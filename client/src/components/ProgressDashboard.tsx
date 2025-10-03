@@ -20,7 +20,7 @@ export function ProgressDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold mb-2">{stat.value}</div>
-            <Progress value={stat.progress} className="h-2" />
+            <Progress value={stat.progress} className="h-2" indicatorClassName="bg-chart-2" />
           </CardContent>
         </Card>
       ))}

@@ -31,7 +31,7 @@ export function MentorCard({ name, expertise, bio, available = false, image }: M
             <h3 className="font-bold mb-1">{name}</h3>
             <div className="flex flex-wrap gap-1 mb-3">
               {expertise.map((skill, i) => (
-                <Badge key={i} variant="outline" className="text-xs bg-chart-3/10">
+                <Badge key={i} variant="outline" className="text-xs bg-chart-2/10">
                   {skill}
                 </Badge>
               ))}

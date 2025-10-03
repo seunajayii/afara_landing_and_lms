@@ -75,7 +75,7 @@ export default function Dashboard() {
                 ))}
               </div>
 
-              <Card className="mt-6 bg-gradient-to-r from-chart-1/10 to-chart-2/10">
+              <Card className="mt-6 bg-chart-2/10">
                 <CardHeader>
                   <CardTitle>Quick Actions</CardTitle>
                 </CardHeader>

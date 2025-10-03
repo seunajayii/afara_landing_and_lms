@@ -37,7 +37,7 @@ export function CourseCard({ title, description, duration, modules, progress, ca
               <span className="text-muted-foreground">Progress</span>
               <span className="font-medium">{progress}%</span>
             </div>
-            <Progress value={progress} className="h-2" />
+            <Progress value={progress} className="h-2" indicatorClassName="bg-chart-2" />
           </div>
         )}
       </CardContent>

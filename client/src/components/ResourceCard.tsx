@@ -19,8 +19,8 @@ export function ResourceCard({ title, category, fileType, size }: ResourceCardPr
             <Badge variant="secondary" className="mb-2">{category}</Badge>
             <CardTitle className="text-base">{title}</CardTitle>
           </div>
-          <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <FileText className="w-5 h-5 text-primary" />
+          <div className="w-10 h-10 rounded-md bg-chart-2/10 flex items-center justify-center flex-shrink-0">
+            <FileText className="w-5 h-5 text-chart-2" />
           </div>
         </div>
       </CardHeader>

@@ -41,16 +41,16 @@ export default function Certificates() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-4 flex-1">
                       <div className={`w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 ${
-                        cert.status === "earned" ? "bg-chart-5/10" : cert.status === "in-progress" ? "bg-chart-1/10" : "bg-muted"
+                        cert.status === "earned" ? "bg-chart-2/10" : cert.status === "in-progress" ? "bg-chart-2/10" : "bg-muted"
                       }`}>
                         <Award className={`w-6 h-6 ${
-                          cert.status === "earned" ? "text-chart-5" : cert.status === "in-progress" ? "text-chart-1" : "text-muted-foreground"
+                          cert.status === "earned" ? "text-chart-2" : cert.status === "in-progress" ? "text-chart-2" : "text-muted-foreground"
                         }`} />
                       </div>
                       <div className="flex-1">
                         <CardTitle className="text-lg mb-2">{cert.title}</CardTitle>
                         {cert.status === "earned" && (
-                          <Badge className="bg-chart-5 text-white">Earned</Badge>
+                          <Badge className="bg-chart-2 text-white">Earned</Badge>
                         )}
                         {cert.status === "in-progress" && (
                           <Badge variant="secondary">{cert.progress}% Complete</Badge>
@@ -81,7 +81,7 @@ export default function Certificates() {
             ))}
           </div>
 
-          <Card className="mt-8 bg-gradient-to-r from-chart-1/10 to-chart-2/10">
+          <Card className="mt-8 bg-chart-2/10">
             <CardContent className="pt-6">
               <div className="text-center">
                 <h3 className="text-xl font-bold mb-2">Program Completion Certificate</h3>
@@ -89,7 +89,7 @@ export default function Certificates() {
                   Complete all core modules to earn your AFÁRÁ Program Completion Certificate
                 </p>
                 <div className="w-full bg-muted rounded-full h-3 mb-2">
-                  <div className="bg-gradient-to-r from-chart-1 to-chart-2 h-3 rounded-full" style={{ width: "67%" }} />
+                  <div className="bg-chart-2 h-3 rounded-full" style={{ width: "67%" }} />
                 </div>
                 <p className="text-sm text-muted-foreground">8 of 12 modules completed (67%)</p>
               </div>

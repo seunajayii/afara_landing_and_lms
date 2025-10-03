@@ -15,7 +15,7 @@ export function EventCard({ title, date, time, type, location }: EventCardProps)
   const typeColors = {
     live: "bg-status-online text-white",
     recorded: "bg-muted text-muted-foreground",
-    upcoming: "bg-chart-3 text-white"
+    upcoming: "bg-chart-2 text-white"
   };
 
   return (
