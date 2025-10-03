@@ -26,7 +26,7 @@ export function Navbar() {
         <div className="flex justify-between items-center h-16">
           <Link href="/" data-testid="link-home">
             <div className="flex items-center gap-3 cursor-pointer">
-              <img src={opsbLogo} alt="OPSB" className="h-8 w-auto" />
+              <img src={opsbLogo} alt="OPSB" className="h-11 w-auto" />
             </div>
           </Link>
 
