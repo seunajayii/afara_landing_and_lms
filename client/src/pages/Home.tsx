@@ -63,11 +63,11 @@ export default function Home() {
                 An entrepreneurship accelerator for African women in energy & infrastructure. Supporting 50 women-led ventures with funding, technical expertise, and regulatory guidance.
               </p>
               <p className="text-muted-foreground mb-8">
-                The name "Afárá" comes from the Yoruba word meaning "bridge"—symbolizing connection, transition, and opportunity. We help women move from feasibility to funding, from aspiration to execution.
+                The name "AFÁRÁ" comes from the Yoruba word meaning "bridge"—symbolizing connection, transition, and opportunity. We help women move from feasibility to funding, from aspiration to execution.
               </p>
               <Link href="/afara">
                 <Button size="lg" data-testid="button-learn-about-afara">
-                  Learn About Afárá
+                  Learn About AFÁRÁ
                 </Button>
               </Link>
             </div>

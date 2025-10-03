@@ -16,7 +16,7 @@ export function Navbar() {
     { path: "/about", label: "About Us" },
     { path: "/services", label: "Services" },
     { path: "/track-record", label: "Track Record" },
-    { path: "/afara", label: "AFARA" },
+    { path: "/afara", label: "AFÁRÁ" },
     { path: "/contact", label: "Contact" },
   ];
 

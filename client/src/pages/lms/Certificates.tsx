@@ -86,7 +86,7 @@ export default function Certificates() {
               <div className="text-center">
                 <h3 className="text-xl font-bold mb-2">Program Completion Certificate</h3>
                 <p className="text-muted-foreground mb-4">
-                  Complete all core modules to earn your Afárá Program Completion Certificate
+                  Complete all core modules to earn your AFÁRÁ Program Completion Certificate
                 </p>
                 <div className="w-full bg-muted rounded-full h-3 mb-2">
                   <div className="bg-gradient-to-r from-chart-1 to-chart-2 h-3 rounded-full" style={{ width: "67%" }} />

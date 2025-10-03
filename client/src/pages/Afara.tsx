@@ -57,13 +57,13 @@ export default function Afara() {
           </div>
 
           <div className="mb-20">
-            <h2 className="text-3xl font-bold mb-6">About Afárá</h2>
+            <h2 className="text-3xl font-bold mb-6">About AFÁRÁ</h2>
             <div className="prose prose-lg max-w-none text-muted-foreground">
               <p className="mb-4">
-                The name "Afárá" comes from the Yoruba word meaning <strong>"bridge"</strong>—symbolizing connection, transition, and opportunity. Afárá exists to help women move from feasibility to funding, from aspiration to execution.
+                The name "AFÁRÁ" comes from the Yoruba word meaning <strong>"bridge"</strong>—symbolizing connection, transition, and opportunity. AFÁRÁ exists to help women move from feasibility to funding, from aspiration to execution.
               </p>
               <p className="mb-4">
-                Rooted in Nigerian culture and committed to African identity, Afárá brings a global outlook to innovation, leadership, and infrastructure transformation.
+                Rooted in Nigerian culture and committed to African identity, AFÁRÁ brings a global outlook to innovation, leadership, and infrastructure transformation.
               </p>
             </div>
           </div>
@@ -92,7 +92,7 @@ export default function Afara() {
             </p>
             <Link href="/lms/dashboard">
               <Button size="lg" data-testid="button-access-lms">
-                Access Afárá LMS
+                Access AFÁRÁ LMS
               </Button>
             </Link>
           </div>
