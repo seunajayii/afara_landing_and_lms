@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
+import opsbLogo from "@assets/OPSB Image 1_1759494409313.png";
 
 export function Navbar() {
   const [location] = useLocation();
@@ -25,7 +26,7 @@ export function Navbar() {
         <div className="flex justify-between items-center h-16">
           <Link href="/" data-testid="link-home">
             <div className="flex items-center gap-3 cursor-pointer">
-              <div className="font-display font-bold text-xl">OPSB</div>
+              <img src={opsbLogo} alt="OPSB" className="h-10 w-auto" />
             </div>
           </Link>
 
