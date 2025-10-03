@@ -1,0 +1,56 @@
+Project Overview
+We are building a responsive company website for Open Spaces & Bridges Advisory (OPSB) with an
+embedded Learning Management System (LMS) for Afara. Afara is OPSB's accelerator for women-led
+energy and infrastructure businesses in Africa. The LMS will serve as the operational hub for the program.
+Core Requirements
+1. OPSB Corporate Website
+- About Us (Mission, Vision, Leadership)
+- Services: Advisory, Infrastructure, Funding Strategy, Regulation
+- Track Record: Filterable transaction experience
+- Afara Program Overview + CTA linking to LMS
+- Contact Page with Inquiry Form
+2. Afara LMS Platform
+- Hosted under same domain or subdomain (e.g., learn.openspacesandbridges.com)
+- Unified brand identity with OPSB, distinct color scheme for Afara
+- Features needed:
+* User onboarding and access levels
+* Training modules: self-paced + live
+* Certification system
+* Mentorship tracking & matching
+* Resource library
+* Community board/discussion space
+* Progress dashboards for founders & program admins
+* Event calendar + Zoom integration
+* Admin panel for OPSB team
+Design & Functionality Notes
+- Modern, Afrocentric design aesthetic
+- Dual-tone theme (corporate for OPSB, bold/fresh for Afara)
+- Mobile-first UX for low-bandwidth environments
+- Secure login system
+- GDPR & African data compliance
+- Integration with Zoom for live sessions & event hosting
+Suggested Stack
+- Frontend: React.js / Next.js
+- Backend: WordPress, Sanity, or Strapi
+- LMS Engine: Thinkific, LearnWorlds, or custom build
+- Hosting: Vercel, Netlify, AWS
+- Community: Circle.so or Firebase/Supabase
+- Zoom API for session hosting and webinar integration
+Documents & Assets
+- 'AFARA CNote FNL.pdf' (Program model and vision)
+- 'OPSB Profile.pdf' (Company profile and services)
+- Brand logos and visual guides (provided separately)
+Key Deliverables
+1. Corporate website for OPSB
+2. LMS-powered platform for Afara program delivery
+3. Admin panel for content & cohort management
+4. Mobile responsive interface
+5. Zoom integration and event calendar
+6. Visual branding and content import
+Optional Features
+- Slack/WhatsApp group integration for communication
+- CRM-style Airtable/Notion backend for team ops
+- KPI dashboard (ventures onboarded, capital raised, mentorship hours)
+Timeline & Delivery
+- 6-8 weeks development cycle post-approval
+- Staged delivery with live demo & handoff documentation
