@@ -23,6 +23,10 @@ Preferred communication style: Simple, everyday language.
 
 **Design System:**
 - Dual-identity color scheme: Deep maroon (#550202) for OPSB corporate, Forest green (#001b12) for AFÁRÁ LMS
+- **Brand Assets**: 
+  - OPSB logo (maroon background) in Navbar and Footer
+  - AFÁRÁ logo (dark green background) in LMS Sidebar
+  - Typography: "AFÁRÁ" displayed in ALL CAPS with accent marks throughout platform
 - shadcn/ui component library with Radix UI primitives for accessible, customizable UI components
 - Theme system supporting light/dark modes with CSS custom properties
 - Typography using Inter (headings/body) and DM Sans (accents) from Google Fonts
