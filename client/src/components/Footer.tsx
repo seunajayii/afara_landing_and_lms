@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { Mail, MapPin, Linkedin } from "lucide-react";
+import opsbLogo from "@assets/OPSB Image 1_1759494409313.png";
 
 export function Footer() {
   return (
@@ -7,7 +8,7 @@ export function Footer() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
-            <h3 className="font-display font-bold text-xl mb-4">OPSB</h3>
+            <img src={opsbLogo} alt="OPSB" className="h-10 w-auto mb-4" />
             <p className="text-sm text-muted-foreground">
               Leading advisory catalyst for transformative infrastructure projects across Africa.
             </p>
@@ -17,23 +18,23 @@ export function Footer() {
             <h4 className="font-semibold mb-4">Quick Links</h4>
             <ul className="space-y-2 text-sm">
               <li>
-                <Link href="/about">
-                  <a className="text-muted-foreground hover:text-foreground transition-colors">About Us</a>
+                <Link href="/about" className="text-muted-foreground hover:text-foreground transition-colors">
+                  About Us
                 </Link>
               </li>
               <li>
-                <Link href="/services">
-                  <a className="text-muted-foreground hover:text-foreground transition-colors">Services</a>
+                <Link href="/services" className="text-muted-foreground hover:text-foreground transition-colors">
+                  Services
                 </Link>
               </li>
               <li>
-                <Link href="/track-record">
-                  <a className="text-muted-foreground hover:text-foreground transition-colors">Track Record</a>
+                <Link href="/track-record" className="text-muted-foreground hover:text-foreground transition-colors">
+                  Track Record
                 </Link>
               </li>
               <li>
-                <Link href="/afara">
-                  <a className="text-muted-foreground hover:text-foreground transition-colors">Afara</a>
+                <Link href="/afara" className="text-muted-foreground hover:text-foreground transition-colors">
+                  AFÁRÁ
                 </Link>
               </li>
             </ul>
