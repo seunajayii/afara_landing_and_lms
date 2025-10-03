@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { Mail, MapPin, Linkedin } from "lucide-react";
-import opsbLogo from "@assets/OPSB Image 2_1759494386920.png";
+import opsbLogo from "@assets/OPSB Image 1_1759521068903.png";
 
 export function Footer() {
   return (
@@ -8,7 +8,7 @@ export function Footer() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
-            <img src={opsbLogo} alt="OPSB" className="h-14 w-auto rounded-md mb-4" />
+            <img src={opsbLogo} alt="OPSB" className="h-10 w-auto mb-4" />
             <p className="text-sm text-muted-foreground">
               Leading advisory catalyst for transformative infrastructure projects across Africa.
             </p>
