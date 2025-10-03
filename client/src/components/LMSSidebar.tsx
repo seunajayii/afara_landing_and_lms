@@ -12,6 +12,7 @@ import {
   Settings,
   LogOut,
 } from "lucide-react";
+import afaraLogo from "@assets/AFARA Image 1_1759495014353.png";
 
 export function LMSSidebar() {
   const [location] = useLocation();
@@ -30,8 +31,8 @@ export function LMSSidebar() {
     <div className="w-64 border-r bg-sidebar h-screen flex flex-col">
       <div className="p-6 border-b">
         <Link href="/lms/dashboard">
-          <div className="font-display font-bold text-xl cursor-pointer bg-gradient-to-r from-chart-1 to-chart-2 bg-clip-text text-transparent">
-            AFÁRÁ
+          <div className="cursor-pointer">
+            <img src={afaraLogo} alt="AFÁRÁ" className="h-10 w-auto" />
           </div>
         </Link>
         <p className="text-xs text-muted-foreground mt-1">Powered by OPSB</p>
