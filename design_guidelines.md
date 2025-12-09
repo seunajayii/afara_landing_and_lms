@@ -1,39 +1,44 @@
-# Design Guidelines: OPSB Corporate Website & AFÁRÁ LMS Platform
+# Design Guidelines: AFÁRÁ Accelerator Platform
+
+## About AFÁRÁ
+
+AFÁRÁ is a business accelerator that supports female-owned and led African companies in the Energy and Infrastructure space. The platform provides comprehensive training, mentorship, resources, and community for women entrepreneurs building transformative projects across the continent.
+
+**Parent Company**: Open Spaces & Bridges Advisory (OPSB) - mentioned subtly in footer
 
 ## Design Approach
 
-**Dual-Identity Strategy**: OPSB requires professional credibility and trust, while AFÁRÁ needs to feel empowering and community-driven. We'll create a unified design language that adapts its tone across both platforms.
+**Single-Identity Strategy**: AFÁRÁ is the primary and sole brand identity for this platform. The design should feel empowering, bold, and community-driven while maintaining professional credibility for the energy and infrastructure sector.
 
 **Primary Inspiration**: 
-- **OPSB Corporate**: Professional typography + color restraint + subtle Afrocentric geometric patterns
-- **AFÁRÁ LMS**: Clean learning interfaces + vibrant African-inspired color accents + community-focused layouts
+- Clean learning interfaces + vibrant African-inspired color accents
+- Community-focused layouts emphasizing connection and growth
+- Bold typography reflecting confidence and entrepreneurial spirit
 
 ## Color Palette
 
-### OPSB Corporate (Professional Tone)
-- **Primary**: Deep maroon `0 99% 17%` (#550202) - Professional, trustworthy, infrastructure-focused
-- **Secondary**: Warm cream `42 91% 93%` (#fef3dc) - Subtle warmth for backgrounds and highlights
-- **Brand Identity**: OPSB represents the mother brand - established, professional, advisory excellence
-- **Logo**: Transparent OPSB logo used in Navbar and Footer
+### AFÁRÁ Brand (Bold & Empowering)
+- **Primary**: Deep forest green `160 85% 20%` - Growth, infrastructure, African heritage
+- **Secondary**: Warm off-white `42 60% 96%` - Clean, approachable environment
+- **Accent**: Teal green `160 40% 88%` - Highlighting progress and achievements
+- **Brand Identity**: Bold, empowering, entrepreneurial - designed for women leaders
 
-### AFÁRÁ LMS (Bold & Empowering)
-- **Primary**: Deep forest green `160 100% 5%` (#001b12) - Growth, infrastructure, African heritage
-- **Secondary**: Warm off-white `40 38% 94%` (#f8f4ea) - Clean, approachable learning environment
-- **Brand Identity**: AFÁRÁ is the daughter brand - bold, empowering, entrepreneurial
-- **Logo**: AFÁRÁ logo (all caps with accents) used in LMS Sidebar
-- **Typography**: Always display as "AFÁRÁ" (all capitals with accent marks)
+### Supporting Colors
+- **Success**: Forest green variations for progress indicators
+- **Highlight**: Warm cream/gold tones for featured content
+- **Community**: Teal accents for social features
 
 ### Dark Mode
-- Maintain both identities with adjusted luminosity
-- OPSB: Deep maroon accents with cream highlights adjusted for dark backgrounds
-- AFÁRÁ: Forest green accents with warm off-white adjusted for dark mode readability
+- Adjusted luminosity maintaining brand identity
+- Forest green accents with warm off-white adjusted for dark mode readability
+- Maintain empowering, professional feel
 
 ## Typography
 
 **Font Stack**:
-- **Headings**: 'Inter' (via Google Fonts) - 600/700 weights for strong hierarchy
+- **Headings**: 'Inter' - 600/700 weights for strong hierarchy
 - **Body**: 'Inter' - 400/500 weights for readability
-- **Accent/Display**: 'DM Sans' (via Google Fonts) - 500/700 for feature highlights
+- **Brand Name**: Always display as "AFÁRÁ" (all capitals with accent marks)
 
 **Scale**:
 - H1: text-5xl md:text-6xl (bold, 700)
@@ -55,76 +60,54 @@
 - Text content: max-w-4xl for optimal reading
 
 **Grid System**:
-- OPSB: 2-3 column layouts for services/transactions
-- AFÁRÁ: Flexible grids for courses (3-4 cards), 2-column mentor profiles
+- Flexible grids for courses (3-4 cards)
+- 2-column mentor profiles
+- Full-width hero sections
 
 ## Component Library
 
 ### Navigation
-**OPSB**: Clean horizontal nav with dropdown for services, sticky on scroll, subtle shadow
-**AFÁRÁ**: Dashboard-style sidebar (collapsible on mobile) with icon navigation for modules, resources, community, profile
+**Public Site**: Clean horizontal nav with Home, About, Program, Contact, and LMS access button
+**LMS Dashboard**: Sidebar with icon navigation for modules, resources, community, profile (collapsible on mobile)
 
 ### Hero Sections
-**OPSB Corporate Hero**:
-- Full-width split layout (60% content, 40% visual)
-- Large heading with animated gradient underline in terracotta
-- Geometric African pattern overlay (subtle, 10% opacity) on background
-- Professional team photo or infrastructure imagery
-- Dual CTAs: "Our Services" (primary) + "View Track Record" (outline)
 
-**AFÁRÁ LMS Dashboard Hero**:
+**Landing Page Hero**:
+- Full-width with background image of African infrastructure or women entrepreneurs
+- Compelling headline about empowering women in energy/infrastructure
+- Clear value proposition
+- Dual CTAs: "Apply Now" (primary) + "Learn More" (outline)
+- Dark wash gradient for text readability
+
+**LMS Dashboard Hero**:
 - Welcome banner with personalized greeting
-- Progress ring visualization (percentage of program completion)
-- Quick stats cards: Modules Completed, Mentorship Hours, Community Posts
+- Progress ring visualization
+- Quick stats: Modules Completed, Mentorship Hours, Community Posts
 - Gradient background with brand colors
 
 ### Cards & Content Blocks
 
-**Transaction/Project Cards (OPSB)**:
-- White cards with subtle slate border
-- Hover: Lift effect (shadow-lg) + terracotta border accent
-- Filterable tags with pill design
-- Clean typography hierarchy
+**Program Feature Cards**:
+- Rounded corners (rounded-md)
+- Icon with forest green accent
+- Clear benefit-focused content
+- Hover elevation effect
 
-**Course/Module Cards (AFÁRÁ)**:
-- Rounded corners (rounded-xl)
-- Progress bar at bottom (gradient: forest green to warm off-white)
+**Course/Module Cards**:
+- Progress bar at bottom (gradient: forest green)
 - Course thumbnail with overlay gradient
 - Duration badge, difficulty indicator
 
 **Mentor Profile Cards**:
 - Circular avatar with forest green border
 - Bio excerpt with "Connect" CTA
-- Expertise tags in AFÁRÁ brand colors
-- Availability indicator (green dot for active)
+- Expertise tags in brand colors
+- Availability indicator
 
-### Forms & Inputs
-
-**OPSB Contact Form**:
-- Floating labels with slate focus states
-- Clean, minimal borders
-- Terracotta submit button with hover lift
-- Multi-step layout for detailed inquiries
-
-**AFÁRÁ Discussion/Community**:
-- Rich text editor with formatting toolbar
-- @mention functionality with autocomplete
-- Attachment support with file preview
-- Post/Reply threading with indentation
-
-### Data Visualization
-
-**Admin Dashboard (OPSB)**:
-- KPI cards: Ventures Funded, Capital Raised, Mentorship Hours
-- Line charts (Chart.js) for funding trends
-- Heat map for geographic reach across Africa
-- Color: Teal for positive metrics, terracotta for highlights
-
-**Founder Progress Dashboard (AFÁRÁ)**:
-- Circular progress indicators for module completion
-- Timeline visualization for program milestones
-- Badge collection showcase for certifications
-- Comparison view: Cohort average vs. individual progress
+**Success Story Cards**:
+- Photo of entrepreneur with overlay
+- Quote highlighting achievement
+- Business/project information
 
 ### Learning Interface Components
 
@@ -132,19 +115,16 @@
 - Custom controls with AFÁRÁ branding
 - Progress saving with visual indicator
 - Playback speed controls
-- Transcript toggle (accessibility)
 
 **Resource Library**:
-- Card grid with file type icons (Heroicons)
+- Card grid with file type icons
 - Search with instant filtering
-- Category sidebar navigation
-- Download tracking for admins
+- Category navigation
 
 **Certification Display**:
 - Digital certificate with AFÁRÁ branding
 - Downloadable PDF version
 - Share to LinkedIn integration
-- Achievement gallery view
 
 ## Afrocentric Design Elements
 
@@ -155,38 +135,36 @@
 
 **Color Philosophy**:
 - Earth tones with vibrant accent pops
-- Sunset gradients (orange to deep purple) for hero sections
-- Terracotta and teal as bridge between tradition and innovation
+- Forest green representing growth and infrastructure
+- Warm cream/gold representing African warmth and prosperity
 
 **Imagery Style**:
-- Authentic African professional photography (not stock clichés)
-- Infrastructure in African contexts
+- Authentic African professional photography
 - Women in leadership/entrepreneurial settings
+- Infrastructure in African contexts (solar farms, energy projects, bridges)
 - Warm, natural lighting with cultural authenticity
 
 ## Images
 
-### OPSB Corporate Site
-1. **Hero Image**: Wide landscape photo of African infrastructure (bridge, solar farm, or modern building) at golden hour - positioned right side of split hero layout
-2. **About Section**: Professional team photo in boardroom or site visit - full width with text overlay
-3. **Track Record**: Thumbnail images for major projects - grid layout with hover zoom
-4. **AFÁRÁ CTA Section**: Empowering photo of African woman entrepreneur in energy/infrastructure setting - background image with gradient overlay
+### Landing Page
+1. **Hero Image**: African woman entrepreneur in energy/infrastructure setting OR solar farm/infrastructure at golden hour
+2. **Program Section**: Women in collaborative work environment
+3. **Success Stories**: Alumni headshots and project photos
 
-### AFÁRÁ LMS Platform
-1. **Dashboard Welcome**: Abstract geometric pattern with Afrocentric motifs - header background
-2. **Course Thumbnails**: Custom illustrations representing each module topic - card headers
-3. **Community Section**: Collage of cohort members (with permission) - banner area
-4. **Mentor Profiles**: Professional headshots with consistent circular crop - profile cards
-5. **Success Stories**: Before/after project photos from alumni - case study sections
+### LMS Platform
+1. **Dashboard Welcome**: Abstract geometric pattern with Afrocentric motifs
+2. **Course Thumbnails**: Custom illustrations for each module topic
+3. **Community Section**: Cohort members in networking settings
+4. **Mentor Profiles**: Professional headshots with circular crop
 
 ## Accessibility & Performance
 
 - WCAG AA contrast ratios minimum (AAA for body text)
-- Dark mode toggle prominent in navigation
+- Dark mode toggle in navigation
 - Lazy loading for images below fold
 - Skeleton screens for content loading states
 - Keyboard navigation for all interactive elements
-- Form inputs with clear error states (red-500 with descriptive text)
+- Form inputs with clear error states
 - Icon-only buttons include aria-labels
 
 ## Animations
@@ -195,5 +173,15 @@ Use sparingly and purposefully:
 - Smooth page transitions (300ms ease-in-out)
 - Card hover lifts (transform: translateY(-4px))
 - Progress bar fills (animated on scroll into view)
-- Micro-interactions on CTAs (scale on click)
+- Micro-interactions on CTAs
 - NO distracting auto-playing animations
+
+## Footer
+
+Simple, clean footer containing:
+- AFÁRÁ logo
+- Quick navigation links
+- Contact information
+- Social media links
+- "An OPSB Initiative" with subtle link to parent company
+- Copyright notice

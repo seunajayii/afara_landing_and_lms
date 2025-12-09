@@ -48,7 +48,7 @@ export default function Dashboard() {
       <main className="flex-1 overflow-auto">
         <div className="p-8">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2">Welcome back, Founder! 👋</h1>
+            <h1 className="text-3xl font-bold mb-2">Welcome back, Founder</h1>
             <p className="text-muted-foreground">Here's your progress overview for this cohort.</p>
           </div>
 

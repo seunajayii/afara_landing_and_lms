@@ -7,9 +7,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import About from "@/pages/About";
-import Services from "@/pages/Services";
-import TrackRecord from "@/pages/TrackRecord";
-import Afara from "@/pages/Afara";
+import Program from "@/pages/Program";
 import Contact from "@/pages/Contact";
 import Dashboard from "@/pages/lms/Dashboard";
 import Courses from "@/pages/lms/Courses";
@@ -24,9 +22,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/about" component={About} />
-      <Route path="/services" component={Services} />
-      <Route path="/track-record" component={TrackRecord} />
-      <Route path="/afara" component={Afara} />
+      <Route path="/program" component={Program} />
       <Route path="/contact" component={Contact} />
       
       <Route path="/lms/dashboard" component={Dashboard} />

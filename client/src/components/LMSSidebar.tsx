@@ -35,7 +35,7 @@ export function LMSSidebar() {
             <img src={afaraLogo} alt="AFÁRÁ" className="h-12 w-auto" />
           </div>
         </Link>
-        <p className="text-xs text-muted-foreground mt-2">Powered by OPSB</p>
+        <p className="text-xs text-muted-foreground mt-2">An OPSB Initiative</p>
       </div>
 
       <nav className="flex-1 p-4">

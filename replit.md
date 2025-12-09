@@ -1,10 +1,12 @@
-# OPSB & AFÁRÁ Platform
+# AFÁRÁ Accelerator Platform
 
 ## Overview
 
-This is a dual-brand web platform combining the Open Spaces & Bridges Advisory (OPSB) corporate website with the AFÁRÁ Learning Management System (LMS). OPSB serves as the parent brand providing professional advisory services for African energy and infrastructure projects, while AFÁRÁ is an entrepreneurship accelerator specifically designed for women-led ventures in the sector.
+AFÁRÁ is a business accelerator platform supporting female-owned and led African companies in the Energy and Infrastructure space. The name "AFÁRÁ" comes from the Yoruba word meaning "bridge"—symbolizing connection, transition, and opportunity.
 
-The platform features a responsive corporate website showcasing OPSB's services, track record, and team, alongside a comprehensive LMS delivering training modules, mentorship tracking, resource libraries, and community engagement tools for AFÁRÁ program participants.
+The platform features a responsive public website showcasing the accelerator program, alongside a comprehensive Learning Management System (LMS) delivering training modules, mentorship tracking, resource libraries, and community engagement tools for program participants.
+
+AFÁRÁ is an initiative of Open Spaces & Bridges Advisory (OPSB).
 
 ## User Preferences
 
@@ -22,18 +24,17 @@ Preferred communication style: Simple, everyday language.
 - Tailwind CSS with custom design system implementation
 
 **Design System:**
-- Dual-identity color scheme: Deep maroon (#550202) for OPSB corporate, Forest green (#001b12) for AFÁRÁ LMS
+- Forest green primary color palette representing growth, infrastructure, and African heritage
 - **Brand Assets**: 
-  - OPSB logo (maroon background) in Navbar and Footer
-  - AFÁRÁ logo (dark green background) in LMS Sidebar
+  - AFÁRÁ logo used in Navbar, Footer, and LMS Sidebar
   - Typography: "AFÁRÁ" displayed in ALL CAPS with accent marks throughout platform
 - shadcn/ui component library with Radix UI primitives for accessible, customizable UI components
 - Theme system supporting light/dark modes with CSS custom properties
-- Typography using Inter (headings/body) and DM Sans (accents) from Google Fonts
-- Responsive-first approach with mobile optimization for low-bandwidth environments
+- Typography using Inter (headings/body) from Google Fonts
+- Responsive-first approach with mobile optimization
 
 **Component Architecture:**
-- Reusable card components (CourseCard, MentorCard, EventCard, ResourceCard, TransactionCard) for consistent data presentation
+- Reusable card components (CourseCard, MentorCard, EventCard, ResourceCard) for consistent data presentation
 - Shared layout components (Navbar, Footer, LMSSidebar) for navigation consistency
 - Specialized components for LMS features (ProgressDashboard, DiscussionPost)
 - Path aliases configured for clean imports (@/ for client, @shared/ for shared code, @assets/ for assets)
@@ -74,15 +75,13 @@ Preferred communication style: Simple, everyday language.
 
 ### Routing Structure
 
-**Corporate Website (OPSB Brand):**
-- `/` - Hero section with service overview
-- `/about` - Mission, vision, team profiles
-- `/services` - Detailed service offerings
-- `/track-record` - Filterable project portfolio
-- `/afara` - AFÁRÁ program overview with LMS call-to-action
-- `/contact` - Inquiry form
+**Public Website:**
+- `/` - Hero section with accelerator overview, program pillars, and statistics
+- `/about` - Vision, mission, values, team profiles, and OPSB connection
+- `/program` - Detailed program structure, pillars, benefits, and timeline
+- `/contact` - Application/inquiry form
 
-**LMS Platform (AFÁRÁ Brand):**
+**LMS Platform:**
 - `/lms/dashboard` - Personal progress overview
 - `/lms/courses` - Training module library
 - `/lms/mentorship` - Mentor matching and session tracking

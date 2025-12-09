@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { Mail, MapPin, Linkedin } from "lucide-react";
-import opsbLogo from "@assets/OPSB Image 1_1759521068903.png";
+import afaraLogo from "@assets/AFARA Image 1_1759521116826.png";
 
 export function Footer() {
   return (
@@ -8,9 +8,9 @@ export function Footer() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
-            <img src={opsbLogo} alt="OPSB" className="h-20 w-auto mb-4" />
+            <img src={afaraLogo} alt="AFÁRÁ" className="h-16 w-auto mb-4" />
             <p className="text-sm text-muted-foreground">
-              Leading advisory catalyst for transformative infrastructure projects across Africa.
+              Empowering female entrepreneurs to lead transformative energy and infrastructure projects across Africa.
             </p>
           </div>
 
@@ -23,18 +23,18 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/services" className="text-muted-foreground hover:text-foreground transition-colors">
-                  Services
+                <Link href="/program" className="text-muted-foreground hover:text-foreground transition-colors">
+                  Program
                 </Link>
               </li>
               <li>
-                <Link href="/track-record" className="text-muted-foreground hover:text-foreground transition-colors">
-                  Track Record
+                <Link href="/lms/dashboard" className="text-muted-foreground hover:text-foreground transition-colors">
+                  Access LMS
                 </Link>
               </li>
               <li>
-                <Link href="/afara" className="text-muted-foreground hover:text-foreground transition-colors">
-                  AFÁRÁ
+                <Link href="/contact" className="text-muted-foreground hover:text-foreground transition-colors">
+                  Contact
                 </Link>
               </li>
             </ul>
@@ -49,7 +49,7 @@ export function Footer() {
               </li>
               <li className="flex items-center gap-2">
                 <Mail className="w-4 h-4" />
-                <span>info@opsb.africa</span>
+                <span>info@afara.africa</span>
               </li>
             </ul>
           </div>
@@ -61,6 +61,7 @@ export function Footer() {
                 href="#"
                 className="w-10 h-10 rounded-md bg-muted hover-elevate flex items-center justify-center transition-all"
                 aria-label="LinkedIn"
+                data-testid="link-linkedin"
               >
                 <Linkedin className="w-5 h-5" />
               </a>
@@ -68,8 +69,21 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="border-t mt-8 pt-8 text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} Open Spaces & Bridges Advisory. All rights reserved.</p>
+        <div className="border-t mt-8 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-muted-foreground">
+          <p>&copy; {new Date().getFullYear()} AFÁRÁ. All rights reserved.</p>
+          <p>
+            An{" "}
+            <a 
+              href="https://opsb.africa" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+              data-testid="link-opsb"
+            >
+              OPSB
+            </a>
+            {" "}Initiative
+          </p>
         </div>
       </div>
     </footer>

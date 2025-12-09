@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
-import opsbLogo from "@assets/OPSB Image 1_1759521068903.png";
+import afaraLogo from "@assets/AFARA Image 1_1759521116826.png";
 
 export function Navbar() {
   const [location] = useLocation();
@@ -13,10 +13,8 @@ export function Navbar() {
 
   const navLinks = [
     { path: "/", label: "Home" },
-    { path: "/about", label: "About Us" },
-    { path: "/services", label: "Services" },
-    { path: "/track-record", label: "Track Record" },
-    { path: "/afara", label: "AFÁRÁ" },
+    { path: "/about", label: "About" },
+    { path: "/program", label: "Program" },
     { path: "/contact", label: "Contact" },
   ];
 
@@ -26,7 +24,7 @@ export function Navbar() {
         <div className="flex justify-between items-center h-16">
           <Link href="/" data-testid="link-home">
             <div className="flex items-center gap-3 cursor-pointer">
-              <img src={opsbLogo} alt="OPSB" className="h-11 w-auto" />
+              <img src={afaraLogo} alt="AFÁRÁ" className="h-11 w-auto" />
             </div>
           </Link>
 
@@ -36,7 +34,7 @@ export function Navbar() {
                 <Button
                   variant="ghost"
                   className={isActive(link.path) ? "bg-accent" : ""}
-                  data-testid={`link-${link.label.toLowerCase().replace(" ", "-")}`}
+                  data-testid={`link-${link.label.toLowerCase()}`}
                 >
                   {link.label}
                 </Button>
@@ -46,8 +44,8 @@ export function Navbar() {
 
           <div className="flex items-center gap-2">
             <Link href="/lms/dashboard">
-              <Button variant="default" size="sm" data-testid="button-lms-login">
-                LMS Login
+              <Button variant="default" size="sm" data-testid="button-access-lms">
+                Access LMS
               </Button>
             </Link>
             <ThemeToggle />
@@ -77,6 +75,15 @@ export function Navbar() {
                   </Button>
                 </Link>
               ))}
+              <Link href="/lms/dashboard">
+                <Button
+                  variant="default"
+                  className="w-full mt-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Access LMS
+                </Button>
+              </Link>
             </div>
           </div>
         )}

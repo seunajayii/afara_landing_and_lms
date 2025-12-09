@@ -13,6 +13,7 @@ export default function Contact() {
     name: "",
     email: "",
     organization: "",
+    interest: "",
     message: ""
   });
 
@@ -30,7 +31,7 @@ export default function Contact() {
           <div className="text-center mb-16">
             <h1 className="text-5xl font-bold mb-4">Get In Touch</h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-              We'd love to hear from you. Reach out to discuss how we can support your infrastructure and energy projects.
+              Interested in joining the AFÁRÁ accelerator or partnering with us? We'd love to hear from you.
             </p>
           </div>
 
@@ -38,7 +39,7 @@ export default function Contact() {
             <div className="lg:col-span-2">
               <Card>
                 <CardHeader>
-                  <CardTitle>Send us a message</CardTitle>
+                  <CardTitle>Apply or Send a Message</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handleSubmit} className="space-y-6">
@@ -65,21 +66,33 @@ export default function Contact() {
                         />
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="organization">Organization</Label>
-                      <Input
-                        id="organization"
-                        placeholder="Your organization"
-                        value={formData.organization}
-                        onChange={(e) => setFormData({ ...formData, organization: e.target.value })}
-                        data-testid="input-organization"
-                      />
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="organization">Organization / Company</Label>
+                        <Input
+                          id="organization"
+                          placeholder="Your organization"
+                          value={formData.organization}
+                          onChange={(e) => setFormData({ ...formData, organization: e.target.value })}
+                          data-testid="input-organization"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="interest">I'm interested in...</Label>
+                        <Input
+                          id="interest"
+                          placeholder="e.g., Applying to the program, Partnership"
+                          value={formData.interest}
+                          onChange={(e) => setFormData({ ...formData, interest: e.target.value })}
+                          data-testid="input-interest"
+                        />
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="message">Message</Label>
                       <Textarea
                         id="message"
-                        placeholder="Tell us about your project or inquiry..."
+                        placeholder="Tell us about yourself and your venture or inquiry..."
                         rows={6}
                         value={formData.message}
                         onChange={(e) => setFormData({ ...formData, message: e.target.value })}
@@ -118,7 +131,7 @@ export default function Contact() {
                     </div>
                     <div>
                       <h3 className="font-semibold mb-2">Email Us</h3>
-                      <p className="text-sm text-muted-foreground">info@opsb.africa</p>
+                      <p className="text-sm text-muted-foreground">info@afara.africa</p>
                     </div>
                   </div>
                 </CardContent>
@@ -135,6 +148,18 @@ export default function Contact() {
                       <p className="text-sm text-muted-foreground">Connect on LinkedIn</p>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-primary text-primary-foreground">
+                <CardContent className="pt-6">
+                  <h3 className="font-semibold mb-2">Join the Community</h3>
+                  <p className="text-sm opacity-90 mb-4">
+                    Already a member? Access the AFÁRÁ LMS to continue your learning journey.
+                  </p>
+                  <Button variant="secondary" size="sm" className="w-full" asChild>
+                    <a href="/lms/dashboard" data-testid="button-access-lms">Access LMS</a>
+                  </Button>
                 </CardContent>
               </Card>
             </div>
