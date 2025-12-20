@@ -1,13 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import entrepreneurImage from "@assets/generated_images/African_woman_entrepreneur_portrait_f0a967a8.png";
+import heroBackground from "@assets/AFARA_Back_ground_1766234995095.png";
 
 export function Hero() {
   return (
     <section className="relative min-h-[700px] flex items-center">
       <div className="absolute inset-0 z-0">
         <img
-          src={entrepreneurImage}
+          src={heroBackground}
           alt="African woman entrepreneur in energy sector"
           className="w-full h-full object-cover"
         />
