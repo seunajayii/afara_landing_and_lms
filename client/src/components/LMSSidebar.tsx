@@ -12,12 +12,13 @@ import {
   Award,
   Settings,
   LogOut,
+  Shield,
 } from "lucide-react";
 import afaraLogo from "@assets/AFARA Image 1_1759521116826.png";
 
 export function LMSSidebar() {
   const [location, setLocation] = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
 
   const handleLogout = async () => {
     await logout();
@@ -63,6 +64,14 @@ export function LMSSidebar() {
       </nav>
 
       <div className="p-4 border-t space-y-2">
+        {isAdmin && (
+          <Link href="/admin/dashboard">
+            <Button variant="default" className="w-full justify-start gap-3" data-testid="button-admin-portal">
+              <Shield className="w-4 h-4" />
+              Admin Portal
+            </Button>
+          </Link>
+        )}
         <Button variant="ghost" className="w-full justify-start gap-3" data-testid="button-settings">
           <Settings className="w-4 h-4" />
           Settings

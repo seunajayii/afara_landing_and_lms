@@ -19,6 +19,7 @@ import Events from "@/pages/lms/Events";
 import Resources from "@/pages/lms/Resources";
 import Community from "@/pages/lms/Community";
 import Certificates from "@/pages/lms/Certificates";
+import AdminDashboard from "@/pages/admin/AdminDashboard";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -46,6 +47,35 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   return <Component />;
 }
 
+function AdminProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+  const { isAuthenticated, isLoading, isAdmin } = useAuth();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (!isLoading) {
+      if (!isAuthenticated) {
+        setLocation("/login");
+      } else if (!isAdmin) {
+        setLocation("/lms/dashboard");
+      }
+    }
+  }, [isLoading, isAuthenticated, isAdmin, setLocation]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !isAdmin) {
+    return null;
+  }
+
+  return <Component />;
+}
+
 function Router() {
   return (
     <Switch>
@@ -62,6 +92,9 @@ function Router() {
       <Route path="/lms/resources">{() => <ProtectedRoute component={Resources} />}</Route>
       <Route path="/lms/community">{() => <ProtectedRoute component={Community} />}</Route>
       <Route path="/lms/certificates">{() => <ProtectedRoute component={Certificates} />}</Route>
+      
+      {/* Admin Routes */}
+      <Route path="/admin/dashboard">{() => <AdminProtectedRoute component={AdminDashboard} />}</Route>
       
       <Route component={NotFound} />
     </Switch>
