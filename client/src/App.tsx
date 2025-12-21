@@ -20,6 +20,10 @@ import Resources from "@/pages/lms/Resources";
 import Community from "@/pages/lms/Community";
 import Certificates from "@/pages/lms/Certificates";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
+import CourseManagement from "@/pages/admin/CourseManagement";
+import UserManagement from "@/pages/admin/UserManagement";
+import ResourceManagement from "@/pages/admin/ResourceManagement";
+import CertificateManagement from "@/pages/admin/CertificateManagement";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -95,6 +99,10 @@ function Router() {
       
       {/* Admin Routes */}
       <Route path="/admin/dashboard">{() => <AdminProtectedRoute component={AdminDashboard} />}</Route>
+      <Route path="/admin/courses">{() => <AdminProtectedRoute component={CourseManagement} />}</Route>
+      <Route path="/admin/users">{() => <AdminProtectedRoute component={UserManagement} />}</Route>
+      <Route path="/admin/resources">{() => <AdminProtectedRoute component={ResourceManagement} />}</Route>
+      <Route path="/admin/certificates">{() => <AdminProtectedRoute component={CertificateManagement} />}</Route>
       
       <Route component={NotFound} />
     </Switch>
