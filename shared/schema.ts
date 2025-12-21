@@ -227,6 +227,7 @@ export const postLikes = pgTable("post_likes", {
 });
 
 export const certificateStatusEnum = pgEnum("certificate_status", ["pending", "approved", "rejected"]);
+export const applicationStatusEnum = pgEnum("application_status", ["draft", "submitted", "under_review", "accepted", "rejected", "waitlisted"]);
 
 export const certificates = pgTable("certificates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -266,6 +267,34 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const applications = pgTable("applications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: text("email").notNull(),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  phone: text("phone"),
+  country: text("country"),
+  city: text("city"),
+  companyName: text("company_name"),
+  companyWebsite: text("company_website"),
+  jobTitle: text("job_title"),
+  industrySector: text("industry_sector"),
+  yearsInBusiness: integer("years_in_business"),
+  numberOfEmployees: text("number_of_employees"),
+  annualRevenue: text("annual_revenue"),
+  businessDescription: text("business_description"),
+  challengesFaced: text("challenges_faced"),
+  goalsForProgram: text("goals_for_program"),
+  howDidYouHear: text("how_did_you_hear"),
+  linkedinUrl: text("linkedin_url"),
+  additionalInfo: text("additional_info"),
+  status: applicationStatusEnum("status").notNull().default("submitted"),
+  reviewNotes: text("review_notes"),
+  reviewedById: varchar("reviewed_by_id").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  submittedAt: timestamp("submitted_at").notNull().defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertProfileSchema = createInsertSchema(profiles).omit({ id: true });
 export const insertMentorProfileSchema = createInsertSchema(mentorProfiles).omit({ id: true });
@@ -285,6 +314,7 @@ export const insertDiscussionPostSchema = createInsertSchema(discussionPosts).om
 export const insertCertificateSchema = createInsertSchema(certificates).omit({ id: true, issuedAt: true });
 export const insertAchievementSchema = createInsertSchema(achievements).omit({ id: true });
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
+export const insertApplicationSchema = createInsertSchema(applications).omit({ id: true, submittedAt: true });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -324,3 +354,5 @@ export type InsertAchievement = z.infer<typeof insertAchievementSchema>;
 export type Achievement = typeof achievements.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notifications.$inferSelect;
+export type InsertApplication = z.infer<typeof insertApplicationSchema>;
+export type Application = typeof applications.$inferSelect;

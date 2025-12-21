@@ -24,6 +24,7 @@ import CourseManagement from "@/pages/admin/CourseManagement";
 import UserManagement from "@/pages/admin/UserManagement";
 import ResourceManagement from "@/pages/admin/ResourceManagement";
 import CertificateManagement from "@/pages/admin/CertificateManagement";
+import Apply from "@/pages/Apply";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -87,6 +88,7 @@ function Router() {
       <Route path="/about" component={About} />
       <Route path="/program" component={Program} />
       <Route path="/contact" component={Contact} />
+      <Route path="/apply" component={Apply} />
       <Route path="/login" component={Login} />
       
       <Route path="/lms/dashboard">{() => <ProtectedRoute component={Dashboard} />}</Route>

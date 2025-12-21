@@ -18,12 +18,14 @@ import {
   type Certificate, type InsertCertificate,
   type Achievement, type InsertAchievement,
   type Notification, type InsertNotification,
+  type Application, type InsertApplication,
   users, profiles, mentorProfiles, facilitatorProfiles,
   courses, modules, lessons, enrollments, lessonProgress,
   mentorshipRequests, mentorshipSessions,
   events, eventRegistrations, resources,
   discussionThreads, discussionPosts, postLikes,
-  certificates, achievements, userAchievements, notifications
+  certificates, achievements, userAchievements, notifications,
+  applications
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc } from "drizzle-orm";
@@ -138,6 +140,12 @@ export interface IStorage {
   createNotification(notification: InsertNotification): Promise<Notification>;
   markNotificationRead(id: string): Promise<void>;
   markAllNotificationsRead(userId: string): Promise<void>;
+  
+  getApplication(id: string): Promise<Application | undefined>;
+  getAllApplications(): Promise<Application[]>;
+  getApplicationsByStatus(status: string): Promise<Application[]>;
+  createApplication(application: InsertApplication): Promise<Application>;
+  updateApplication(id: string, data: Partial<InsertApplication>): Promise<Application | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -592,6 +600,29 @@ export class DatabaseStorage implements IStorage {
 
   async markAllNotificationsRead(userId: string): Promise<void> {
     await db.update(notifications).set({ isRead: true }).where(eq(notifications.userId, userId));
+  }
+
+  async getApplication(id: string): Promise<Application | undefined> {
+    const [application] = await db.select().from(applications).where(eq(applications.id, id));
+    return application;
+  }
+
+  async getAllApplications(): Promise<Application[]> {
+    return db.select().from(applications).orderBy(desc(applications.submittedAt));
+  }
+
+  async getApplicationsByStatus(status: string): Promise<Application[]> {
+    return db.select().from(applications).where(eq(applications.status, status as any)).orderBy(desc(applications.submittedAt));
+  }
+
+  async createApplication(application: InsertApplication): Promise<Application> {
+    const [newApplication] = await db.insert(applications).values(application).returning();
+    return newApplication;
+  }
+
+  async updateApplication(id: string, data: Partial<InsertApplication>): Promise<Application | undefined> {
+    const [updated] = await db.update(applications).set(data).where(eq(applications.id, id)).returning();
+    return updated;
   }
 }
 

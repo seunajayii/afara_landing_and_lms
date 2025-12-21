@@ -8,7 +8,7 @@ import {
   insertMentorshipRequestSchema, insertMentorshipSessionSchema,
   insertEventSchema, insertEventRegistrationSchema, insertResourceSchema,
   insertDiscussionThreadSchema, insertDiscussionPostSchema, insertCertificateSchema,
-  insertNotificationSchema
+  insertNotificationSchema, insertApplicationSchema
 } from "@shared/schema";
 import { z } from "zod";
 import { randomUUID } from "crypto";
@@ -1041,6 +1041,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allEvents = await storage.getAllEvents();
       const allResources = await storage.getAllResources();
       const threads = await storage.getAllDiscussionThreads();
+      const allApplications = await storage.getAllApplications();
       
       res.json({
         totalUsers: users.length,
@@ -1052,10 +1053,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
         publishedCourses: allCourses.filter(c => c.status === "published").length,
         totalEvents: allEvents.length,
         totalResources: allResources.length,
-        totalDiscussions: threads.length
+        totalDiscussions: threads.length,
+        totalApplications: allApplications.length,
+        pendingApplications: allApplications.filter(a => a.status === "submitted" || a.status === "under_review").length
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch admin stats" });
+    }
+  });
+
+  // Application Routes (Public - no auth required)
+  app.get("/api/applications", async (req: Request, res: Response) => {
+    try {
+      const status = req.query.status as string;
+      const allApplications = status 
+        ? await storage.getApplicationsByStatus(status)
+        : await storage.getAllApplications();
+      res.json(allApplications);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch applications" });
+    }
+  });
+
+  app.get("/api/applications/:id", async (req: Request, res: Response) => {
+    try {
+      const application = await storage.getApplication(req.params.id);
+      if (!application) return res.status(404).json({ error: "Application not found" });
+      res.json(application);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch application" });
+    }
+  });
+
+  app.post("/api/applications", async (req: Request, res: Response) => {
+    try {
+      const data = insertApplicationSchema.parse(req.body);
+      const application = await storage.createApplication(data);
+      res.status(201).json(application);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Failed to submit application" });
+    }
+  });
+
+  app.patch("/api/applications/:id", async (req: Request, res: Response) => {
+    try {
+      const application = await storage.updateApplication(req.params.id, req.body);
+      if (!application) return res.status(404).json({ error: "Application not found" });
+      res.json(application);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update application" });
     }
   });
 
