@@ -13,6 +13,7 @@ import {
   Settings,
   LogOut,
   Shield,
+  FileText,
 } from "lucide-react";
 import afaraLogo from "@assets/AFARA Image 1_1759521116826.png";
 
@@ -27,6 +28,7 @@ export function AdminSidebar() {
 
   const adminNavItems = [
     { path: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { path: "/admin/applications", label: "Applications", icon: FileText },
     { path: "/admin/courses", label: "Course Management", icon: BookOpen },
     { path: "/admin/users", label: "User Management", icon: Users },
     { path: "/admin/mentors", label: "Mentor Management", icon: UserCog },

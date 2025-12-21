@@ -137,7 +137,14 @@ export default function Apply() {
 
   const submitMutation = useMutation({
     mutationFn: async (data: ApplicationFormData) => {
-      const response = await apiRequest("POST", "/api/applications", data);
+      // Convert empty strings to undefined for optional fields
+      const cleanedData = Object.fromEntries(
+        Object.entries(data).map(([key, value]) => [
+          key,
+          value === "" ? undefined : value
+        ])
+      );
+      const response = await apiRequest("POST", "/api/applications", cleanedData);
       return response.json();
     },
     onSuccess: () => {

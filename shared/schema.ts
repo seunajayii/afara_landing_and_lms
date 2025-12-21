@@ -314,7 +314,14 @@ export const insertDiscussionPostSchema = createInsertSchema(discussionPosts).om
 export const insertCertificateSchema = createInsertSchema(certificates).omit({ id: true, issuedAt: true });
 export const insertAchievementSchema = createInsertSchema(achievements).omit({ id: true });
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
-export const insertApplicationSchema = createInsertSchema(applications).omit({ id: true, submittedAt: true });
+export const insertApplicationSchema = createInsertSchema(applications).omit({ 
+  id: true, 
+  submittedAt: true, 
+  reviewedAt: true, 
+  reviewedById: true,
+  reviewNotes: true,
+  status: true 
+});
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
