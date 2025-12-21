@@ -2,33 +2,61 @@ import { LMSSidebar } from "@/components/LMSSidebar";
 import { MentorCard } from "@/components/MentorCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Calendar, Clock, CheckCircle } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { User, Profile, MentorProfile } from "@shared/schema";
+
+interface MentorWithProfile extends User {
+  profile?: Profile;
+  mentorProfile?: MentorProfile;
+}
+
+function MentorCardSkeleton() {
+  return (
+    <div className="border rounded-lg p-6 space-y-4">
+      <div className="flex items-start gap-4">
+        <Skeleton className="h-12 w-12 rounded-full" />
+        <div className="flex-1 space-y-2">
+          <Skeleton className="h-6 w-1/2" />
+          <Skeleton className="h-4 w-3/4" />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <Skeleton className="h-6 w-20" />
+        <Skeleton className="h-6 w-24" />
+      </div>
+      <Skeleton className="h-9 w-full" />
+    </div>
+  );
+}
 
 export default function Mentorship() {
-  const mentors = [
-    {
-      name: "Dr. Amara Nwosu",
-      expertise: ["Energy Policy", "Regulation", "Compliance"],
-      bio: "15+ years advising on energy regulatory frameworks across West Africa.",
-      available: true
-    },
-    {
-      name: "Kwame Osei",
-      expertise: ["Project Finance", "Capital Markets", "M&A"],
-      bio: "Former investment banker with experience in $2B+ infrastructure transactions.",
-      available: true
-    },
-    {
-      name: "Zainab Ibrahim",
-      expertise: ["Technical Due Diligence", "Engineering", "Solar"],
-      bio: "Renewable energy engineer with 50+ solar project implementations.",
-      available: false
-    }
-  ];
+  const { data: mentorUsers, isLoading } = useQuery<User[]>({
+    queryKey: ["/api/users/role/mentor"],
+  });
 
-  const sessions = [
-    { title: "Regulatory Strategy Session", mentor: "Dr. Amara Nwosu", date: "Mar 10, 2025", time: "10:00 AM" },
-    { title: "Financial Modeling Review", mentor: "Kwame Osei", date: "Mar 12, 2025", time: "2:00 PM" }
-  ];
+  const mentorIds = mentorUsers?.map(u => u.id) || [];
+  
+  const { data: mentorDetails } = useQuery<MentorWithProfile[]>({
+    queryKey: ["/api/mentors", "details"],
+    queryFn: async () => {
+      if (mentorIds.length === 0) return [];
+      const results = await Promise.all(
+        mentorIds.map(id => 
+          fetch(`/api/mentors/${id}`, { credentials: "include" }).then(r => r.json())
+        )
+      );
+      return results;
+    },
+    enabled: mentorIds.length > 0,
+  });
+
+  const mentors = mentorDetails?.map(mentor => ({
+    name: `${mentor.firstName} ${mentor.lastName}`,
+    expertise: mentor.mentorProfile?.specializations || mentor.profile?.expertiseAreas || [],
+    bio: mentor.profile?.bio || "",
+    available: mentor.mentorProfile?.isAcceptingMentees ?? true,
+  })) || [];
 
   return (
     <div className="flex h-screen">
@@ -40,34 +68,36 @@ export default function Mentorship() {
           <div className="grid lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2">
               <h2 className="text-xl font-bold mb-4">Available Mentors</h2>
-              <div className="space-y-4">
-                {mentors.map((mentor, i) => (
-                  <MentorCard key={i} {...mentor} />
-                ))}
-              </div>
+              {isLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map((i) => (
+                    <MentorCardSkeleton key={i} />
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {mentors.map((mentor, i) => (
+                    <MentorCard key={i} {...mentor} />
+                  ))}
+                </div>
+              )}
+
+              {!isLoading && mentors.length === 0 && (
+                <div className="text-center py-12 border rounded-lg">
+                  <p className="text-muted-foreground">No mentors available at the moment.</p>
+                </div>
+              )}
             </div>
 
             <div>
               <h2 className="text-xl font-bold mb-4">Upcoming Sessions</h2>
               <div className="space-y-4">
-                {sessions.map((session, i) => (
-                  <Card key={i} className="hover-elevate transition-all duration-300">
-                    <CardContent className="pt-6">
-                      <h3 className="font-bold mb-2">{session.title}</h3>
-                      <p className="text-sm text-muted-foreground mb-3">{session.mentor}</p>
-                      <div className="space-y-2 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4" />
-                          <span>{session.date}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4" />
-                          <span>{session.time}</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                <Card className="text-center py-8 text-muted-foreground">
+                  <CardContent>
+                    <p>No upcoming sessions scheduled.</p>
+                    <p className="text-sm mt-2">Request a session with a mentor to get started.</p>
+                  </CardContent>
+                </Card>
 
                 <Card className="bg-muted/50">
                   <CardContent className="pt-6">
@@ -75,7 +105,7 @@ export default function Mentorship() {
                       <CheckCircle className="w-5 h-5 text-chart-5 flex-shrink-0 mt-0.5" />
                       <div>
                         <h3 className="font-semibold mb-1">Mentorship Hours</h3>
-                        <p className="text-2xl font-bold">24 hours</p>
+                        <p className="text-2xl font-bold">0 hours</p>
                         <p className="text-xs text-muted-foreground mt-1">Completed this cohort</p>
                       </div>
                     </div>

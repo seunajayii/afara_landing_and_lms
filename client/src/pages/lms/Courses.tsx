@@ -2,60 +2,47 @@ import { LMSSidebar } from "@/components/LMSSidebar";
 import { CourseCard } from "@/components/CourseCard";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useQuery } from "@tanstack/react-query";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { Course } from "@shared/schema";
+
+interface CourseWithModules extends Course {
+  modules?: { id: string }[];
+}
+
+function formatDuration(minutes: number | null): string {
+  if (!minutes) return "Self-paced";
+  const weeks = Math.ceil(minutes / (7 * 60));
+  return `${weeks} weeks`;
+}
+
+function CourseCardSkeleton() {
+  return (
+    <div className="border rounded-lg p-6 space-y-4">
+      <Skeleton className="h-6 w-20" />
+      <Skeleton className="h-6 w-3/4" />
+      <Skeleton className="h-4 w-full" />
+      <div className="flex gap-4">
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-4 w-24" />
+      </div>
+    </div>
+  );
+}
 
 export default function Courses() {
   const [filter, setFilter] = useState("all");
 
-  const courses = [
-    {
-      title: "Financial Structuring for Infrastructure",
-      description: "Learn to design bankable financial structures for energy and infrastructure projects.",
-      duration: "6 weeks",
-      modules: 8,
-      progress: 45,
-      category: "Finance"
-    },
-    {
-      title: "Regulatory Compliance & Strategy",
-      description: "Navigate policy and regulatory frameworks with confidence.",
-      duration: "4 weeks",
-      modules: 6,
-      progress: 20,
-      category: "Regulation"
-    },
-    {
-      title: "Project Development Fundamentals",
-      description: "From concept to capital—master the entire development process.",
-      duration: "8 weeks",
-      modules: 12,
-      progress: 10,
-      category: "Technical"
-    },
-    {
-      title: "Leadership & Communication Skills",
-      description: "Build confidence, audacity, and executive presence.",
-      duration: "5 weeks",
-      modules: 7,
-      category: "Soft Skills"
-    },
-    {
-      title: "Funding Strategy & Capital Raising",
-      description: "Shape funding strategies and connect with the right capital partners.",
-      duration: "6 weeks",
-      modules: 9,
-      category: "Finance"
-    },
-    {
-      title: "Technical Due Diligence",
-      description: "Conduct thorough technical assessments for infrastructure projects.",
-      duration: "4 weeks",
-      modules: 6,
-      category: "Technical"
-    }
-  ];
+  const { data: courses, isLoading } = useQuery<CourseWithModules[]>({
+    queryKey: ["/api/courses"],
+  });
 
   const categories = ["all", "Finance", "Technical", "Regulation", "Soft Skills"];
-  const filteredCourses = filter === "all" ? courses : courses.filter(c => c.category === filter);
+  
+  const filteredCourses = courses?.filter(course => {
+    if (filter === "all") return course.status === "published";
+    return course.status === "published" && course.category === filter;
+  }) || [];
 
   return (
     <div className="flex h-screen">
@@ -77,11 +64,32 @@ export default function Courses() {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredCourses.map((course, i) => (
-              <CourseCard key={i} {...course} />
-            ))}
-          </div>
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <CourseCardSkeleton key={i} />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredCourses.map((course) => (
+                <CourseCard 
+                  key={course.id} 
+                  title={course.title}
+                  description={course.shortDescription || course.description || ""}
+                  duration={formatDuration(course.durationMinutes)}
+                  modules={course.modules?.length || 0}
+                  category={course.category || "General"}
+                />
+              ))}
+            </div>
+          )}
+
+          {!isLoading && filteredCourses.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">No courses found in this category.</p>
+            </div>
+          )}
         </div>
       </main>
     </div>

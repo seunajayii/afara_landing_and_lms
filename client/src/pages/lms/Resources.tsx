@@ -3,65 +3,49 @@ import { ResourceCard } from "@/components/ResourceCard";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { Resource } from "@shared/schema";
+
+function formatFileSize(bytes: number | null): string {
+  if (!bytes) return "Unknown";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getFileType(fileName: string | null): string {
+  if (!fileName) return "FILE";
+  const ext = fileName.split(".").pop()?.toUpperCase();
+  return ext || "FILE";
+}
+
+function ResourceCardSkeleton() {
+  return (
+    <div className="border rounded-lg p-6 space-y-4">
+      <Skeleton className="h-6 w-20" />
+      <Skeleton className="h-6 w-3/4" />
+      <div className="flex gap-4">
+        <Skeleton className="h-4 w-16" />
+        <Skeleton className="h-4 w-16" />
+      </div>
+      <Skeleton className="h-9 w-full" />
+    </div>
+  );
+}
 
 export default function Resources() {
   const [searchQuery, setSearchQuery] = useState("");
 
-  const resources = [
-    {
-      title: "Infrastructure Project Development Guide",
-      category: "Technical",
-      fileType: "PDF",
-      size: "2.4 MB"
-    },
-    {
-      title: "Financial Modeling Templates",
-      category: "Finance",
-      fileType: "XLSX",
-      size: "1.8 MB"
-    },
-    {
-      title: "Regulatory Compliance Checklist",
-      category: "Regulation",
-      fileType: "PDF",
-      size: "856 KB"
-    },
-    {
-      title: "Capital Raising Strategy Toolkit",
-      category: "Finance",
-      fileType: "PDF",
-      size: "3.2 MB"
-    },
-    {
-      title: "Energy Sector Policy Brief - West Africa",
-      category: "Research",
-      fileType: "PDF",
-      size: "1.5 MB"
-    },
-    {
-      title: "Project Feasibility Study Template",
-      category: "Technical",
-      fileType: "DOCX",
-      size: "945 KB"
-    },
-    {
-      title: "Mentorship Session Recording - Q1 2025",
-      category: "Recordings",
-      fileType: "MP4",
-      size: "245 MB"
-    },
-    {
-      title: "Leadership Development Workbook",
-      category: "Soft Skills",
-      fileType: "PDF",
-      size: "1.2 MB"
-    }
-  ];
+  const { data: resources, isLoading } = useQuery<Resource[]>({
+    queryKey: ["/api/resources"],
+  });
 
-  const filteredResources = resources.filter(resource =>
+  const filteredResources = resources?.filter(resource =>
     resource.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    resource.category.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+    (resource.category || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (resource.description || "").toLowerCase().includes(searchQuery.toLowerCase())
+  ) || [];
 
   return (
     <div className="flex h-screen">
@@ -81,13 +65,27 @@ export default function Resources() {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredResources.map((resource, i) => (
-              <ResourceCard key={i} {...resource} />
-            ))}
-          </div>
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <ResourceCardSkeleton key={i} />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredResources.map((resource) => (
+                <ResourceCard
+                  key={resource.id}
+                  title={resource.title}
+                  category={resource.category || "General"}
+                  fileType={getFileType(resource.fileName)}
+                  size={formatFileSize(resource.fileSize)}
+                />
+              ))}
+            </div>
+          )}
 
-          {filteredResources.length === 0 && (
+          {!isLoading && filteredResources.length === 0 && (
             <div className="text-center py-12">
               <p className="text-muted-foreground">No resources found matching your search.</p>
             </div>
