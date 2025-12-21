@@ -1,6 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { authenticateUser, createUserWithPassword } from "./auth";
 import { 
   insertUserSchema, insertProfileSchema, insertMentorProfileSchema, insertFacilitatorProfileSchema,
   insertCourseSchema, insertModuleSchema, insertLessonSchema, insertEnrollmentSchema,
@@ -12,8 +13,96 @@ import {
 import { z } from "zod";
 import { randomUUID } from "crypto";
 
+const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6)
+});
+
+const registerSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1)
+});
+
 export async function registerRoutes(app: Express): Promise<Server> {
   
+  // Auth Routes
+  app.post("/api/auth/login", async (req: Request, res: Response) => {
+    try {
+      const { email, password } = loginSchema.parse(req.body);
+      const user = await authenticateUser(email, password);
+      
+      if (!user) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+      
+      if (!user.isActive) {
+        return res.status(403).json({ error: "Account is deactivated" });
+      }
+      
+      req.session.userId = user.id;
+      req.session.userRole = user.role;
+      
+      const { passwordHash, ...safeUser } = user;
+      res.json({ user: safeUser });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Login failed" });
+    }
+  });
+
+  app.post("/api/auth/register", async (req: Request, res: Response) => {
+    try {
+      const { email, password, firstName, lastName } = registerSchema.parse(req.body);
+      
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ error: "Email already registered" });
+      }
+      
+      const user = await createUserWithPassword(email, password, firstName, lastName, "participant");
+      
+      req.session.userId = user.id;
+      req.session.userRole = user.role;
+      
+      const { passwordHash, ...safeUser } = user;
+      res.status(201).json({ user: safeUser });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Registration failed" });
+    }
+  });
+
+  app.post("/api/auth/logout", (req: Request, res: Response) => {
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).json({ error: "Logout failed" });
+      }
+      res.clearCookie("connect.sid");
+      res.json({ success: true });
+    });
+  });
+
+  app.get("/api/auth/me", async (req: Request, res: Response) => {
+    if (!req.session.userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    
+    const user = await storage.getUser(req.session.userId);
+    if (!user) {
+      req.session.destroy(() => {});
+      return res.status(401).json({ error: "User not found" });
+    }
+    
+    const { passwordHash, ...safeUser } = user;
+    res.json({ user: safeUser });
+  });
+
   app.get("/api/users", async (req: Request, res: Response) => {
     try {
       const users = await storage.getAllUsers();

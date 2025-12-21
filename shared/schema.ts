@@ -15,6 +15,7 @@ export const contentStatusEnum = pgEnum("content_status", ["draft", "pending_rev
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull().unique(),
+  passwordHash: text("password_hash"),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   role: userRoleEnum("role").notNull().default("participant"),

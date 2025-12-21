@@ -1,10 +1,30 @@
 import express, { type Request, Response, NextFunction } from "express";
+import session from "express-session";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { seedSuperAdmin } from "./auth";
+
+declare module "express-session" {
+  interface SessionData {
+    userId: string;
+    userRole: string;
+  }
+}
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+app.use(session({
+  secret: process.env.SESSION_SECRET || "afara-accelerator-secret-key-2024",
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === "production",
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000
+  }
+}));
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -37,6 +57,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  await seedSuperAdmin();
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
