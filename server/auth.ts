@@ -32,7 +32,7 @@ export async function createUserWithPassword(
   password: string, 
   firstName: string, 
   lastName: string,
-  role: "participant" | "mentor" | "facilitator" | "admin" = "participant"
+  role: "participant" | "mentor" | "facilitator" | "admin" | "superadmin" = "participant"
 ): Promise<User> {
   const passwordHash = await hashPassword(password);
   return storage.createUser({
@@ -48,7 +48,12 @@ export async function createUserWithPassword(
 export async function seedSuperAdmin(): Promise<void> {
   const existingAdmin = await storage.getUserByEmail("admin@afaraaccelerator.org");
   if (existingAdmin) {
-    console.log("Super admin already exists");
+    if (existingAdmin.role !== "superadmin") {
+      await storage.updateUser(existingAdmin.id, { role: "superadmin" });
+      console.log("Updated existing admin to superadmin role");
+    } else {
+      console.log("Super admin already exists");
+    }
     return;
   }
   
@@ -58,7 +63,7 @@ export async function seedSuperAdmin(): Promise<void> {
     passwordHash,
     firstName: "Super",
     lastName: "Admin",
-    role: "admin",
+    role: "superadmin",
     isActive: true
   });
   console.log("Super admin created: admin@afaraaccelerator.org");

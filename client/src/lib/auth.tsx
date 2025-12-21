@@ -7,7 +7,7 @@ interface User {
   email: string;
   firstName: string;
   lastName: string;
-  role: "participant" | "mentor" | "facilitator" | "admin";
+  role: "participant" | "mentor" | "facilitator" | "admin" | "superadmin";
   profileImageUrl: string | null;
   isActive: boolean;
   createdAt: string;
@@ -19,6 +19,8 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  isSuperAdmin: boolean;
+  canManageContent: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -68,7 +70,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const user = data?.user ?? null;
   const isAuthenticated = !!user;
-  const isAdmin = user?.role === "admin";
+  const isSuperAdmin = user?.role === "superadmin";
+  const isAdmin = user?.role === "admin" || isSuperAdmin;
+  const canManageContent = isAdmin || isSuperAdmin;
 
   const login = async (email: string, password: string) => {
     await loginMutation.mutateAsync({ email, password });
@@ -88,6 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       isAuthenticated,
       isAdmin,
+      isSuperAdmin,
+      canManageContent,
       login,
       register,
       logout

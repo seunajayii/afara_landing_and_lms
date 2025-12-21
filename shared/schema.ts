@@ -3,7 +3,7 @@ import { pgTable, text, varchar, integer, boolean, timestamp, pgEnum } from "dri
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const userRoleEnum = pgEnum("user_role", ["participant", "mentor", "facilitator", "admin"]);
+export const userRoleEnum = pgEnum("user_role", ["participant", "mentor", "facilitator", "admin", "superadmin"]);
 export const lessonTypeEnum = pgEnum("lesson_type", ["video", "text", "quiz", "downloadable"]);
 export const videoSourceEnum = pgEnum("video_source", ["youtube", "vimeo", "upload"]);
 export const progressStatusEnum = pgEnum("progress_status", ["not_started", "in_progress", "completed"]);
@@ -226,6 +226,8 @@ export const postLikes = pgTable("post_likes", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const certificateStatusEnum = pgEnum("certificate_status", ["pending", "approved", "rejected"]);
+
 export const certificates = pgTable("certificates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
@@ -233,6 +235,9 @@ export const certificates = pgTable("certificates", {
   certificateNumber: text("certificate_number").notNull().unique(),
   issuedAt: timestamp("issued_at").notNull().defaultNow(),
   certificateUrl: text("certificate_url"),
+  approvalStatus: certificateStatusEnum("approval_status").notNull().default("pending"),
+  approvedById: varchar("approved_by_id").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
 });
 
 export const achievements = pgTable("achievements", {
