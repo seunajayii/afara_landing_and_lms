@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
+import { useAuth } from "@/lib/auth";
 import {
   LayoutDashboard,
   BookOpen,
@@ -15,7 +16,13 @@ import {
 import afaraLogo from "@assets/AFARA Image 1_1759521116826.png";
 
 export function LMSSidebar() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
+  const { user, logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+    setLocation("/login");
+  };
 
   const navItems = [
     { path: "/lms/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -60,15 +67,24 @@ export function LMSSidebar() {
           <Settings className="w-4 h-4" />
           Settings
         </Button>
-        <div className="flex items-center justify-between">
-          <Link href="/">
-            <Button variant="ghost" size="sm" className="gap-2" data-testid="button-logout">
-              <LogOut className="w-4 h-4" />
-              Exit LMS
-            </Button>
-          </Link>
+        <div className="flex items-center justify-between gap-2">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="gap-2" 
+            onClick={handleLogout}
+            data-testid="button-logout"
+          >
+            <LogOut className="w-4 h-4" />
+            Log Out
+          </Button>
           <ThemeToggle />
         </div>
+        {user && (
+          <p className="text-xs text-muted-foreground truncate">
+            {user.firstName} {user.lastName}
+          </p>
+        )}
       </div>
     </div>
   );

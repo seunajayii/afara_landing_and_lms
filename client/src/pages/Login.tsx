@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,11 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
-import logo from "@assets/AFARA Logo.png";
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const { login, register, isAuthenticated, user } = useAuth();
+  const { login, register, isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
   
   const [loginEmail, setLoginEmail] = useState("");
@@ -25,12 +24,21 @@ export default function Login() {
   const [registerLastName, setRegisterLastName] = useState("");
   const [isRegisterLoading, setIsRegisterLoading] = useState(false);
 
-  if (isAuthenticated && user) {
-    if (user.role === "admin") {
-      setLocation("/lms/dashboard");
-    } else {
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
       setLocation("/lms/dashboard");
     }
+  }, [isLoading, isAuthenticated, setLocation]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (isAuthenticated) {
     return null;
   }
 
@@ -82,10 +90,7 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-primary/10 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <img src={logo} alt="AFÁRÁ" className="h-16" />
-          </div>
-          <CardTitle className="text-2xl">AFÁRÁ Accelerator</CardTitle>
+          <CardTitle className="text-2xl text-primary">AFÁRÁ Accelerator</CardTitle>
           <CardDescription>
             Sign in to access the Learning Management System
           </CardDescription>
