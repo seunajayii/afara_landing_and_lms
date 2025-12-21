@@ -9,7 +9,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { Sparkles, BookOpen, FileText } from "lucide-react";
+import { Sparkles, BookOpen, FileText, Users, Settings, BarChart3 } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 import type { Course, Event, Resource } from "@shared/schema";
 
 interface RecommendationsResponse {
@@ -62,6 +63,8 @@ function EventCardSkeleton() {
 }
 
 export default function Dashboard() {
+  const { user, isAdmin } = useAuth();
+  
   const { data: courses, isLoading: coursesLoading } = useQuery<Course[]>({
     queryKey: ["/api/courses"],
   });
@@ -70,21 +73,18 @@ export default function Dashboard() {
     queryKey: ["/api/events"],
   });
 
-  // Use first participant user for recommendations (demo mode)
+  // Use logged-in user for recommendations
   const { data: recommendations, isLoading: recommendationsLoading, isError } = useQuery<RecommendationsResponse>({
-    queryKey: ["/api/recommendations", "demo-user"],
+    queryKey: ["/api/recommendations", user?.id],
     queryFn: async () => {
-      // Fetch first user as demo
-      const usersRes = await fetch("/api/users");
-      if (!usersRes.ok) throw new Error("Failed to fetch users");
-      const users = await usersRes.json();
-      const userId = users?.[0]?.id || "demo";
-      const res = await fetch(`/api/recommendations/${userId}?limit=3`);
+      if (!user?.id) throw new Error("No user");
+      const res = await fetch(`/api/recommendations/${user.id}?limit=3`);
       if (!res.ok) throw new Error("Failed to fetch recommendations");
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       return data;
     },
+    enabled: !!user?.id,
     retry: 1
   });
 
@@ -95,17 +95,67 @@ export default function Dashboard() {
     return eventType === "upcoming" || eventType === "live";
   }).slice(0, 2) || [];
 
+  const greeting = user ? `Welcome back, ${user.firstName}` : "Welcome back";
+  const subtitle = isAdmin 
+    ? "Here's your admin dashboard overview." 
+    : "Here's your progress overview for this cohort.";
+
   return (
     <div className="flex h-screen">
       <LMSSidebar />
       <main className="flex-1 overflow-auto">
         <div className="p-8">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2">Welcome back, Founder</h1>
-            <p className="text-muted-foreground">Here's your progress overview for this cohort.</p>
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-3xl font-bold" data-testid="text-welcome">{greeting}</h1>
+              {isAdmin && (
+                <Badge variant="default" className="bg-primary" data-testid="badge-admin">
+                  Admin
+                </Badge>
+              )}
+            </div>
+            <p className="text-muted-foreground">{subtitle}</p>
           </div>
 
-          <ProgressDashboard />
+          {isAdmin ? (
+            <div className="grid md:grid-cols-3 gap-6 mb-8">
+              <Card className="hover-elevate">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Total Users</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-2">
+                    <Users className="h-5 w-5 text-primary" />
+                    <span className="text-2xl font-bold" data-testid="text-total-users">--</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="hover-elevate">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Active Courses</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="h-5 w-5 text-primary" />
+                    <span className="text-2xl font-bold" data-testid="text-active-courses">{courses?.length || 0}</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="hover-elevate">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Upcoming Events</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5 text-primary" />
+                    <span className="text-2xl font-bold" data-testid="text-upcoming-events">{upcomingEvents.length}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+            <ProgressDashboard />
+          )}
 
           <div className="grid lg:grid-cols-2 gap-8 mt-8">
             <div>
