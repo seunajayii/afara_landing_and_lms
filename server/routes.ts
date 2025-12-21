@@ -854,6 +854,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Recommendations API - content-based matching
+  app.get("/api/recommendations/:userId", async (req: Request, res: Response) => {
+    try {
+      const userId = req.params.userId;
+      const limit = parseInt(req.query.limit as string) || 6;
+      
+      // Get user profile for interests
+      const profile = await storage.getProfile(userId);
+      const userInterests = [
+        ...(profile?.expertiseAreas || []),
+        ...(profile?.industries || [])
+      ].map(i => i.toLowerCase());
+      
+      // Get all published courses and resources
+      const allCourses = await storage.getAllCourses();
+      const allResources = await storage.getAllResources();
+      
+      const publishedCourses = allCourses.filter(c => c.status === "published");
+      const publishedResources = allResources.filter(r => r.status === "published");
+      
+      // Score function - matches content keywords with user interests
+      const scoreContent = (content: { 
+        category?: string | null; 
+        title: string; 
+        description?: string | null;
+        tags?: string[] | null;
+      }) => {
+        let score = 0;
+        const searchableText = [
+          content.category || "",
+          content.title,
+          content.description || "",
+          ...(content.tags || [])
+        ].join(" ").toLowerCase();
+        
+        for (const interest of userInterests) {
+          if (searchableText.includes(interest)) {
+            score += 2;
+          }
+          // Partial match
+          const words = interest.split(/\s+/);
+          for (const word of words) {
+            if (word.length > 3 && searchableText.includes(word)) {
+              score += 1;
+            }
+          }
+        }
+        
+        // Default score for new content (boost recently added)
+        if (score === 0) {
+          score = 0.5;
+        }
+        
+        return score;
+      };
+      
+      // Score and sort courses
+      const scoredCourses = publishedCourses.map(course => ({
+        ...course,
+        score: scoreContent({
+          category: course.category,
+          title: course.title,
+          description: course.description,
+          tags: course.learningOutcomes
+        }),
+        type: "course" as const
+      })).sort((a, b) => b.score - a.score).slice(0, limit);
+      
+      // Score and sort resources
+      const scoredResources = publishedResources.map(resource => ({
+        ...resource,
+        score: scoreContent({
+          category: resource.category,
+          title: resource.title,
+          description: resource.description,
+          tags: null
+        }),
+        type: "resource" as const
+      })).sort((a, b) => b.score - a.score).slice(0, limit);
+      
+      res.json({
+        courses: scoredCourses,
+        resources: scoredResources,
+        userInterests
+      });
+    } catch (error) {
+      console.error("Recommendations error:", error);
+      res.status(500).json({ error: "Failed to generate recommendations" });
+    }
+  });
+
   app.get("/api/admin/stats", async (req: Request, res: Response) => {
     try {
       const users = await storage.getAllUsers();

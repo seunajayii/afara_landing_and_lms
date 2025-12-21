@@ -4,11 +4,19 @@ import { CourseCard } from "@/components/CourseCard";
 import { EventCard } from "@/components/EventCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import type { Course, Event } from "@shared/schema";
+import { Sparkles, BookOpen, FileText } from "lucide-react";
+import type { Course, Event, Resource } from "@shared/schema";
+
+interface RecommendationsResponse {
+  courses: (Course & { score: number; type: "course" })[];
+  resources: (Resource & { score: number; type: "resource" })[];
+  userInterests: string[];
+}
 
 function formatDuration(minutes: number | null): string {
   if (!minutes) return "Self-paced";
@@ -60,6 +68,24 @@ export default function Dashboard() {
 
   const { data: events, isLoading: eventsLoading } = useQuery<Event[]>({
     queryKey: ["/api/events"],
+  });
+
+  // Use first participant user for recommendations (demo mode)
+  const { data: recommendations, isLoading: recommendationsLoading, isError } = useQuery<RecommendationsResponse>({
+    queryKey: ["/api/recommendations", "demo-user"],
+    queryFn: async () => {
+      // Fetch first user as demo
+      const usersRes = await fetch("/api/users");
+      if (!usersRes.ok) throw new Error("Failed to fetch users");
+      const users = await usersRes.json();
+      const userId = users?.[0]?.id || "demo";
+      const res = await fetch(`/api/recommendations/${userId}?limit=3`);
+      if (!res.ok) throw new Error("Failed to fetch recommendations");
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      return data;
+    },
+    retry: 1
   });
 
   const publishedCourses = courses?.filter(c => c.status === "published").slice(0, 2) || [];
@@ -160,6 +186,116 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
             </div>
+          </div>
+
+          {/* Personalized Recommendations Section */}
+          <div className="mt-8">
+            <div className="flex items-center gap-2 mb-6">
+              <Sparkles className="h-6 w-6 text-primary" />
+              <h2 className="text-2xl font-bold">Recommended For You</h2>
+            </div>
+            
+            {recommendationsLoading ? (
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <CourseCardSkeleton />
+                  <CourseCardSkeleton />
+                </div>
+                <div className="space-y-4">
+                  <CourseCardSkeleton />
+                  <CourseCardSkeleton />
+                </div>
+              </div>
+            ) : isError ? (
+              <Card className="p-6 text-center border-destructive/50">
+                <p className="text-muted-foreground">
+                  Unable to load recommendations at this time. Please try again later.
+                </p>
+              </Card>
+            ) : recommendations && (recommendations.courses.length > 0 || recommendations.resources.length > 0) ? (
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* Recommended Courses */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Courses</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {recommendations.courses.slice(0, 3).map((course) => (
+                      <div 
+                        key={course.id} 
+                        className="p-3 rounded-md border hover-elevate cursor-pointer"
+                        data-testid={`recommendation-course-${course.id}`}
+                      >
+                        <div className="flex items-start justify-between gap-2 flex-wrap">
+                          <h4 className="font-medium text-sm">{course.title}</h4>
+                          <Badge variant="secondary">
+                            {course.category || "General"}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                          {course.shortDescription || course.description}
+                        </p>
+                      </div>
+                    ))}
+                    {recommendations.courses.length === 0 && (
+                      <p className="text-sm text-muted-foreground">No course recommendations yet.</p>
+                    )}
+                    <Link href="/lms/courses">
+                      <Button variant="ghost" size="sm" className="w-full mt-2" data-testid="button-view-recommended-courses">
+                        View All Courses
+                      </Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+
+                {/* Recommended Resources */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Resources</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {recommendations.resources.slice(0, 3).map((resource) => (
+                      <div 
+                        key={resource.id} 
+                        className="p-3 rounded-md border hover-elevate cursor-pointer"
+                        data-testid={`recommendation-resource-${resource.id}`}
+                      >
+                        <div className="flex items-start justify-between gap-2 flex-wrap">
+                          <h4 className="font-medium text-sm">{resource.title}</h4>
+                          <Badge variant="outline">
+                            {resource.resourceType}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                          {resource.description}
+                        </p>
+                      </div>
+                    ))}
+                    {recommendations.resources.length === 0 && (
+                      <p className="text-sm text-muted-foreground">No resource recommendations yet.</p>
+                    )}
+                    <Link href="/lms/resources">
+                      <Button variant="ghost" size="sm" className="w-full mt-2" data-testid="button-view-recommended-resources">
+                        View All Resources
+                      </Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              <Card className="p-6 text-center">
+                <Sparkles className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                <p className="text-muted-foreground">
+                  Complete your profile to get personalized recommendations based on your expertise and interests.
+                </p>
+              </Card>
+            )}
           </div>
         </div>
       </main>
