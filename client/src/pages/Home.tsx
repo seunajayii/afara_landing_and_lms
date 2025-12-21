@@ -32,10 +32,10 @@ export default function Home() {
   ];
 
   const stats = [
-    { value: "50+", label: "Women-Led Ventures Supported" },
-    { value: "15+", label: "African Countries Represented" },
-    { value: "$100M+", label: "Funding Pipeline" },
-    { value: "200+", label: "Mentorship Hours Delivered" }
+    { value: "50+", label: "Women-Led Ventures to Support" },
+    { value: "15+", label: "African Countries to Reach" },
+    { value: "$1B+", label: "Target Funding Pipeline" },
+    { value: "200+", label: "Mentorship Hours to Deliver" }
   ];
 
   return (
