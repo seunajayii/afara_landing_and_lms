@@ -25,6 +25,7 @@ import UserManagement from "@/pages/admin/UserManagement";
 import ResourceManagement from "@/pages/admin/ResourceManagement";
 import CertificateManagement from "@/pages/admin/CertificateManagement";
 import ApplicationManagement from "@/pages/admin/ApplicationManagement";
+import EventManagement from "@/pages/admin/EventManagement";
 import Apply from "@/pages/Apply";
 import { Loader2 } from "lucide-react";
 
@@ -107,6 +108,7 @@ function Router() {
       <Route path="/admin/resources">{() => <AdminProtectedRoute component={ResourceManagement} />}</Route>
       <Route path="/admin/certificates">{() => <AdminProtectedRoute component={CertificateManagement} />}</Route>
       <Route path="/admin/applications">{() => <AdminProtectedRoute component={ApplicationManagement} />}</Route>
+      <Route path="/admin/events">{() => <AdminProtectedRoute component={EventManagement} />}</Route>
       
       <Route component={NotFound} />
     </Switch>
