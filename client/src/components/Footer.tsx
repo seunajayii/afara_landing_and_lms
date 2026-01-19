@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { Mail, MapPin, Linkedin } from "lucide-react";
 import afaraLogo from "@assets/AFARA Image 1_1759521116826.png";
+import { NewsletterSignup } from "./NewsletterSignup";
 
 export function Footer() {
   return (
@@ -55,8 +56,9 @@ export function Footer() {
           </div>
 
           <div>
-            <h4 className="font-semibold mb-4">Follow Us</h4>
-            <div className="flex gap-3">
+            <h4 className="font-semibold mb-4">Stay Connected</h4>
+            <NewsletterSignup variant="inline" className="mb-4" />
+            <div className="flex gap-3 mt-4">
               <a
                 href="#"
                 className="w-10 h-10 rounded-md bg-muted hover-elevate flex items-center justify-center transition-all"

@@ -14,6 +14,7 @@ import {
   LogOut,
   Shield,
   FileText,
+  Mail,
 } from "lucide-react";
 import afaraLogo from "@assets/AFARA Image 1_1759521116826.png";
 
@@ -35,6 +36,7 @@ export function AdminSidebar() {
     { path: "/admin/resources", label: "Resource Management", icon: FolderOpen },
     { path: "/admin/events", label: "Event Management", icon: Calendar },
     { path: "/admin/certificates", label: "Certificate Management", icon: Award },
+    { path: "/admin/newsletter", label: "Newsletter", icon: Mail },
   ];
 
   const superAdminItems = [

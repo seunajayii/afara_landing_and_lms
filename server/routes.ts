@@ -1108,6 +1108,166 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Newsletter Routes
+  const subscribeSchema = z.object({
+    email: z.string().email(),
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
+    source: z.string().optional()
+  });
+
+  const unsubscribeSchema = z.object({
+    email: z.string().email()
+  });
+
+  const campaignSchema = z.object({
+    subject: z.string().min(1, "Subject is required"),
+    content: z.string().min(1, "Content is required")
+  });
+
+  const isAdmin = (req: Request): boolean => {
+    const role = req.session?.userRole;
+    return role === "admin" || role === "superadmin";
+  };
+
+  app.get("/api/newsletter/subscribers", async (req: Request, res: Response) => {
+    if (!req.session?.userId || !isAdmin(req)) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    try {
+      const subscribers = await storage.getAllNewsletterSubscribers();
+      res.json(subscribers);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch subscribers" });
+    }
+  });
+
+  app.post("/api/newsletter/subscribe", async (req: Request, res: Response) => {
+    try {
+      const { email, firstName, lastName, source } = subscribeSchema.parse(req.body);
+      
+      const existingSubscriber = await storage.getNewsletterSubscriberByEmail(email);
+      
+      if (existingSubscriber) {
+        if (existingSubscriber.isActive) {
+          return res.status(400).json({ error: "Email is already subscribed" });
+        }
+        const resubscribed = await storage.updateNewsletterSubscriber(existingSubscriber.id, {
+          isActive: true,
+          firstName,
+          lastName
+        });
+        return res.json({ message: "Successfully resubscribed", subscriber: resubscribed });
+      }
+      
+      const subscriber = await storage.createNewsletterSubscriber({
+        email,
+        firstName,
+        lastName,
+        source: source || "website"
+      });
+      
+      try {
+        const { sendWelcomeEmail } = await import("./email");
+        await sendWelcomeEmail(email, firstName);
+      } catch (emailError) {
+        console.error("Failed to send welcome email:", emailError);
+      }
+      
+      res.status(201).json({ message: "Successfully subscribed", subscriber });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Subscribe error:", error);
+      res.status(500).json({ error: "Failed to subscribe" });
+    }
+  });
+
+  app.post("/api/newsletter/unsubscribe", async (req: Request, res: Response) => {
+    try {
+      const { email } = unsubscribeSchema.parse(req.body);
+      await storage.unsubscribeNewsletter(email);
+      res.json({ message: "Successfully unsubscribed" });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Failed to unsubscribe" });
+    }
+  });
+
+  app.get("/api/newsletter/campaigns", async (req: Request, res: Response) => {
+    if (!req.session?.userId || !isAdmin(req)) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    try {
+      const campaigns = await storage.getAllNewsletterCampaigns();
+      res.json(campaigns);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch campaigns" });
+    }
+  });
+
+  app.post("/api/newsletter/campaigns", async (req: Request, res: Response) => {
+    if (!req.session?.userId || !isAdmin(req)) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    try {
+      const { subject, content } = campaignSchema.parse(req.body);
+      
+      const campaign = await storage.createNewsletterCampaign({
+        subject,
+        content,
+        sentById: req.session.userId,
+        status: "draft"
+      });
+      
+      res.status(201).json(campaign);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create campaign" });
+    }
+  });
+
+  app.post("/api/newsletter/campaigns/:id/send", async (req: Request, res: Response) => {
+    if (!req.session?.userId || !isAdmin(req)) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    try {
+      const campaign = await storage.getNewsletterCampaign(req.params.id);
+      if (!campaign) {
+        return res.status(404).json({ error: "Campaign not found" });
+      }
+      
+      const activeSubscribers = await storage.getActiveNewsletterSubscribers();
+      const recipientEmails = activeSubscribers.map(s => s.email);
+      
+      if (recipientEmails.length === 0) {
+        return res.status(400).json({ error: "No active subscribers" });
+      }
+      
+      const { sendNewsletter } = await import("./email");
+      const result = await sendNewsletter(campaign.subject, campaign.content, recipientEmails);
+      
+      if (!result.success) {
+        return res.status(500).json({ error: result.error || "Failed to send newsletter" });
+      }
+      
+      await storage.updateNewsletterCampaign(campaign.id, {
+        status: "sent",
+        recipientCount: recipientEmails.length
+      });
+      
+      res.json({ message: "Newsletter sent successfully", recipientCount: recipientEmails.length });
+    } catch (error) {
+      console.error("Send campaign error:", error);
+      res.status(500).json({ error: "Failed to send campaign" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
