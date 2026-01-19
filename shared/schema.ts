@@ -269,30 +269,80 @@ export const notifications = pgTable("notifications", {
 
 export const applications = pgTable("applications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  
+  // Personal Section
   email: text("email").notNull(),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   phone: text("phone"),
-  country: text("country"),
-  city: text("city"),
-  companyName: text("company_name"),
-  companyWebsite: text("company_website"),
-  jobTitle: text("job_title"),
-  industrySector: text("industry_sector"),
-  yearsInBusiness: integer("years_in_business"),
-  numberOfEmployees: text("number_of_employees"),
-  annualRevenue: text("annual_revenue"),
-  businessDescription: text("business_description"),
-  challengesFaced: text("challenges_faced"),
-  goalsForProgram: text("goals_for_program"),
-  howDidYouHear: text("how_did_you_hear"),
+  personalStatement: text("personal_statement"),
+  videoEssayUrl: text("video_essay_url"),
+  
+  // Section 1: Applicant Background & Sector Experience
+  professionalBackground: text("professional_background"),
+  yearsOfExperience: integer("years_of_experience"),
+  keyResponsibilities: text("key_responsibilities"),
+  hasProjectExperience: boolean("has_project_experience"),
+  projectExperience: text("project_experience"),
+  primarySector: text("primary_sector"),
+  sectorSpecification: text("sector_specification"),
+  subSectors: text("sub_sectors").array(),
+  otherSubSector: text("other_sub_sector"),
+  
+  // Section 2: Business Ownership & Operations
+  companyLegalName: text("company_legal_name"),
+  companyCountry: text("company_country"),
+  companyHeadquarters: text("company_headquarters"),
+  incorporationYear: integer("incorporation_year"),
+  ownershipPercentage: integer("ownership_percentage"),
+  numberOfShareholders: integer("number_of_shareholders"),
+  shareholdersOver25Percent: boolean("shareholders_over_25_percent"),
+  
+  // Section 3: Financial Documentation & Compliance
+  canProvideFinancials: boolean("can_provide_financials"),
+  isTaxRegistered: boolean("is_tax_registered"),
+  
+  // Section 4: Project Readiness & Development Status
+  projectDescription: text("project_description"),
+  projectLocation: text("project_location"),
+  projectSector: text("project_sector"),
+  projectCurrentStatus: text("project_current_status"),
+  projectStage: text("project_stage"),
+  projectDocuments: text("project_documents").array(),
+  otherProjectDocuments: text("other_project_documents"),
+  projectedImpact: text("projected_impact"),
+  
+  // Section 5: Support Needs & Project Advancement
+  mainChallenges: text("main_challenges"),
+  supportAreasNeeded: text("support_areas_needed").array(),
+  otherSupportArea: text("other_support_area"),
+  keyActivitiesForNextStage: text("key_activities_for_next_stage"),
+  fundingRequired: text("funding_required"),
+  expectedTimeline: text("expected_timeline"),
+  
+  // Section 6: Founder Commitment & Peer Support
+  canCommitToProgram: boolean("can_commit_to_program"),
+  canAttendLagosEvent: boolean("can_attend_lagos_event"),
+  commitmentManagementPlan: text("commitment_management_plan"),
+  willingToMentor: boolean("willing_to_mentor"),
+  peerMentorshipImportance: text("peer_mentorship_importance"),
+  
+  // Final Question
+  whyAfaraIsRight: text("why_afara_is_right"),
+  
+  // Legacy fields for backwards compatibility
   linkedinUrl: text("linkedin_url"),
   additionalInfo: text("additional_info"),
-  status: applicationStatusEnum("status").notNull().default("submitted"),
+  
+  // Application tracking
+  currentStep: integer("current_step").default(0),
+  status: applicationStatusEnum("status").notNull().default("draft"),
   reviewNotes: text("review_notes"),
   reviewedById: varchar("reviewed_by_id").references(() => users.id),
   reviewedAt: timestamp("reviewed_at"),
-  submittedAt: timestamp("submitted_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at"),
+  submittedAt: timestamp("submitted_at"),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
