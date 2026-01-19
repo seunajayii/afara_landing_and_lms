@@ -18,6 +18,8 @@ import {
   type Certificate, type InsertCertificate,
   type Achievement, type InsertAchievement,
   type Notification, type InsertNotification,
+  type NewsletterSubscriber, type InsertNewsletterSubscriber,
+  type NewsletterCampaign, type InsertNewsletterCampaign,
   type Application, type InsertApplication,
   users, profiles, mentorProfiles, facilitatorProfiles,
   courses, modules, lessons, enrollments, lessonProgress,
@@ -25,6 +27,7 @@ import {
   events, eventRegistrations, resources,
   discussionThreads, discussionPosts, postLikes,
   certificates, achievements, userAchievements, notifications,
+  newsletterSubscribers, newsletterCampaigns,
   applications
 } from "@shared/schema";
 import { db } from "./db";
@@ -146,6 +149,19 @@ export interface IStorage {
   getApplicationsByStatus(status: string): Promise<Application[]>;
   createApplication(application: InsertApplication): Promise<Application>;
   updateApplication(id: string, data: Partial<InsertApplication>): Promise<Application | undefined>;
+  
+  getNewsletterSubscriber(id: string): Promise<NewsletterSubscriber | undefined>;
+  getNewsletterSubscriberByEmail(email: string): Promise<NewsletterSubscriber | undefined>;
+  getAllNewsletterSubscribers(): Promise<NewsletterSubscriber[]>;
+  getActiveNewsletterSubscribers(): Promise<NewsletterSubscriber[]>;
+  createNewsletterSubscriber(subscriber: InsertNewsletterSubscriber): Promise<NewsletterSubscriber>;
+  updateNewsletterSubscriber(id: string, data: Partial<InsertNewsletterSubscriber>): Promise<NewsletterSubscriber | undefined>;
+  unsubscribeNewsletter(email: string): Promise<void>;
+  
+  getNewsletterCampaign(id: string): Promise<NewsletterCampaign | undefined>;
+  getAllNewsletterCampaigns(): Promise<NewsletterCampaign[]>;
+  createNewsletterCampaign(campaign: InsertNewsletterCampaign): Promise<NewsletterCampaign>;
+  updateNewsletterCampaign(id: string, data: Partial<InsertNewsletterCampaign>): Promise<NewsletterCampaign | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -622,6 +638,57 @@ export class DatabaseStorage implements IStorage {
 
   async updateApplication(id: string, data: Partial<InsertApplication>): Promise<Application | undefined> {
     const [updated] = await db.update(applications).set(data).where(eq(applications.id, id)).returning();
+    return updated;
+  }
+
+  async getNewsletterSubscriber(id: string): Promise<NewsletterSubscriber | undefined> {
+    const [subscriber] = await db.select().from(newsletterSubscribers).where(eq(newsletterSubscribers.id, id));
+    return subscriber;
+  }
+
+  async getNewsletterSubscriberByEmail(email: string): Promise<NewsletterSubscriber | undefined> {
+    const [subscriber] = await db.select().from(newsletterSubscribers).where(eq(newsletterSubscribers.email, email));
+    return subscriber;
+  }
+
+  async getAllNewsletterSubscribers(): Promise<NewsletterSubscriber[]> {
+    return db.select().from(newsletterSubscribers).orderBy(desc(newsletterSubscribers.subscribedAt));
+  }
+
+  async getActiveNewsletterSubscribers(): Promise<NewsletterSubscriber[]> {
+    return db.select().from(newsletterSubscribers).where(eq(newsletterSubscribers.isActive, true)).orderBy(desc(newsletterSubscribers.subscribedAt));
+  }
+
+  async createNewsletterSubscriber(subscriber: InsertNewsletterSubscriber): Promise<NewsletterSubscriber> {
+    const [newSubscriber] = await db.insert(newsletterSubscribers).values(subscriber).returning();
+    return newSubscriber;
+  }
+
+  async updateNewsletterSubscriber(id: string, data: Partial<InsertNewsletterSubscriber>): Promise<NewsletterSubscriber | undefined> {
+    const [updated] = await db.update(newsletterSubscribers).set(data).where(eq(newsletterSubscribers.id, id)).returning();
+    return updated;
+  }
+
+  async unsubscribeNewsletter(email: string): Promise<void> {
+    await db.update(newsletterSubscribers).set({ isActive: false, unsubscribedAt: new Date() }).where(eq(newsletterSubscribers.email, email));
+  }
+
+  async getNewsletterCampaign(id: string): Promise<NewsletterCampaign | undefined> {
+    const [campaign] = await db.select().from(newsletterCampaigns).where(eq(newsletterCampaigns.id, id));
+    return campaign;
+  }
+
+  async getAllNewsletterCampaigns(): Promise<NewsletterCampaign[]> {
+    return db.select().from(newsletterCampaigns).orderBy(desc(newsletterCampaigns.createdAt));
+  }
+
+  async createNewsletterCampaign(campaign: InsertNewsletterCampaign): Promise<NewsletterCampaign> {
+    const [newCampaign] = await db.insert(newsletterCampaigns).values(campaign).returning();
+    return newCampaign;
+  }
+
+  async updateNewsletterCampaign(id: string, data: Partial<InsertNewsletterCampaign>): Promise<NewsletterCampaign | undefined> {
+    const [updated] = await db.update(newsletterCampaigns).set(data).where(eq(newsletterCampaigns.id, id)).returning();
     return updated;
   }
 }
