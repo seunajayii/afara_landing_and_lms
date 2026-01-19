@@ -56,7 +56,7 @@ export function Footer() {
           </div>
 
           <div>
-            <h4 className="font-semibold mb-4">Stay Connected</h4>
+            <h4 className="font-semibold mb-4">Subscribe to Our Newsletter</h4>
             <NewsletterSignup variant="inline" className="mb-4" />
             <div className="flex gap-3 mt-4">
               <a
