@@ -366,11 +366,9 @@ export const insertAchievementSchema = createInsertSchema(achievements).omit({ i
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
 export const insertApplicationSchema = createInsertSchema(applications).omit({ 
   id: true, 
-  submittedAt: true, 
   reviewedAt: true, 
   reviewedById: true,
   reviewNotes: true,
-  status: true 
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
