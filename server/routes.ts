@@ -27,6 +27,11 @@ const registerSchema = z.object({
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
+  // Health check endpoint for Railway/production monitoring
+  app.get("/api/health", (_req: Request, res: Response) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
   // Auth Routes
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     try {
