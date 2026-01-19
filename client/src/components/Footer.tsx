@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { Mail, MapPin, Linkedin } from "lucide-react";
+import { Mail, MapPin, Linkedin, Instagram } from "lucide-react";
 import afaraLogo from "@assets/AFARA Image 1_1759521116826.png";
 import { NewsletterSignup } from "./NewsletterSignup";
 
@@ -66,6 +66,14 @@ export function Footer() {
                 data-testid="link-linkedin"
               >
                 <Linkedin className="w-5 h-5" />
+              </a>
+              <a
+                href="#"
+                className="w-10 h-10 rounded-md bg-muted hover-elevate flex items-center justify-center transition-all"
+                aria-label="Instagram"
+                data-testid="link-instagram"
+              >
+                <Instagram className="w-5 h-5" />
               </a>
             </div>
           </div>
