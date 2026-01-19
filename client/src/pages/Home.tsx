@@ -144,7 +144,7 @@ export default function Home() {
             Join a community of ambitious women entrepreneurs transforming Africa's energy and infrastructure landscape. Access training, mentorship, and funding opportunities.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
-            <Link href="/contact">
+            <Link href="/apply">
               <Button size="lg" data-testid="button-apply-now">
                 Apply Now
               </Button>
