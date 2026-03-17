@@ -155,13 +155,21 @@ export async function sendWelcomeEmail(email: string, firstName?: string): Promi
       subject: 'Welcome to the AFÁRÁ Community!',
       html: `
         <div style="font-family: Arial, sans-serif; background: #f9fafb; margin: 0; padding: 0;">
-          <!-- Main Content -->
-          <div style="max-width: 600px; margin: 0 auto; background: white;">
-            <!-- Gradient Header with Brand -->
-            <div style="background: linear-gradient(135deg, #166534 0%, #15803d 100%); padding: 50px 30px; text-align: center; color: white;">
-              <h1 style="margin: 0; font-size: 40px; font-weight: bold; letter-spacing: 1px;">AFÁRÁ</h1>
-              <p style="margin: 10px 0 0 0; font-size: 14px; color: #d1fae5;">Women Leading Africa's Energy & Infrastructure Future</p>
-            </div>
+          <!-- Header with Brand -->
+          <div style="background-color: #166534; padding: 60px 30px; text-align: center;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #166534;">
+              <tr>
+                <td align="center" style="padding: 20px 0;">
+                  <h1 style="margin: 0; font-size: 48px; font-weight: bold; color: white; letter-spacing: 2px; font-family: Arial, sans-serif;">AFÁRÁ</h1>
+                </td>
+              </tr>
+              <tr>
+                <td align="center" style="padding: 10px 0 20px 0;">
+                  <p style="margin: 0; font-size: 15px; color: #d1fae5; font-family: Arial, sans-serif; line-height: 1.4;">Women Leading Africa's Energy & Infrastructure Future</p>
+                </td>
+              </tr>
+            </table>
+          </div>
 
           <!-- Main Content -->
           <div style="max-width: 600px; margin: 0 auto; background: white; padding: 40px 30px;">
