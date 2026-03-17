@@ -70,8 +70,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const user = await createUserWithPassword(email, password, firstName, lastName, "participant");
       
-      req.session.userId = user.id;
-      req.session.userRole = user.role;
+      // Only auto-login the new user if no one is currently logged in
+      // (avoids overwriting an admin's session when they create users)
+      if (!req.session.userId) {
+        req.session.userId = user.id;
+        req.session.userRole = user.role;
+      }
       
       const { passwordHash, ...safeUser } = user;
       res.status(201).json({ user: safeUser });
