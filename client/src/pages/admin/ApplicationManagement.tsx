@@ -36,6 +36,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   Search, 
   Eye,
+  Trash2,
   CheckCircle,
   XCircle,
   Clock,
@@ -102,6 +103,22 @@ export default function ApplicationManagement() {
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to update application.", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest("DELETE", `/api/applications/${id}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
+      toast({ title: "Application Deleted", description: "The application has been deleted." });
+      setSelectedApplication(null);
+      setIsViewDialogOpen(false);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to delete application.", variant: "destructive" });
     },
   });
 
@@ -302,6 +319,20 @@ export default function ApplicationManagement() {
                                     data-testid={`button-status-${app.id}`}
                                   >
                                     Update
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => {
+                                      if (window.confirm(`Delete application from ${app.firstName} ${app.lastName}?`)) {
+                                        deleteMutation.mutate(app.id);
+                                      }
+                                    }}
+                                    disabled={deleteMutation.isPending}
+                                    data-testid={`button-delete-${app.id}`}
+                                    title="Delete application"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
                                   </Button>
                                 </div>
                               </TableCell>

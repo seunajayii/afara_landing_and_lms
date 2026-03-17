@@ -177,11 +177,9 @@ export default function AdminDashboard() {
                     <p className="text-sm text-muted-foreground">
                       Assign mentors and manage mentorship pairings.
                     </p>
-                    <Link href="/admin/mentors">
-                      <Button className="w-full" data-testid="button-manage-mentors">
-                        Manage Mentors
-                      </Button>
-                    </Link>
+                    <Button className="w-full" disabled data-testid="button-manage-mentors" title="Coming soon">
+                      Manage Mentors (Coming Soon)
+                    </Button>
                   </CardContent>
                 </Card>
 

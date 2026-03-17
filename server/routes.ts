@@ -652,7 +652,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/events", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
-      const data = insertEventSchema.parse(req.body);
+      // Convert datetime-local strings to ISO format if present
+      const body = { ...req.body };
+      if (body.startTime && typeof body.startTime === 'string') {
+        body.startTime = new Date(body.startTime).toISOString();
+      }
+      if (body.endTime && typeof body.endTime === 'string') {
+        body.endTime = new Date(body.endTime).toISOString();
+      }
+      
+      const data = insertEventSchema.parse(body);
       const event = await storage.createEvent(data);
       res.status(201).json(event);
     } catch (error) {
@@ -665,7 +674,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/events/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
-      const event = await storage.updateEvent(req.params.id, req.body);
+      // Convert datetime-local strings to ISO format if present
+      const body = { ...req.body };
+      if (body.startTime && typeof body.startTime === 'string') {
+        body.startTime = new Date(body.startTime).toISOString();
+      }
+      if (body.endTime && typeof body.endTime === 'string') {
+        body.endTime = new Date(body.endTime).toISOString();
+      }
+      
+      const event = await storage.updateEvent(req.params.id, body);
       if (!event) return res.status(404).json({ error: "Event not found" });
       res.json(event);
     } catch (error) {
@@ -1269,6 +1287,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(application);
     } catch (error) {
       res.status(500).json({ error: "Failed to update application" });
+    }
+  });
+
+  // Admin-only: delete application
+  app.delete("/api/applications/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const application = await storage.getApplication(req.params.id);
+      if (!application) return res.status(404).json({ error: "Application not found" });
+      
+      await storage.deleteApplication(req.params.id);
+      res.json({ success: true, id: req.params.id });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete application" });
     }
   });
 

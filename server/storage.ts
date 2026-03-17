@@ -149,6 +149,7 @@ export interface IStorage {
   getApplicationsByStatus(status: string): Promise<Application[]>;
   createApplication(application: InsertApplication): Promise<Application>;
   updateApplication(id: string, data: Partial<InsertApplication>): Promise<Application | undefined>;
+  deleteApplication(id: string): Promise<void>;
   
   getNewsletterSubscriber(id: string): Promise<NewsletterSubscriber | undefined>;
   getNewsletterSubscriberByEmail(email: string): Promise<NewsletterSubscriber | undefined>;
@@ -639,6 +640,10 @@ export class DatabaseStorage implements IStorage {
   async updateApplication(id: string, data: Partial<InsertApplication>): Promise<Application | undefined> {
     const [updated] = await db.update(applications).set(data).where(eq(applications.id, id)).returning();
     return updated;
+  }
+
+  async deleteApplication(id: string): Promise<void> {
+    await db.delete(applications).where(eq(applications.id, id));
   }
 
   async getNewsletterSubscriber(id: string): Promise<NewsletterSubscriber | undefined> {
