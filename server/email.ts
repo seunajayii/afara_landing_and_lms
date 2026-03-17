@@ -155,10 +155,13 @@ export async function sendWelcomeEmail(email: string, firstName?: string): Promi
       subject: 'Welcome to the AFÁRÁ Community!',
       html: `
         <div style="font-family: Arial, sans-serif; background: #f9fafb; margin: 0; padding: 0;">
-          <!-- Hero Image Section -->
-          <div style="max-width: 600px; margin: 0 auto; background: white; overflow: hidden;">
-            <img src="https://afaraaccelerator.org/assets/welcome-email-hero.png" alt="AFÁRÁ Welcome" style="width: 100%; height: auto; display: block; margin: 0; padding: 0;" />
-          </div>
+          <!-- Main Content -->
+          <div style="max-width: 600px; margin: 0 auto; background: white;">
+            <!-- Gradient Header with Brand -->
+            <div style="background: linear-gradient(135deg, #166534 0%, #15803d 100%); padding: 50px 30px; text-align: center; color: white;">
+              <h1 style="margin: 0; font-size: 40px; font-weight: bold; letter-spacing: 1px;">AFÁRÁ</h1>
+              <p style="margin: 10px 0 0 0; font-size: 14px; color: #d1fae5;">Women Leading Africa's Energy & Infrastructure Future</p>
+            </div>
 
           <!-- Main Content -->
           <div style="max-width: 600px; margin: 0 auto; background: white; padding: 40px 30px;">
