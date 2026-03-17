@@ -108,7 +108,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ user: safeUser });
   });
 
-  app.get("/api/users", async (req: Request, res: Response) => {
+  // --- Auth middleware helpers ---
+  const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+    if (!req.session?.userId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    next();
+  };
+
+  const requireAdminRole = (req: Request, res: Response, next: NextFunction) => {
+    const role = req.session?.userRole;
+    if (!role || (role !== "admin" && role !== "superadmin")) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    next();
+  };
+
+  // Visibility filter helper
+  const canAccessVisibility = (visibility: string | null, userRole: string | null): boolean => {
+    const v = visibility || "community";
+    if (v === "public") return true;
+    if (v === "community") return userRole !== null;
+    if (v === "cohort_only") return userRole !== null && userRole !== "community_member";
+    return true;
+  };
+
+  app.get("/api/users", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const users = await storage.getAllUsers();
       res.json(users);
@@ -117,7 +142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/users/:id", async (req: Request, res: Response) => {
+  app.get("/api/users/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const user = await storage.getUser(req.params.id);
       if (!user) return res.status(404).json({ error: "User not found" });
@@ -149,7 +174,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/users/:id", async (req: Request, res: Response) => {
+  app.patch("/api/users/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const user = await storage.updateUser(req.params.id, req.body);
       if (!user) return res.status(404).json({ error: "User not found" });
@@ -594,7 +619,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allEvents = req.query.upcoming === "true"
         ? await storage.getUpcomingEvents()
         : await storage.getAllEvents();
-      res.json(allEvents);
+      const userRole = (req.session?.userRole as string) || null;
+      const isAdminUser = userRole === "admin" || userRole === "superadmin";
+      const visibleEvents = isAdminUser
+        ? allEvents
+        : allEvents.filter(e => canAccessVisibility(e.visibility, userRole));
+      res.json(visibleEvents);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch events" });
     }
@@ -687,7 +717,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allResources = category
         ? await storage.getResourcesByCategory(category)
         : await storage.getAllResources();
-      res.json(allResources);
+      const userRole = (req.session?.userRole as string) || null;
+      const isAdminUser = userRole === "admin" || userRole === "superadmin";
+      const visibleResources = isAdminUser
+        ? allResources
+        : allResources.filter(r => canAccessVisibility(r.visibility, userRole));
+      res.json(visibleResources);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch resources" });
     }
@@ -1094,6 +1129,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertApplicationSchema.parse(req.body);
       const application = await storage.createApplication(data);
+
+      // When status is "submitted", auto-create a community_member account
+      if (data.status === "submitted") {
+        try {
+          const existingUser = await storage.getUserByEmail(data.email);
+          if (!existingUser) {
+            const tempPassword = randomUUID().replace(/-/g, '');
+            await createUserWithPassword(data.email, tempPassword, data.firstName, data.lastName, "community_member");
+          }
+          const { sendApplicationConfirmationEmail } = await import("./email");
+          await sendApplicationConfirmationEmail(data.email, data.firstName);
+        } catch (innerError) {
+          console.error("Failed to create community member or send confirmation email:", innerError);
+        }
+      }
+
       res.status(201).json(application);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1105,8 +1156,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/applications/:id", async (req: Request, res: Response) => {
     try {
+      const newStatus = req.body.status;
       const application = await storage.updateApplication(req.params.id, req.body);
       if (!application) return res.status(404).json({ error: "Application not found" });
+
+      // When accepted, promote the applicant user to participant and send acceptance email
+      if (newStatus === "accepted") {
+        try {
+          const user = await storage.getUserByEmail(application.email);
+          if (user) {
+            await storage.updateUser(user.id, { role: "participant" });
+          }
+          const { sendAcceptanceEmail } = await import("./email");
+          await sendAcceptanceEmail(application.email, application.firstName);
+        } catch (innerError) {
+          console.error("Failed to promote user or send acceptance email:", innerError);
+        }
+      }
+
       res.json(application);
     } catch (error) {
       res.status(500).json({ error: "Failed to update application" });

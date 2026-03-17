@@ -32,7 +32,7 @@ export async function createUserWithPassword(
   password: string, 
   firstName: string, 
   lastName: string,
-  role: "participant" | "mentor" | "facilitator" | "admin" | "superadmin" = "participant"
+  role: "community_member" | "participant" | "mentor" | "facilitator" | "admin" | "superadmin" = "participant"
 ): Promise<User> {
   const passwordHash = await hashPassword(password);
   return storage.createUser({

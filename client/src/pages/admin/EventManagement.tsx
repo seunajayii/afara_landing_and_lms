@@ -88,6 +88,7 @@ const eventFormSchema = z.object({
   recordingUrl: z.string().url("Please enter a valid URL").optional().or(z.literal("")),
   maxAttendees: z.coerce.number().min(1).optional(),
   isPublic: z.boolean().default(true),
+  visibility: z.enum(["public", "community", "cohort_only"]).default("community"),
   status: z.enum(["draft", "pending_review", "published", "archived"]),
 });
 
@@ -167,6 +168,7 @@ export default function EventManagement() {
       recordingUrl: "",
       maxAttendees: 100,
       isPublic: true,
+      visibility: "community",
       status: "draft",
     },
   });
@@ -185,6 +187,7 @@ export default function EventManagement() {
       recordingUrl: "",
       maxAttendees: 100,
       isPublic: true,
+      visibility: "community",
       status: "draft",
     },
   });
@@ -287,6 +290,7 @@ export default function EventManagement() {
       recordingUrl: event.recordingUrl || "",
       maxAttendees: event.maxAttendees || 100,
       isPublic: event.isPublic ?? true,
+      visibility: (event.visibility as EventFormData["visibility"]) || "community",
       status: event.status as EventFormData["status"],
     });
     setIsEditDialogOpen(true);
@@ -543,6 +547,28 @@ export default function EventManagement() {
                     )}
                   />
                 </div>
+                <FormField
+                  control={createForm.control}
+                  name="visibility"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Visibility</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-create-visibility">
+                            <SelectValue placeholder="Select visibility" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="public">Public (Everyone)</SelectItem>
+                          <SelectItem value="community">Community (Logged in)</SelectItem>
+                          <SelectItem value="cohort_only">Cohort Only (Participants+)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={createForm.control}
@@ -748,6 +774,28 @@ export default function EventManagement() {
                     )}
                   />
                 </div>
+                <FormField
+                  control={editForm.control}
+                  name="visibility"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Visibility</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-edit-visibility">
+                            <SelectValue placeholder="Select visibility" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="public">Public (Everyone)</SelectItem>
+                          <SelectItem value="community">Community (Logged in)</SelectItem>
+                          <SelectItem value="cohort_only">Cohort Only (Participants+)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={editForm.control}

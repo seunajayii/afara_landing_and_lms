@@ -77,7 +77,7 @@ const userFormSchema = z.object({
   email: z.string().email("Invalid email address"),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
-  role: z.enum(["participant", "mentor", "facilitator", "admin", "superadmin"]),
+  role: z.enum(["community_member", "participant", "mentor", "facilitator", "admin", "superadmin"]),
   password: z.string().min(6, "Password must be at least 6 characters").optional(),
 });
 
@@ -217,6 +217,7 @@ export default function UserManagement() {
       user.email.toLowerCase().includes(searchQuery.toLowerCase());
     
     if (activeTab === "all") return matchesSearch;
+    if (activeTab === "admin") return matchesSearch && (user.role === "admin" || user.role === "superadmin");
     return matchesSearch && user.role === activeTab;
   }) || [];
 
@@ -262,6 +263,8 @@ export default function UserManagement() {
         return "bg-blue-500/10 text-blue-600 dark:text-blue-400";
       case "mentor":
         return "bg-green-500/10 text-green-600 dark:text-green-400";
+      case "community_member":
+        return "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400";
       default:
         return "bg-gray-500/10 text-gray-600 dark:text-gray-400";
     }
@@ -287,6 +290,7 @@ export default function UserManagement() {
 
   const userCounts = {
     all: users?.length || 0,
+    community_member: users?.filter(u => u.role === "community_member").length || 0,
     participant: users?.filter(u => u.role === "participant").length || 0,
     mentor: users?.filter(u => u.role === "mentor").length || 0,
     facilitator: users?.filter(u => u.role === "facilitator").length || 0,
@@ -330,6 +334,9 @@ export default function UserManagement() {
             <TabsList>
               <TabsTrigger value="all" data-testid="tab-all-users">
                 All ({userCounts.all})
+              </TabsTrigger>
+              <TabsTrigger value="community_member" data-testid="tab-community-members">
+                Community ({userCounts.community_member})
               </TabsTrigger>
               <TabsTrigger value="participant" data-testid="tab-participants">
                 Participants ({userCounts.participant})
@@ -532,6 +539,7 @@ export default function UserManagement() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value="community_member">Community Member</SelectItem>
                         <SelectItem value="participant">Participant</SelectItem>
                         <SelectItem value="mentor">Mentor</SelectItem>
                         <SelectItem value="facilitator">Facilitator</SelectItem>
@@ -642,6 +650,7 @@ export default function UserManagement() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value="community_member">Community Member</SelectItem>
                         <SelectItem value="participant">Participant</SelectItem>
                         <SelectItem value="mentor">Mentor</SelectItem>
                         <SelectItem value="facilitator">Facilitator</SelectItem>

@@ -7,7 +7,7 @@ interface User {
   email: string;
   firstName: string;
   lastName: string;
-  role: "participant" | "mentor" | "facilitator" | "admin" | "superadmin";
+  role: "community_member" | "participant" | "mentor" | "facilitator" | "admin" | "superadmin";
   profileImageUrl: string | null;
   isActive: boolean;
   createdAt: string;

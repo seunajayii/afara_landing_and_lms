@@ -44,6 +44,8 @@ import {
   Building2,
   Mail,
   MapPin,
+  ThumbsUp,
+  Bookmark,
 } from "lucide-react";
 import type { Application } from "@shared/schema";
 import { format } from "date-fns";
@@ -108,7 +110,7 @@ export default function ApplicationManagement() {
       app.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       app.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       app.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      app.companyName?.toLowerCase().includes(searchQuery.toLowerCase());
+      app.companyLegalName?.toLowerCase().includes(searchQuery.toLowerCase());
 
     if (activeTab === "all") return matchesSearch;
     if (activeTab === "pending") return matchesSearch && (app.status === "submitted" || app.status === "under_review");
@@ -248,10 +250,10 @@ export default function ApplicationManagement() {
                                 </div>
                               </TableCell>
                               <TableCell>
-                                <div className="font-medium">{app.companyName || "N/A"}</div>
-                                <div className="text-sm text-muted-foreground">{app.jobTitle}</div>
+                                <div className="font-medium">{app.companyLegalName || "N/A"}</div>
+                                <div className="text-sm text-muted-foreground">{app.companyCountry || ""}</div>
                               </TableCell>
-                              <TableCell>{app.industrySector || "N/A"}</TableCell>
+                              <TableCell>{app.primarySector || "N/A"}</TableCell>
                               <TableCell>
                                 {app.submittedAt ? format(new Date(app.submittedAt), "MMM d, yyyy") : "N/A"}
                               </TableCell>
@@ -270,6 +272,30 @@ export default function ApplicationManagement() {
                                   >
                                     <Eye className="h-4 w-4" />
                                   </Button>
+                                  {(app.status === "submitted" || app.status === "under_review") && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => updateStatusMutation.mutate({ id: app.id, status: "accepted", reviewNotes: app.reviewNotes || "" })}
+                                        disabled={updateStatusMutation.isPending}
+                                        data-testid={`button-accept-${app.id}`}
+                                        title="Accept & Promote to Participant"
+                                      >
+                                        <ThumbsUp className="h-4 w-4 text-green-600" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => updateStatusMutation.mutate({ id: app.id, status: "waitlisted", reviewNotes: app.reviewNotes || "" })}
+                                        disabled={updateStatusMutation.isPending}
+                                        data-testid={`button-waitlist-${app.id}`}
+                                        title="Waitlist"
+                                      >
+                                        <Bookmark className="h-4 w-4 text-yellow-600" />
+                                      </Button>
+                                    </>
+                                  )}
                                   <Button
                                     size="sm"
                                     onClick={() => handleStatusChange(app)}
@@ -331,44 +357,46 @@ export default function ApplicationManagement() {
                     <MapPin className="h-4 w-4" />
                     Location
                   </div>
-                  <div className="font-medium">{selectedApplication.city}, {selectedApplication.country}</div>
+                  <div className="font-medium">
+                    {[selectedApplication.companyHeadquarters, selectedApplication.companyCountry].filter(Boolean).join(", ") || "Not specified"}
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Building2 className="h-4 w-4" />
                     Company
                   </div>
-                  <div className="font-medium">{selectedApplication.companyName}</div>
-                  <div className="text-sm text-muted-foreground">{selectedApplication.jobTitle}</div>
+                  <div className="font-medium">{selectedApplication.companyLegalName || "Not specified"}</div>
+                  <div className="text-sm text-muted-foreground">{selectedApplication.primarySector || ""}</div>
                 </div>
               </div>
 
               <div className="space-y-4 pt-4 border-t">
                 <div>
-                  <h4 className="font-medium mb-1">Industry Sector</h4>
-                  <p className="text-muted-foreground">{selectedApplication.industrySector || "Not specified"}</p>
+                  <h4 className="font-medium mb-1">Primary Sector</h4>
+                  <p className="text-muted-foreground">{selectedApplication.primarySector || "Not specified"}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <h4 className="font-medium mb-1">Years in Business</h4>
-                    <p className="text-muted-foreground">{selectedApplication.yearsInBusiness ?? "Not specified"}</p>
+                    <h4 className="font-medium mb-1">Years of Experience</h4>
+                    <p className="text-muted-foreground">{selectedApplication.yearsOfExperience ?? "Not specified"}</p>
                   </div>
                   <div>
-                    <h4 className="font-medium mb-1">Employees</h4>
-                    <p className="text-muted-foreground">{selectedApplication.numberOfEmployees || "Not specified"}</p>
+                    <h4 className="font-medium mb-1">Ownership %</h4>
+                    <p className="text-muted-foreground">{selectedApplication.ownershipPercentage != null ? `${selectedApplication.ownershipPercentage}%` : "Not specified"}</p>
                   </div>
                 </div>
                 <div>
-                  <h4 className="font-medium mb-1">Business Description</h4>
-                  <p className="text-muted-foreground whitespace-pre-wrap">{selectedApplication.businessDescription || "Not provided"}</p>
+                  <h4 className="font-medium mb-1">Professional Background</h4>
+                  <p className="text-muted-foreground whitespace-pre-wrap">{selectedApplication.professionalBackground || "Not provided"}</p>
                 </div>
                 <div>
-                  <h4 className="font-medium mb-1">Challenges Faced</h4>
-                  <p className="text-muted-foreground whitespace-pre-wrap">{selectedApplication.challengesFaced || "Not provided"}</p>
+                  <h4 className="font-medium mb-1">Main Challenges</h4>
+                  <p className="text-muted-foreground whitespace-pre-wrap">{selectedApplication.mainChallenges || "Not provided"}</p>
                 </div>
                 <div>
-                  <h4 className="font-medium mb-1">Goals for Program</h4>
-                  <p className="text-muted-foreground whitespace-pre-wrap">{selectedApplication.goalsForProgram || "Not provided"}</p>
+                  <h4 className="font-medium mb-1">Why AFÁRÁ is Right</h4>
+                  <p className="text-muted-foreground whitespace-pre-wrap">{selectedApplication.whyAfaraIsRight || "Not provided"}</p>
                 </div>
                 {selectedApplication.reviewNotes && (
                   <div className="pt-4 border-t">

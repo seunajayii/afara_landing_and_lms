@@ -3,7 +3,7 @@ import { pgTable, text, varchar, integer, boolean, timestamp, pgEnum } from "dri
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const userRoleEnum = pgEnum("user_role", ["participant", "mentor", "facilitator", "admin", "superadmin"]);
+export const userRoleEnum = pgEnum("user_role", ["participant", "mentor", "facilitator", "admin", "superadmin", "community_member"]);
 export const lessonTypeEnum = pgEnum("lesson_type", ["video", "text", "quiz", "downloadable"]);
 export const videoSourceEnum = pgEnum("video_source", ["youtube", "vimeo", "upload"]);
 export const progressStatusEnum = pgEnum("progress_status", ["not_started", "in_progress", "completed"]);
@@ -11,6 +11,7 @@ export const sessionStatusEnum = pgEnum("session_status", ["scheduled", "complet
 export const eventTypeEnum = pgEnum("event_type", ["webinar", "workshop", "live_session", "networking"]);
 export const resourceTypeEnum = pgEnum("resource_type", ["document", "template", "toolkit", "guide"]);
 export const contentStatusEnum = pgEnum("content_status", ["draft", "pending_review", "published", "archived"]);
+export const visibilityEnum = pgEnum("content_visibility", ["public", "community", "cohort_only"]);
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -165,6 +166,7 @@ export const events = pgTable("events", {
   recordingUrl: text("recording_url"),
   maxAttendees: integer("max_attendees"),
   isPublic: boolean("is_public").default(true),
+  visibility: visibilityEnum("visibility").notNull().default("community"),
   status: contentStatusEnum("status").notNull().default("published"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -189,6 +191,7 @@ export const resources = pgTable("resources", {
   thumbnailUrl: text("thumbnail_url"),
   downloadCount: integer("download_count").default(0),
   uploadedById: varchar("uploaded_by_id").references(() => users.id),
+  visibility: visibilityEnum("visibility").notNull().default("community"),
   status: contentStatusEnum("status").notNull().default("published"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
