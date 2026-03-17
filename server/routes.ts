@@ -634,6 +634,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const event = await storage.getEvent(req.params.id);
       if (!event) return res.status(404).json({ error: "Event not found" });
+      const userRole = (req.session?.userRole as string) || null;
+      const isAdminUser = userRole === "admin" || userRole === "superadmin";
+      if (!isAdminUser && !canAccessVisibility(event.visibility, userRole)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const registrations = await storage.getEventRegistrationsByEvent(req.params.id);
       res.json({ ...event, registrations });
     } catch (error) {
@@ -732,6 +737,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const resource = await storage.getResource(req.params.id);
       if (!resource) return res.status(404).json({ error: "Resource not found" });
+      const userRole = (req.session?.userRole as string) || null;
+      const isAdminUser = userRole === "admin" || userRole === "superadmin";
+      if (!isAdminUser && !canAccessVisibility(resource.visibility, userRole)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       res.json(resource);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch resource" });
@@ -1074,7 +1084,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/admin/stats", async (req: Request, res: Response) => {
+  app.get("/api/admin/stats", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const users = await storage.getAllUsers();
       const allCourses = await storage.getAllCourses();
@@ -1102,8 +1112,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Application Routes (Public - no auth required)
-  app.get("/api/applications", async (req: Request, res: Response) => {
+  // Application Routes (Admin-only for listing/managing; public POST for submission)
+  app.get("/api/applications", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const status = req.query.status as string;
       const allApplications = status 
@@ -1115,7 +1125,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/applications/:id", async (req: Request, res: Response) => {
+  app.get("/api/applications/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const application = await storage.getApplication(req.params.id);
       if (!application) return res.status(404).json({ error: "Application not found" });
@@ -1154,11 +1164,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/applications/:id", async (req: Request, res: Response) => {
+  app.patch("/api/applications/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const newStatus = req.body.status;
       const application = await storage.updateApplication(req.params.id, req.body);
       if (!application) return res.status(404).json({ error: "Application not found" });
+
+      // When transitioning to submitted, auto-create community_member account + confirmation email
+      if (newStatus === "submitted") {
+        try {
+          const existingUser = await storage.getUserByEmail(application.email);
+          if (!existingUser) {
+            const tempPassword = randomUUID().replace(/-/g, '');
+            await createUserWithPassword(application.email, tempPassword, application.firstName, application.lastName, "community_member");
+          }
+          const { sendApplicationConfirmationEmail } = await import("./email");
+          await sendApplicationConfirmationEmail(application.email, application.firstName);
+        } catch (innerError) {
+          console.error("Failed to create community member or send confirmation email:", innerError);
+        }
+      }
 
       // When accepted, promote the applicant user to participant and send acceptance email
       if (newStatus === "accepted") {

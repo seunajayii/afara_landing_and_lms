@@ -59,22 +59,20 @@ export function Footer() {
             <h4 className="font-semibold mb-4">Subscribe to Our Newsletter</h4>
             <NewsletterSignup variant="inline" className="mb-4" />
             <div className="flex gap-3 mt-4">
-              <a
-                href="#"
-                className="w-10 h-10 rounded-md bg-muted hover-elevate flex items-center justify-center transition-all"
+              <div
+                className="w-10 h-10 rounded-md bg-muted flex items-center justify-center"
                 aria-label="LinkedIn"
-                data-testid="link-linkedin"
+                data-testid="icon-linkedin"
               >
-                <Linkedin className="w-5 h-5" />
-              </a>
-              <a
-                href="#"
-                className="w-10 h-10 rounded-md bg-muted hover-elevate flex items-center justify-center transition-all"
+                <Linkedin className="w-5 h-5 text-muted-foreground" />
+              </div>
+              <div
+                className="w-10 h-10 rounded-md bg-muted flex items-center justify-center"
                 aria-label="Instagram"
-                data-testid="link-instagram"
+                data-testid="icon-instagram"
               >
-                <Instagram className="w-5 h-5" />
-              </a>
+                <Instagram className="w-5 h-5 text-muted-foreground" />
+              </div>
             </div>
           </div>
         </div>

@@ -2,15 +2,14 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/lib/auth";
+import React from "react";
 import {
   LayoutDashboard,
   BookOpen,
   Users,
-  UserCog,
   Calendar,
   FolderOpen,
   Award,
-  Settings,
   LogOut,
   Shield,
   FileText,
@@ -32,16 +31,13 @@ export function AdminSidebar() {
     { path: "/admin/applications", label: "Applications", icon: FileText },
     { path: "/admin/courses", label: "Course Management", icon: BookOpen },
     { path: "/admin/users", label: "User Management", icon: Users },
-    { path: "/admin/mentors", label: "Mentor Management", icon: UserCog },
     { path: "/admin/resources", label: "Resource Management", icon: FolderOpen },
     { path: "/admin/events", label: "Event Management", icon: Calendar },
     { path: "/admin/certificates", label: "Certificate Management", icon: Award },
     { path: "/admin/newsletter", label: "Newsletter", icon: Mail },
   ];
 
-  const superAdminItems = [
-    { path: "/admin/settings", label: "Platform Settings", icon: Settings },
-  ];
+  const superAdminItems: { path: string; label: string; icon: React.ElementType }[] = [];
 
   return (
     <div className="w-64 border-r bg-sidebar h-screen flex flex-col">
