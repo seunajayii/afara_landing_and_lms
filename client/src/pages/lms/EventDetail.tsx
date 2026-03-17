@@ -107,9 +107,9 @@ export default function EventDetail() {
                 )}
               </div>
 
-              {event.meetingUrl && (
+              {event.meetingLink && (
                 <Button asChild className="gap-2" data-testid="button-join-event">
-                  <a href={event.meetingUrl} target="_blank" rel="noopener noreferrer">
+                  <a href={event.meetingLink} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="w-4 h-4" />
                     Join Session
                   </a>
