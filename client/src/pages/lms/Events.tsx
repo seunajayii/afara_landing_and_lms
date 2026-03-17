@@ -3,6 +3,8 @@ import { EventCard } from "@/components/EventCard";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
+import { Lock } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 import type { Event } from "@shared/schema";
 
 function getEventType(event: Event): "live" | "recorded" | "upcoming" {
@@ -42,6 +44,9 @@ function EventCardSkeleton() {
 }
 
 export default function Events() {
+  const { user } = useAuth();
+  const isCommunityMember = user?.role === "community_member";
+
   const { data: events, isLoading } = useQuery<Event[]>({
     queryKey: ["/api/events"],
   });
@@ -59,6 +64,15 @@ export default function Events() {
       <main className="flex-1 overflow-auto">
         <div className="p-8">
           <h1 className="text-3xl font-bold mb-6">Events & Sessions</h1>
+
+          {isCommunityMember && (
+            <div className="flex items-start gap-3 p-4 mb-6 rounded-md bg-muted border" data-testid="notice-cohort-events">
+              <Lock className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
+              <p className="text-sm text-muted-foreground">
+                Some sessions are available to cohort participants only. Apply to the AFÁRÁ program to access all events.
+              </p>
+            </div>
+          )}
 
           {isLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -1,10 +1,11 @@
 import { LMSSidebar } from "@/components/LMSSidebar";
 import { ResourceCard } from "@/components/ResourceCard";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Search, Lock } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/lib/auth";
 import type { Resource } from "@shared/schema";
 
 function formatFileSize(bytes: number | null): string {
@@ -36,6 +37,8 @@ function ResourceCardSkeleton() {
 
 export default function Resources() {
   const [searchQuery, setSearchQuery] = useState("");
+  const { user } = useAuth();
+  const isCommunityMember = user?.role === "community_member";
 
   const { data: resources, isLoading } = useQuery<Resource[]>({
     queryKey: ["/api/resources"],
@@ -53,6 +56,15 @@ export default function Resources() {
       <main className="flex-1 overflow-auto">
         <div className="p-8">
           <h1 className="text-3xl font-bold mb-6">Resource Library</h1>
+
+          {isCommunityMember && (
+            <div className="flex items-start gap-3 p-4 mb-6 rounded-md bg-muted border" data-testid="notice-cohort-resources">
+              <Lock className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
+              <p className="text-sm text-muted-foreground">
+                Some resources are available to cohort participants only. Apply to the AFÁRÁ program to unlock the full resource library.
+              </p>
+            </div>
+          )}
 
           <div className="relative mb-8">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />

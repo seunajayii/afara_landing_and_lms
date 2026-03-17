@@ -646,7 +646,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/events", async (req: Request, res: Response) => {
+  app.post("/api/events", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const data = insertEventSchema.parse(req.body);
       const event = await storage.createEvent(data);
@@ -659,7 +659,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/events/:id", async (req: Request, res: Response) => {
+  app.patch("/api/events/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const event = await storage.updateEvent(req.params.id, req.body);
       if (!event) return res.status(404).json({ error: "Event not found" });
@@ -669,7 +669,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/events/:id", async (req: Request, res: Response) => {
+  app.delete("/api/events/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       await storage.deleteEvent(req.params.id);
       res.status(204).send();
@@ -748,7 +748,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/resources", async (req: Request, res: Response) => {
+  app.post("/api/resources", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const data = insertResourceSchema.parse(req.body);
       const resource = await storage.createResource(data);
@@ -761,7 +761,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/resources/:id", async (req: Request, res: Response) => {
+  app.patch("/api/resources/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const resource = await storage.updateResource(req.params.id, req.body);
       if (!resource) return res.status(404).json({ error: "Resource not found" });
@@ -771,7 +771,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/resources/:id", async (req: Request, res: Response) => {
+  app.delete("/api/resources/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       await storage.deleteResource(req.params.id);
       res.status(204).send();
@@ -1164,9 +1164,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/applications/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+  app.patch("/api/applications/:id", async (req: Request, res: Response) => {
     try {
       const newStatus = req.body.status;
+      // Status transitions that only admins may perform
+      const adminOnlyStatuses = ["accepted", "rejected", "under_review", "waitlisted"];
+      if (newStatus && adminOnlyStatuses.includes(newStatus)) {
+        if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });
+        const userRole = req.session?.userRole as string;
+        if (userRole !== "admin" && userRole !== "superadmin") {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+      }
       const application = await storage.updateApplication(req.params.id, req.body);
       if (!application) return res.status(404).json({ error: "Application not found" });
 
