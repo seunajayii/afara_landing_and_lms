@@ -1164,8 +1164,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Public: applicants may update their own draft or submit it
-  app.patch("/api/applications/:id", async (req: Request, res: Response) => {
+  // Public: applicants save/submit their own draft (requires email ownership proof)
+  app.patch("/api/applications/:id/save", async (req: Request, res: Response) => {
     try {
       const newStatus = req.body.status;
       const allowedPublicStatuses = [undefined, "draft", "submitted"];
@@ -1173,7 +1173,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Forbidden: only draft and submitted transitions are allowed on this endpoint" });
       }
 
-      // Ownership check: the request must include the same email as the stored application
+      // Ownership check: caller must supply the same email as stored on the draft
       const existing = await storage.getApplication(req.params.id);
       if (!existing) return res.status(404).json({ error: "Application not found" });
       const requestEmail = (req.body.email || "").trim().toLowerCase();
@@ -1207,13 +1207,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin-only: full application status management (accept, reject, waitlist, etc.)
+  app.patch("/api/applications/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const newStatus = req.body.status;
+      const application = await storage.updateApplication(req.params.id, req.body);
+      if (!application) return res.status(404).json({ error: "Application not found" });
+
+      if (newStatus === "accepted") {
+        try {
+          const user = await storage.getUserByEmail(application.email);
+          if (user) {
+            await storage.updateUser(user.id, { role: "participant" });
+          }
+          const { sendAcceptanceEmail } = await import("./email");
+          await sendAcceptanceEmail(application.email, application.firstName);
+        } catch (innerError) {
+          console.error("Failed to promote user or send acceptance email:", innerError);
+        }
+      }
+
+      res.json(application);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update application" });
+    }
+  });
+
+  // Alias kept for backward compatibility
   app.patch("/api/admin/applications/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const newStatus = req.body.status;
       const application = await storage.updateApplication(req.params.id, req.body);
       if (!application) return res.status(404).json({ error: "Application not found" });
 
-      // When accepted, promote the applicant user to participant and send acceptance email
       if (newStatus === "accepted") {
         try {
           const user = await storage.getUserByEmail(application.email);

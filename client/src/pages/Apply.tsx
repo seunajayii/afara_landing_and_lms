@@ -238,7 +238,7 @@ export default function Apply() {
       );
       
       if (draftId) {
-        const response = await apiRequest("PATCH", `/api/applications/${draftId}`, {
+        const response = await apiRequest("PATCH", `/api/applications/${draftId}/save`, {
           ...cleanedData,
           status: "draft",
         });
@@ -280,7 +280,7 @@ export default function Apply() {
       );
       
       if (draftId) {
-        const response = await apiRequest("PATCH", `/api/applications/${draftId}`, {
+        const response = await apiRequest("PATCH", `/api/applications/${draftId}/save`, {
           ...cleanedData,
           status: "submitted",
           submittedAt: new Date().toISOString(),
