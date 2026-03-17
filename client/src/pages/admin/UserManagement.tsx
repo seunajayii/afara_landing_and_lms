@@ -339,7 +339,7 @@ export default function UserManagement() {
                 Community ({userCounts.community_member})
               </TabsTrigger>
               <TabsTrigger value="participant" data-testid="tab-participants">
-                Participants ({userCounts.participant})
+                Cohort Members ({userCounts.participant})
               </TabsTrigger>
               <TabsTrigger value="mentor" data-testid="tab-mentors">
                 Mentors ({userCounts.mentor})
@@ -540,7 +540,7 @@ export default function UserManagement() {
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="community_member">Community Member</SelectItem>
-                        <SelectItem value="participant">Participant</SelectItem>
+                        <SelectItem value="participant">Participant (Cohort member)</SelectItem>
                         <SelectItem value="mentor">Mentor</SelectItem>
                         <SelectItem value="facilitator">Facilitator</SelectItem>
                         <SelectItem value="admin">Admin</SelectItem>
@@ -651,7 +651,7 @@ export default function UserManagement() {
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="community_member">Community Member</SelectItem>
-                        <SelectItem value="participant">Participant</SelectItem>
+                        <SelectItem value="participant">Participant (Cohort member)</SelectItem>
                         <SelectItem value="mentor">Mentor</SelectItem>
                         <SelectItem value="facilitator">Facilitator</SelectItem>
                         <SelectItem value="admin">Admin</SelectItem>
