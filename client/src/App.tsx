@@ -16,7 +16,9 @@ import Dashboard from "@/pages/lms/Dashboard";
 import Courses from "@/pages/lms/Courses";
 import Mentorship from "@/pages/lms/Mentorship";
 import Events from "@/pages/lms/Events";
+import EventDetail from "@/pages/lms/EventDetail";
 import Resources from "@/pages/lms/Resources";
+import ResourceDetail from "@/pages/lms/ResourceDetail";
 import Community from "@/pages/lms/Community";
 import Certificates from "@/pages/lms/Certificates";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
@@ -98,7 +100,9 @@ function Router() {
       <Route path="/lms/courses">{() => <ProtectedRoute component={Courses} />}</Route>
       <Route path="/lms/mentorship">{() => <ProtectedRoute component={Mentorship} />}</Route>
       <Route path="/lms/events">{() => <ProtectedRoute component={Events} />}</Route>
+      <Route path="/lms/events/:id">{() => <ProtectedRoute component={EventDetail} />}</Route>
       <Route path="/lms/resources">{() => <ProtectedRoute component={Resources} />}</Route>
+      <Route path="/lms/resources/:id">{() => <ProtectedRoute component={ResourceDetail} />}</Route>
       <Route path="/lms/community">{() => <ProtectedRoute component={Community} />}</Route>
       <Route path="/lms/certificates">{() => <ProtectedRoute component={Certificates} />}</Route>
       

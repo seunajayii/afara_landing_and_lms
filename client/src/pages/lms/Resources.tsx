@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
+import { Link } from "wouter";
 import type { Resource } from "@shared/schema";
 
 function formatFileSize(bytes: number | null): string {
@@ -86,13 +87,14 @@ export default function Resources() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredResources.map((resource) => (
-                <ResourceCard
-                  key={resource.id}
-                  title={resource.title}
-                  category={resource.category || "General"}
-                  fileType={getFileType(resource.fileName)}
-                  size={formatFileSize(resource.fileSize)}
-                />
+                <Link key={resource.id} href={`/lms/resources/${resource.id}`} data-testid={`link-resource-${resource.id}`}>
+                  <ResourceCard
+                    title={resource.title}
+                    category={resource.category || "General"}
+                    fileType={getFileType(resource.fileName)}
+                    size={formatFileSize(resource.fileSize)}
+                  />
+                </Link>
               ))}
             </div>
           )}

@@ -1164,17 +1164,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Public: applicants may update their own draft or submit it
   app.patch("/api/applications/:id", async (req: Request, res: Response) => {
     try {
       const newStatus = req.body.status;
-      // Status transitions that only admins may perform
-      const adminOnlyStatuses = ["accepted", "rejected", "under_review", "waitlisted"];
-      if (newStatus && adminOnlyStatuses.includes(newStatus)) {
-        if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });
-        const userRole = req.session?.userRole as string;
-        if (userRole !== "admin" && userRole !== "superadmin") {
-          return res.status(403).json({ error: "Forbidden" });
-        }
+      const allowedPublicStatuses = [undefined, "draft", "submitted"];
+      if (newStatus && !allowedPublicStatuses.includes(newStatus)) {
+        return res.status(403).json({ error: "Forbidden: only draft and submitted transitions are allowed on this endpoint" });
       }
       const application = await storage.updateApplication(req.params.id, req.body);
       if (!application) return res.status(404).json({ error: "Application not found" });
@@ -1193,6 +1189,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Failed to create community member or send confirmation email:", innerError);
         }
       }
+
+      res.json(application);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update application" });
+    }
+  });
+
+  // Admin-only: full application status management (accept, reject, waitlist, etc.)
+  app.patch("/api/admin/applications/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const newStatus = req.body.status;
+      const application = await storage.updateApplication(req.params.id, req.body);
+      if (!application) return res.status(404).json({ error: "Application not found" });
 
       // When accepted, promote the applicant user to participant and send acceptance email
       if (newStatus === "accepted") {

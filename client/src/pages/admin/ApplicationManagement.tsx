@@ -85,7 +85,7 @@ export default function ApplicationManagement() {
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status, reviewNotes }: { id: string; status: string; reviewNotes: string }) => {
-      const response = await apiRequest("PATCH", `/api/applications/${id}`, { 
+      const response = await apiRequest("PATCH", `/api/admin/applications/${id}`, { 
         status, 
         reviewNotes,
         reviewedAt: new Date().toISOString()

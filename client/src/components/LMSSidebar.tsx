@@ -10,7 +10,6 @@ import {
   FolderOpen,
   MessageSquare,
   Award,
-  Settings,
   LogOut,
   Shield,
 } from "lucide-react";
@@ -72,10 +71,6 @@ export function LMSSidebar() {
             </Button>
           </Link>
         )}
-        <Button variant="ghost" className="w-full justify-start gap-3" data-testid="button-settings">
-          <Settings className="w-4 h-4" />
-          Settings
-        </Button>
         <div className="flex items-center justify-between gap-2">
           <Button 
             variant="ghost" 

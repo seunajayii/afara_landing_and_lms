@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { Lock } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { Link } from "wouter";
 import type { Event } from "@shared/schema";
 
 function getEventType(event: Event): "live" | "recorded" | "upcoming" {
@@ -87,17 +88,18 @@ export default function Events() {
                 const startTime = new Date(event.startTime);
                 
                 return (
-                  <EventCard
-                    key={event.id}
-                    title={event.title}
-                    date={eventType === "recorded" ? "Recorded" : format(startTime, "MMMM d, yyyy")}
-                    time={eventType === "recorded" 
-                      ? `${event.durationMinutes || 60} minutes` 
-                      : format(startTime, "h:mm a") + " WAT"
-                    }
-                    type={eventType}
-                    location={formatLocation(event)}
-                  />
+                  <Link key={event.id} href={`/lms/events/${event.id}`} data-testid={`link-event-${event.id}`}>
+                    <EventCard
+                      title={event.title}
+                      date={eventType === "recorded" ? "Recorded" : format(startTime, "MMMM d, yyyy")}
+                      time={eventType === "recorded" 
+                        ? `${event.durationMinutes || 60} minutes` 
+                        : format(startTime, "h:mm a") + " WAT"
+                      }
+                      type={eventType}
+                      location={formatLocation(event)}
+                    />
+                  </Link>
                 );
               })}
             </div>
