@@ -44,10 +44,10 @@ export async function sendNewsletter(
   recipients: string[]
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { client, fromEmail } = await getResendClient();
+    const { client } = await getResendClient();
     
     const { data, error } = await client.emails.send({
-      from: fromEmail || 'AFÁRÁ <newsletter@afara.io>',
+      from: 'Nwanne <admin@afaraaccelerator.org>',
       to: recipients,
       subject,
       html: htmlContent
@@ -67,10 +67,10 @@ export async function sendNewsletter(
 
 export async function sendApplicationConfirmationEmail(email: string, firstName?: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const { client, fromEmail } = await getResendClient();
+    const { client } = await getResendClient();
     
     const { data, error } = await client.emails.send({
-      from: fromEmail || 'AFÁRÁ <noreply@afara.io>',
+      from: 'Nwanne <admin@afaraaccelerator.org>',
       to: email,
       subject: 'Application Received – AFÁRÁ Accelerator Program',
       html: `
@@ -103,10 +103,10 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
 
 export async function sendAcceptanceEmail(email: string, firstName?: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const { client, fromEmail } = await getResendClient();
+    const { client } = await getResendClient();
     
     const { data, error } = await client.emails.send({
-      from: fromEmail || 'AFÁRÁ <noreply@afara.io>',
+      from: 'Nwanne <admin@afaraaccelerator.org>',
       to: email,
       subject: 'Congratulations! Your AFÁRÁ Application Has Been Accepted',
       html: `
@@ -147,10 +147,10 @@ export async function sendAcceptanceEmail(email: string, firstName?: string): Pr
 
 export async function sendWelcomeEmail(email: string, firstName?: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const { client, fromEmail } = await getResendClient();
+    const { client } = await getResendClient();
     
     const { data, error } = await client.emails.send({
-      from: fromEmail || 'AFÁRÁ <newsletter@afara.io>',
+      from: 'Nwanne <admin@afaraaccelerator.org>',
       to: email,
       subject: 'Welcome to the AFÁRÁ Community!',
       html: `

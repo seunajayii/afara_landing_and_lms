@@ -156,7 +156,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/users/role/:role", async (req: Request, res: Response) => {
+  app.get("/api/users/role/:role", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const users = await storage.getUsersByRole(req.params.role);
       res.json(users);
@@ -786,8 +786,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/resources/:id/download", async (req: Request, res: Response) => {
     try {
-      await storage.incrementResourceDownload(req.params.id);
       const resource = await storage.getResource(req.params.id);
+      if (!resource) return res.status(404).json({ error: "Resource not found" });
+      
+      // Check visibility: admins bypass; others must have access based on visibility
+      const userRole = req.session?.userRole || null;
+      if (userRole !== "admin" && userRole !== "superadmin") {
+        if (!canAccessVisibility(resource.visibility, userRole)) {
+          return res.status(403).json({ error: "Access denied: cohort members only" });
+        }
+      }
+      
+      await storage.incrementResourceDownload(req.params.id);
       res.json(resource);
     } catch (error) {
       res.status(500).json({ error: "Failed to track download" });
