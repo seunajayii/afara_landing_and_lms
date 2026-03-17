@@ -1172,6 +1172,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (newStatus && !allowedPublicStatuses.includes(newStatus)) {
         return res.status(403).json({ error: "Forbidden: only draft and submitted transitions are allowed on this endpoint" });
       }
+
+      // Ownership check: the request must include the same email as the stored application
+      const existing = await storage.getApplication(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Application not found" });
+      const requestEmail = (req.body.email || "").trim().toLowerCase();
+      const storedEmail = (existing.email || "").trim().toLowerCase();
+      if (!requestEmail || requestEmail !== storedEmail) {
+        return res.status(403).json({ error: "Forbidden: email does not match application record" });
+      }
+
       const application = await storage.updateApplication(req.params.id, req.body);
       if (!application) return res.status(404).json({ error: "Application not found" });
 
