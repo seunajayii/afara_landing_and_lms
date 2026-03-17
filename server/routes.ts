@@ -652,13 +652,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/events", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
-      // Convert datetime-local strings to ISO format if present
+      // Convert datetime-local strings to Date objects
       const body = { ...req.body };
       if (body.startTime && typeof body.startTime === 'string') {
-        body.startTime = new Date(body.startTime).toISOString();
+        body.startTime = new Date(body.startTime);
       }
       if (body.endTime && typeof body.endTime === 'string') {
-        body.endTime = new Date(body.endTime).toISOString();
+        body.endTime = new Date(body.endTime);
       }
       
       const data = insertEventSchema.parse(body);
@@ -674,13 +674,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/events/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
-      // Convert datetime-local strings to ISO format if present
+      // Convert datetime-local strings to Date objects
       const body = { ...req.body };
       if (body.startTime && typeof body.startTime === 'string') {
-        body.startTime = new Date(body.startTime).toISOString();
+        body.startTime = new Date(body.startTime);
       }
       if (body.endTime && typeof body.endTime === 'string') {
-        body.endTime = new Date(body.endTime).toISOString();
+        body.endTime = new Date(body.endTime);
       }
       
       const event = await storage.updateEvent(req.params.id, body);
