@@ -23,7 +23,8 @@ export default function ResourceDetail() {
     },
   });
 
-  const isCohortRestricted = (error as any)?.status === 403;
+  const isCohortRestricted =
+    typeof error === "object" && error !== null && "status" in error && (error as { status: number }).status === 403;
 
   return (
     <div className="flex h-screen">

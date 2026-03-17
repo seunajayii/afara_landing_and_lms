@@ -24,7 +24,8 @@ export default function EventDetail() {
     },
   });
 
-  const isCohortRestricted = (error as any)?.status === 403;
+  const isCohortRestricted =
+    typeof error === "object" && error !== null && "status" in error && (error as { status: number }).status === 403;
 
   const getTypeBadge = () => {
     if (!event) return null;
