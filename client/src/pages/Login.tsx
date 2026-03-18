@@ -114,12 +114,6 @@ export default function Login() {
               </Button>
             </Link>
           </div>
-          
-          <div className="mt-4 p-3 bg-muted rounded-md text-sm">
-            <p className="font-medium mb-1">Admin Login:</p>
-            <p className="text-muted-foreground">admin@afaraaccelerator.org</p>
-            <p className="text-muted-foreground">Admin123!</p>
-          </div>
         </CardContent>
       </Card>
     </div>
