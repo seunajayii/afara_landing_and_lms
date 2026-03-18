@@ -32,9 +32,86 @@ export function AttachmentCard({
   attachment: PostAttachment;
   onRemove?: () => void;
 }) {
+  if (attachment.type === "event") {
+    const date = attachment.startTime ? new Date(attachment.startTime) : null;
+    return (
+      <div className="flex items-start gap-3 rounded-md border px-3 py-2.5 bg-muted/40 text-sm">
+        <div className="flex-shrink-0 mt-0.5">
+          <CalendarDays className="w-4 h-4 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
+            Event
+          </div>
+          <a
+            href={attachment.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-primary hover:underline leading-tight block truncate"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {attachment.title}
+          </a>
+          {date && (
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+              {" · "}
+              {date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+            </div>
+          )}
+        </div>
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="flex-shrink-0 text-muted-foreground hover:text-foreground mt-0.5"
+            aria-label="Remove attachment"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (attachment.type === "resource") {
+    return (
+      <div className="flex items-center gap-3 rounded-md border px-3 py-2.5 bg-muted/40 text-sm">
+        <div className="flex-shrink-0">
+          <FileText className="w-4 h-4 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
+            Resource{attachment.resourceType ? ` · ${attachment.resourceType}` : ""}
+          </div>
+          <a
+            href={attachment.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-primary hover:underline truncate block"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {attachment.title}
+          </a>
+        </div>
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="flex-shrink-0 text-muted-foreground hover:text-foreground"
+            aria-label="Remove attachment"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // link type
   return (
     <div className="flex items-center gap-2 rounded-md border px-3 py-2 bg-muted/40 text-sm">
-      <AttachmentTypeIcon type={attachment.type} />
+      <Link2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
       <a
         href={attachment.url}
         target="_blank"
@@ -44,11 +121,6 @@ export function AttachmentCard({
       >
         {attachment.title}
       </a>
-      {attachment.type === "event" && attachment.startTime && (
-        <span className="text-xs text-muted-foreground flex-shrink-0">
-          {new Date(attachment.startTime).toLocaleDateString()}
-        </span>
-      )}
       {onRemove && (
         <button
           type="button"
@@ -343,11 +415,3 @@ export function AttachmentPicker({
   );
 }
 
-export function parseAttachment(json: string | null | undefined): PostAttachment | null {
-  if (!json) return null;
-  try {
-    return JSON.parse(json) as PostAttachment;
-  } catch {
-    return null;
-  }
-}

@@ -824,13 +824,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Sanitize user rows before returning them in community API responses
+  function sanitizeAuthor(user: { passwordHash?: string; [k: string]: unknown } | undefined | null) {
+    if (!user) return undefined;
+    const { passwordHash, ...safe } = user;
+    return safe;
+  }
+
   app.get("/api/community/threads", async (req: Request, res: Response) => {
     try {
       const threads = await storage.getAllDiscussionThreads();
       const threadsWithAuthors = await Promise.all(
         threads.map(async (thread) => {
           const author = await storage.getUser(thread.authorId);
-          return { ...thread, author };
+          return { ...thread, author: sanitizeAuthor(author) };
         })
       );
       res.json(threadsWithAuthors);
@@ -849,10 +856,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const postsWithAuthors = await Promise.all(
         posts.map(async (post) => {
           const postAuthor = await storage.getUser(post.authorId);
-          return { ...post, author: postAuthor };
+          return { ...post, author: sanitizeAuthor(postAuthor) };
         })
       );
-      res.json({ ...thread, author, posts: postsWithAuthors });
+      res.json({ ...thread, author: sanitizeAuthor(author), posts: postsWithAuthors });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch thread" });
     }
@@ -860,9 +867,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/community/threads", requireAuth, async (req: Request, res: Response) => {
     try {
+      // Explicitly whitelist allowed creation fields; moderation fields are always server-defaulted
       const data = insertDiscussionThreadSchema.parse({
-        ...req.body,
+        title: req.body.title,
+        content: req.body.content,
+        category: req.body.category,
+        attachmentJson: req.body.attachmentJson,
         authorId: req.session.userId,
+        isPinned: false,
+        isLocked: false,
+        viewCount: 0,
+        replyCount: 0,
       });
       const thread = await storage.createDiscussionThread(data);
 

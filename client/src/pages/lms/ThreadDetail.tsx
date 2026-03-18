@@ -17,9 +17,9 @@ import type { DiscussionThread, DiscussionPost, User } from "@shared/schema";
 import {
   AttachmentPicker,
   AttachmentCard,
-  parseAttachment,
   type PostAttachment,
 } from "@/components/CommunityAttachmentPicker";
+import { parseAttachment } from "@/lib/communityUtils";
 
 interface PostWithAuthor extends DiscussionPost {
   author?: User;

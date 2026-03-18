@@ -38,7 +38,8 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import type { DiscussionThread, User } from "@shared/schema";
-import { AttachmentPicker, AttachmentCard, parseAttachment, type PostAttachment } from "@/components/CommunityAttachmentPicker";
+import { AttachmentPicker, AttachmentCard, type PostAttachment } from "@/components/CommunityAttachmentPicker";
+import { parseAttachment } from "@/lib/communityUtils";
 
 interface ThreadWithAuthor extends DiscussionThread {
   author?: User;
