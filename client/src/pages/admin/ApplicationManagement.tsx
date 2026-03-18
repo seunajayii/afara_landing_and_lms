@@ -33,6 +33,14 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { 
   Search, 
   Eye,
@@ -45,8 +53,8 @@ import {
   Building2,
   Mail,
   MapPin,
-  ThumbsUp,
-  Bookmark,
+  ChevronDown,
+  ClipboardEdit,
 } from "lucide-react";
 import type { Application } from "@shared/schema";
 import { format } from "date-fns";
@@ -286,40 +294,83 @@ export default function ApplicationManagement() {
                                     variant="outline"
                                     onClick={() => handleViewApplication(app)}
                                     data-testid={`button-view-${app.id}`}
+                                    title="View application"
                                   >
                                     <Eye className="h-4 w-4" />
                                   </Button>
-                                  {(app.status === "submitted" || app.status === "under_review") && (
-                                    <>
+
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
                                       <Button
                                         size="sm"
                                         variant="outline"
-                                        onClick={() => updateStatusMutation.mutate({ id: app.id, status: "accepted", reviewNotes: app.reviewNotes || "" })}
                                         disabled={updateStatusMutation.isPending}
-                                        data-testid={`button-accept-${app.id}`}
-                                        title="Accept & Promote to Participant"
+                                        data-testid={`button-status-menu-${app.id}`}
                                       >
-                                        <ThumbsUp className="h-4 w-4 text-green-600" />
+                                        Set Status <ChevronDown className="h-3 w-3 ml-1" />
                                       </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => updateStatusMutation.mutate({ id: app.id, status: "waitlisted", reviewNotes: app.reviewNotes || "" })}
-                                        disabled={updateStatusMutation.isPending}
-                                        data-testid={`button-waitlist-${app.id}`}
-                                        title="Waitlist"
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuLabel>Change Status</DropdownMenuLabel>
+                                      <DropdownMenuSeparator />
+                                      {app.status !== "submitted" && (
+                                        <DropdownMenuItem
+                                          onClick={() => updateStatusMutation.mutate({ id: app.id, status: "submitted", reviewNotes: app.reviewNotes || "" })}
+                                          data-testid={`menu-submitted-${app.id}`}
+                                        >
+                                          <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
+                                          Mark as Submitted
+                                        </DropdownMenuItem>
+                                      )}
+                                      {app.status !== "under_review" && (
+                                        <DropdownMenuItem
+                                          onClick={() => updateStatusMutation.mutate({ id: app.id, status: "under_review", reviewNotes: app.reviewNotes || "" })}
+                                          data-testid={`menu-under-review-${app.id}`}
+                                        >
+                                          <ClipboardEdit className="h-4 w-4 mr-2 text-muted-foreground" />
+                                          Mark Under Review
+                                        </DropdownMenuItem>
+                                      )}
+                                      {app.status !== "accepted" && (
+                                        <DropdownMenuItem
+                                          onClick={() => updateStatusMutation.mutate({ id: app.id, status: "accepted", reviewNotes: app.reviewNotes || "" })}
+                                          data-testid={`menu-accept-${app.id}`}
+                                          className="text-green-600 focus:text-green-600"
+                                        >
+                                          <CheckCircle className="h-4 w-4 mr-2" />
+                                          Accept
+                                        </DropdownMenuItem>
+                                      )}
+                                      {app.status !== "waitlisted" && (
+                                        <DropdownMenuItem
+                                          onClick={() => updateStatusMutation.mutate({ id: app.id, status: "waitlisted", reviewNotes: app.reviewNotes || "" })}
+                                          data-testid={`menu-waitlist-${app.id}`}
+                                        >
+                                          <Clock className="h-4 w-4 mr-2 text-yellow-600" />
+                                          Waitlist
+                                        </DropdownMenuItem>
+                                      )}
+                                      {app.status !== "rejected" && (
+                                        <DropdownMenuItem
+                                          onClick={() => updateStatusMutation.mutate({ id: app.id, status: "rejected", reviewNotes: app.reviewNotes || "" })}
+                                          data-testid={`menu-reject-${app.id}`}
+                                          className="text-destructive focus:text-destructive"
+                                        >
+                                          <XCircle className="h-4 w-4 mr-2" />
+                                          Reject
+                                        </DropdownMenuItem>
+                                      )}
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
+                                        onClick={() => handleStatusChange(app)}
+                                        data-testid={`menu-notes-${app.id}`}
                                       >
-                                        <Bookmark className="h-4 w-4 text-yellow-600" />
-                                      </Button>
-                                    </>
-                                  )}
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleStatusChange(app)}
-                                    data-testid={`button-status-${app.id}`}
-                                  >
-                                    Update
-                                  </Button>
+                                        <ClipboardEdit className="h-4 w-4 mr-2 text-muted-foreground" />
+                                        Add Review Notes...
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+
                                   <Button
                                     size="sm"
                                     variant="destructive"
