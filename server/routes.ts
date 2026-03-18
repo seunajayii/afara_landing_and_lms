@@ -825,7 +825,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Sanitize user rows before returning them in community API responses
-  function sanitizeAuthor(user: { passwordHash?: string; [k: string]: unknown } | undefined | null) {
+  function sanitizeAuthor(user: { passwordHash?: string | null; [k: string]: unknown } | undefined | null) {
     if (!user) return undefined;
     const { passwordHash, ...safe } = user;
     return safe;

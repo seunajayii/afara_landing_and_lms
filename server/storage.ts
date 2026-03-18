@@ -533,6 +533,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteDiscussionThread(id: string): Promise<void> {
+    // Delete child posts first to avoid FK constraint violation
+    await db.delete(discussionPosts).where(eq(discussionPosts.threadId, id));
     await db.delete(discussionThreads).where(eq(discussionThreads.id, id));
   }
 
