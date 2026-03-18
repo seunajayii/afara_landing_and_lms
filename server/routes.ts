@@ -824,20 +824,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Sanitize user rows before returning them in community API responses
-  function sanitizeAuthor(user: { passwordHash?: string | null; [k: string]: unknown } | undefined | null) {
+  // Return only safe public fields for author objects in community API responses
+  type SafeAuthor = { id: string; firstName: string; lastName: string; profileImageUrl: string | null } | undefined;
+  function toPublicAuthor(user: { id: string; firstName: string; lastName: string; profileImageUrl?: string | null; [k: string]: unknown } | undefined | null): SafeAuthor {
     if (!user) return undefined;
-    const { passwordHash, ...safe } = user;
-    return safe;
+    return { id: user.id, firstName: user.firstName, lastName: user.lastName, profileImageUrl: user.profileImageUrl ?? null };
   }
 
-  app.get("/api/community/threads", async (req: Request, res: Response) => {
+  app.get("/api/community/threads", requireAuth, async (req: Request, res: Response) => {
     try {
       const threads = await storage.getAllDiscussionThreads();
       const threadsWithAuthors = await Promise.all(
         threads.map(async (thread) => {
           const author = await storage.getUser(thread.authorId);
-          return { ...thread, author: sanitizeAuthor(author) };
+          return { ...thread, author: toPublicAuthor(author) };
         })
       );
       res.json(threadsWithAuthors);
@@ -846,7 +846,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/community/threads/:id", async (req: Request, res: Response) => {
+  app.get("/api/community/threads/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const thread = await storage.getDiscussionThread(req.params.id);
       if (!thread) return res.status(404).json({ error: "Thread not found" });
@@ -856,10 +856,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const postsWithAuthors = await Promise.all(
         posts.map(async (post) => {
           const postAuthor = await storage.getUser(post.authorId);
-          return { ...post, author: sanitizeAuthor(postAuthor) };
+          return { ...post, author: toPublicAuthor(postAuthor) };
         })
       );
-      res.json({ ...thread, author: sanitizeAuthor(author), posts: postsWithAuthors });
+      res.json({ ...thread, author: toPublicAuthor(author), posts: postsWithAuthors });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch thread" });
     }
@@ -905,12 +905,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;"/>
             <p style="font-size:12px;color:#6b7280;">AFÁRÁ is an initiative of Open Spaces &amp; Bridges Advisory (OPSB)</p>
           </div>`;
-          // Send individually to prevent PII leakage (recipients cannot see each other's emails)
-          for (const recipient of recipients) {
+          // Send individually to prevent PII leakage; throttle at 2 sends/sec to respect provider limits
+          const BATCH_DELAY_MS = 500;
+          for (let i = 0; i < recipients.length; i++) {
             try {
-              await client.emails.send({ from: fromEmail, to: recipient.email, subject, html });
+              await client.emails.send({ from: fromEmail, to: recipients[i].email, subject, html });
             } catch (singleErr) {
-              console.error(`Failed to notify ${recipient.email}:`, singleErr);
+              console.error(`Failed to notify ${recipients[i].email}:`, singleErr);
+            }
+            if (i < recipients.length - 1) {
+              await new Promise<void>((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
             }
           }
         }
@@ -986,7 +990,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // storage.createDiscussionPost already increments replyCount
       const post = await storage.createDiscussionPost(data);
       const author = await storage.getUser(post.authorId);
-      res.status(201).json({ ...post, author });
+      res.status(201).json({ ...post, author: toPublicAuthor(author) });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: error.errors });
