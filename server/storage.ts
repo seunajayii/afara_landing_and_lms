@@ -125,6 +125,7 @@ export interface IStorage {
   deleteDiscussionThread(id: string): Promise<void>;
   incrementThreadView(id: string): Promise<void>;
   
+  getDiscussionPost(id: string): Promise<DiscussionPost | undefined>;
   getDiscussionPostsByThread(threadId: string): Promise<DiscussionPost[]>;
   createDiscussionPost(post: InsertDiscussionPost): Promise<DiscussionPost>;
   updateDiscussionPost(id: string, data: Partial<InsertDiscussionPost>): Promise<DiscussionPost | undefined>;
@@ -540,6 +541,11 @@ export class DatabaseStorage implements IStorage {
     if (thread) {
       await db.update(discussionThreads).set({ viewCount: (thread.viewCount || 0) + 1 }).where(eq(discussionThreads.id, id));
     }
+  }
+
+  async getDiscussionPost(id: string): Promise<DiscussionPost | undefined> {
+    const [post] = await db.select().from(discussionPosts).where(eq(discussionPosts.id, id));
+    return post;
   }
 
   async getDiscussionPostsByThread(threadId: string): Promise<DiscussionPost[]> {

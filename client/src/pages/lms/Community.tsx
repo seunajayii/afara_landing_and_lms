@@ -1,6 +1,6 @@
 import { LMSSidebar } from "@/components/LMSSidebar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +29,8 @@ import {
   Lock,
   Trash2,
   ChevronRight,
+  Link2,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -54,6 +56,33 @@ const CATEGORIES = [
   "Success Stories",
   "Questions",
 ];
+
+interface Attachment {
+  url: string;
+  title: string;
+  type: "link";
+}
+
+function AttachmentCard({ attachment, onRemove }: { attachment: Attachment; onRemove?: () => void }) {
+  return (
+    <div className="flex items-center gap-2 rounded-md border px-3 py-2 bg-muted/40 text-sm">
+      <Link2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+      <a
+        href={attachment.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex-1 min-w-0 text-primary hover:underline truncate"
+      >
+        {attachment.title || attachment.url}
+      </a>
+      {onRemove && (
+        <button onClick={onRemove} className="flex-shrink-0 text-muted-foreground hover:text-foreground">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
 
 function ThreadSkeleton() {
   return (
@@ -86,13 +115,17 @@ export default function Community() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("General");
+  const [attachment, setAttachment] = useState<Attachment | null>(null);
+  const [attachUrl, setAttachUrl] = useState("");
+  const [attachTitle, setAttachTitle] = useState("");
+  const [showAttachForm, setShowAttachForm] = useState(false);
 
   const { data: threads, isLoading } = useQuery<ThreadWithAuthor[]>({
     queryKey: ["/api/community/threads"],
   });
 
   const createThread = useMutation({
-    mutationFn: async (data: { title: string; content: string; category: string }) => {
+    mutationFn: async (data: { title: string; content: string; category: string; attachmentJson?: string }) => {
       const res = await apiRequest("POST", "/api/community/threads", data);
       return res.json();
     },
@@ -102,6 +135,10 @@ export default function Community() {
       setTitle("");
       setContent("");
       setCategory("General");
+      setAttachment(null);
+      setAttachUrl("");
+      setAttachTitle("");
+      setShowAttachForm(false);
       toast({ title: "Discussion started", description: "Your thread has been posted." });
     },
     onError: () => {
@@ -139,9 +176,22 @@ export default function Community() {
     },
   });
 
+  const handleAddAttachment = () => {
+    if (!attachUrl.trim()) return;
+    setAttachment({ url: attachUrl.trim(), title: attachTitle.trim() || attachUrl.trim(), type: "link" });
+    setAttachUrl("");
+    setAttachTitle("");
+    setShowAttachForm(false);
+  };
+
   const handleCreate = () => {
     if (!title.trim()) return;
-    createThread.mutate({ title: title.trim(), content: content.trim(), category });
+    createThread.mutate({
+      title: title.trim(),
+      content: content.trim(),
+      category,
+      attachmentJson: attachment ? JSON.stringify(attachment) : undefined,
+    });
   };
 
   const sorted = [...(threads || [])].sort((a, b) => {
@@ -210,6 +260,54 @@ export default function Community() {
                       data-testid="input-thread-content"
                     />
                   </div>
+
+                  {/* Attachment section */}
+                  <div className="space-y-2">
+                    {attachment ? (
+                      <AttachmentCard attachment={attachment} onRemove={() => setAttachment(null)} />
+                    ) : showAttachForm ? (
+                      <div className="space-y-2 p-3 border rounded-md bg-muted/30">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Link URL</Label>
+                          <Input
+                            placeholder="https://..."
+                            value={attachUrl}
+                            onChange={(e) => setAttachUrl(e.target.value)}
+                            data-testid="input-attach-url"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Link title (optional)</Label>
+                          <Input
+                            placeholder="Descriptive title"
+                            value={attachTitle}
+                            onChange={(e) => setAttachTitle(e.target.value)}
+                            data-testid="input-attach-title"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={handleAddAttachment} disabled={!attachUrl.trim()}>
+                            Attach
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setShowAttachForm(false)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowAttachForm(true)}
+                        data-testid="button-add-attachment"
+                      >
+                        <Link2 className="w-3.5 h-3.5 mr-1.5" />
+                        Attach a link
+                      </Button>
+                    )}
+                  </div>
+
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => setDialogOpen(false)}>
                       Cancel
@@ -253,6 +351,13 @@ export default function Community() {
                   : "?";
                 const isOwner = user?.id === thread.authorId;
 
+                let threadAttachment: Attachment | null = null;
+                try {
+                  if ((thread as any).attachmentJson) {
+                    threadAttachment = JSON.parse((thread as any).attachmentJson);
+                  }
+                } catch {}
+
                 return (
                   <Card
                     key={thread.id}
@@ -285,7 +390,7 @@ export default function Community() {
                               </Badge>
                             )}
                           </div>
-                          <div className="flex items-center gap-2 mb-1">
+                          <div className="mb-1">
                             <Badge variant="outline" className="text-xs">
                               {thread.category || "General"}
                             </Badge>
@@ -298,6 +403,11 @@ export default function Community() {
                               {thread.content}
                             </p>
                           )}
+                          {threadAttachment && (
+                            <div className="mb-2" onClick={(e) => e.stopPropagation()}>
+                              <AttachmentCard attachment={threadAttachment} />
+                            </div>
+                          )}
                           <div className="flex items-center gap-4 text-xs text-muted-foreground">
                             <span className="flex items-center gap-1">
                               <MessageCircle className="w-3.5 h-3.5" />
@@ -309,26 +419,37 @@ export default function Community() {
                             </span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <div
+                          className="flex items-center gap-1 flex-shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           {isAdmin && (
                             <>
                               <Button
                                 size="icon"
                                 variant="ghost"
                                 title={thread.isPinned ? "Unpin" : "Pin"}
-                                onClick={() => pinThread.mutate({ id: thread.id, isPinned: !thread.isPinned })}
+                                onClick={() =>
+                                  pinThread.mutate({ id: thread.id, isPinned: !thread.isPinned })
+                                }
                                 data-testid={`button-pin-${thread.id}`}
                               >
-                                <Pin className={`w-4 h-4 ${thread.isPinned ? "text-primary fill-primary" : ""}`} />
+                                <Pin
+                                  className={`w-4 h-4 ${thread.isPinned ? "text-primary fill-primary" : ""}`}
+                                />
                               </Button>
                               <Button
                                 size="icon"
                                 variant="ghost"
                                 title={thread.isLocked ? "Unlock" : "Lock"}
-                                onClick={() => lockThread.mutate({ id: thread.id, isLocked: !thread.isLocked })}
+                                onClick={() =>
+                                  lockThread.mutate({ id: thread.id, isLocked: !thread.isLocked })
+                                }
                                 data-testid={`button-lock-${thread.id}`}
                               >
-                                <Lock className={`w-4 h-4 ${thread.isLocked ? "text-yellow-600" : ""}`} />
+                                <Lock
+                                  className={`w-4 h-4 ${thread.isLocked ? "text-yellow-600" : ""}`}
+                                />
                               </Button>
                               <Button
                                 size="icon"

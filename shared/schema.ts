@@ -216,6 +216,7 @@ export const discussionPosts = pgTable("discussion_posts", {
   authorId: varchar("author_id").notNull().references(() => users.id),
   content: text("content").notNull(),
   parentPostId: varchar("parent_post_id"),
+  attachmentJson: text("attachment_json"),
   likeCount: integer("like_count").default(0),
   isEdited: boolean("is_edited").default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),

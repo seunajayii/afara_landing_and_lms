@@ -951,12 +951,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         threadId: req.params.threadId,
         authorId: req.session.userId,
       });
+      // storage.createDiscussionPost already increments replyCount
       const post = await storage.createDiscussionPost(data);
-      // bump reply count
-      await storage.updateDiscussionThread(req.params.threadId, {
-        replyCount: (thread.replyCount || 0) + 1,
-        updatedAt: new Date(),
-      });
       const author = await storage.getUser(post.authorId);
       res.status(201).json({ ...post, author });
     } catch (error) {
@@ -971,12 +967,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const role = req.session?.userRole;
       const isAdminUser = role === "admin" || role === "superadmin";
-      const post = await storage.getDiscussionPostsByThread(req.body.threadId || "").then(posts => posts.find(p => p.id === req.params.id));
-      if (post && !isAdminUser && post.authorId !== req.session.userId) {
+      const post = await storage.getDiscussionPost(req.params.id);
+      if (!post) return res.status(404).json({ error: "Post not found" });
+      if (!isAdminUser && post.authorId !== req.session.userId) {
         return res.status(403).json({ error: "Not authorized to edit this post" });
       }
       const updated = await storage.updateDiscussionPost(req.params.id, req.body);
-      if (!updated) return res.status(404).json({ error: "Post not found" });
       res.json(updated);
     } catch (error) {
       res.status(500).json({ error: "Failed to update post" });
@@ -985,6 +981,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/community/posts/:id", requireAuth, async (req: Request, res: Response) => {
     try {
+      const role = req.session?.userRole;
+      const isAdminUser = role === "admin" || role === "superadmin";
+      const post = await storage.getDiscussionPost(req.params.id);
+      if (!post) return res.status(404).json({ error: "Post not found" });
+      if (!isAdminUser && post.authorId !== req.session.userId) {
+        return res.status(403).json({ error: "Not authorized to delete this post" });
+      }
       await storage.deleteDiscussionPost(req.params.id);
       res.status(204).send();
     } catch (error) {
