@@ -1456,6 +1456,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(application);
     } catch (error) {
+      console.error("PATCH /api/admin/applications/:id error:", error instanceof Error ? error.message : error);
       res.status(500).json({ error: "Failed to update application" });
     }
   });
