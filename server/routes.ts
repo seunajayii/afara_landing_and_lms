@@ -189,6 +189,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/users/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.params.id);
+      if (!user) return res.status(404).json({ error: "User not found" });
+      
+      await storage.deleteUser(req.params.id);
+      res.json({ success: true, id: req.params.id });
+    } catch (error) {
+      console.error("DELETE /api/users/:id error:", error instanceof Error ? error.message : error);
+      res.status(500).json({ error: "Failed to delete user" });
+    }
+  });
+
   app.get("/api/profiles/:userId", async (req: Request, res: Response) => {
     try {
       const profile = await storage.getProfile(req.params.userId);

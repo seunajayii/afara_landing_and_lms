@@ -70,6 +70,7 @@ import {
   Shield,
   GraduationCap,
   UserCog,
+  Trash2,
 } from "lucide-react";
 import type { User } from "@shared/schema";
 
@@ -104,6 +105,7 @@ export default function UserManagement() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeactivateDialogOpen, setIsDeactivateDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   const createForm = useForm<UserFormData>({
@@ -210,6 +212,29 @@ export default function UserManagement() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/users/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setIsDeleteDialogOpen(false);
+      setSelectedUser(null);
+      toast({
+        title: "User Deleted",
+        description: "The user has been deleted successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete user. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const filteredUsers = users?.filter(user => {
     const matchesSearch = 
       user.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -247,9 +272,20 @@ export default function UserManagement() {
     setIsDeactivateDialogOpen(true);
   };
 
+  const openDeleteDialog = (user: User) => {
+    setSelectedUser(user);
+    setIsDeleteDialogOpen(true);
+  };
+
   const handleToggleActive = () => {
     if (selectedUser) {
       toggleActiveMutation.mutate({ id: selectedUser.id, isActive: !selectedUser.isActive });
+    }
+  };
+
+  const handleDelete = () => {
+    if (selectedUser) {
+      deleteMutation.mutate(selectedUser.id);
     }
   };
 
@@ -425,6 +461,15 @@ export default function UserManagement() {
                                   ) : (
                                     <UserCheck className="w-4 h-4 text-green-600" />
                                   )}
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => openDeleteDialog(user)}
+                                  data-testid={`button-delete-user-${user.id}`}
+                                  disabled={deleteMutation.isPending}
+                                >
+                                  <Trash2 className="w-4 h-4" />
                                 </Button>
                               </div>
                             </TableCell>
@@ -702,6 +747,28 @@ export default function UserManagement() {
                 : selectedUser?.isActive 
                   ? "Deactivate" 
                   : "Activate"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete User Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete User</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{selectedUser?.firstName} {selectedUser?.lastName}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete-user"
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
