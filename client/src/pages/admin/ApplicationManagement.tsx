@@ -86,8 +86,7 @@ export default function ApplicationManagement() {
     mutationFn: async ({ id, status, reviewNotes }: { id: string; status: string; reviewNotes: string }) => {
       const response = await apiRequest("PATCH", `/api/admin/applications/${id}`, { 
         status, 
-        reviewNotes,
-        reviewedAt: new Date().toISOString()
+        reviewNotes
       });
       if (!response.ok) {
         const error = await response.json();
