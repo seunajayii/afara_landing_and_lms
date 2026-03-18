@@ -12,6 +12,7 @@ import {
   Award,
   LogOut,
   Shield,
+  UserCircle,
 } from "lucide-react";
 import afaraLogo from "@assets/AFARA Image 1_1759521116826.png";
 
@@ -32,6 +33,7 @@ export function LMSSidebar() {
     { path: "/lms/resources", label: "Resources", icon: FolderOpen },
     { path: "/lms/community", label: "Community", icon: MessageSquare },
     { path: "/lms/certificates", label: "Certificates", icon: Award },
+    { path: "/lms/profile", label: "Profile", icon: UserCircle },
   ];
 
   return (

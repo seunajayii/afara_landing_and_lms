@@ -1,5 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
+import multer from "multer";
 import { storage } from "./storage";
 import { authenticateUser, createUserWithPassword } from "./auth";
 import { 
@@ -1576,6 +1577,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to send campaign" });
     }
   });
+
+  // Avatar upload endpoint
+  const avatarUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 500 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      const allowed = ["image/jpeg", "image/png", "image/webp"];
+      if (allowed.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error("Only JPEG, PNG, and WebP images are allowed"));
+      }
+    },
+  });
+
+  app.post(
+    "/api/auth/upload-avatar",
+    requireAuth,
+    (req: Request, res: Response, next: NextFunction) => {
+      avatarUpload.single("avatar")(req, res, (err) => {
+        if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({ error: "File exceeds 500 KB limit" });
+        }
+        if (err) {
+          return res.status(400).json({ error: err.message || "Upload error" });
+        }
+        next();
+      });
+    },
+    async (req: Request, res: Response) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({ error: "No file provided" });
+        }
+
+        const userId = req.session.userId!;
+        const ext = req.file.mimetype === "image/png"
+          ? "png"
+          : req.file.mimetype === "image/webp"
+          ? "webp"
+          : "jpg";
+        const key = `avatars/${userId}.${ext}`;
+
+        const { isR2Configured, uploadFile } = await import("./r2-storage");
+
+        let avatarUrl: string;
+        if (isR2Configured()) {
+          const result = await uploadFile(key, req.file.buffer, req.file.mimetype, true);
+          avatarUrl = result.url;
+        } else {
+          const base64 = req.file.buffer.toString("base64");
+          avatarUrl = `data:${req.file.mimetype};base64,${base64}`;
+        }
+
+        const updated = await storage.updateUser(userId, { profileImageUrl: avatarUrl } as any);
+        if (!updated) {
+          return res.status(404).json({ error: "User not found" });
+        }
+
+        const { passwordHash, ...safeUser } = updated;
+        res.json({ user: safeUser });
+      } catch (error) {
+        console.error("Avatar upload error:", error);
+        res.status(500).json({ error: "Failed to upload avatar" });
+      }
+    }
+  );
 
   const httpServer = createServer(app);
 

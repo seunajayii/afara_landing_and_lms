@@ -31,6 +31,7 @@ import ApplicationManagement from "@/pages/admin/ApplicationManagement";
 import EventManagement from "@/pages/admin/EventManagement";
 import NewsletterManagement from "@/pages/admin/NewsletterManagement";
 import Apply from "@/pages/Apply";
+import Profile from "@/pages/lms/Profile";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -107,6 +108,7 @@ function Router() {
       <Route path="/lms/community">{() => <ProtectedRoute component={Community} />}</Route>
       <Route path="/lms/community/:threadId">{() => <ProtectedRoute component={ThreadDetail} />}</Route>
       <Route path="/lms/certificates">{() => <ProtectedRoute component={Certificates} />}</Route>
+      <Route path="/lms/profile">{() => <ProtectedRoute component={Profile} />}</Route>
       
       {/* Admin Routes */}
       <Route path="/admin/dashboard">{() => <AdminProtectedRoute component={AdminDashboard} />}</Route>
