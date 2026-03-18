@@ -569,6 +569,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteDiscussionPost(id: string): Promise<void> {
+    const post = await this.getDiscussionPost(id);
+    if (post) {
+      const thread = await this.getDiscussionThread(post.threadId);
+      if (thread) {
+        await db.update(discussionThreads).set({ replyCount: Math.max(0, (thread.replyCount || 0) - 1) }).where(eq(discussionThreads.id, post.threadId));
+      }
+    }
     await db.delete(discussionPosts).where(eq(discussionPosts.id, id));
   }
 

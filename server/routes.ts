@@ -960,11 +960,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const role = req.session?.userRole;
       const isAdminUser = role === "admin" || role === "superadmin";
+      if (!isAdminUser) {
+        return res.status(403).json({ error: "Only admins can delete threads" });
+      }
       const thread = await storage.getDiscussionThread(req.params.id);
       if (!thread) return res.status(404).json({ error: "Thread not found" });
-      if (!isAdminUser && thread.authorId !== req.session.userId) {
-        return res.status(403).json({ error: "Not authorized to delete this thread" });
-      }
       await storage.deleteDiscussionThread(req.params.id);
       res.status(204).send();
     } catch (error) {
@@ -1019,11 +1019,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const role = req.session?.userRole;
       const isAdminUser = role === "admin" || role === "superadmin";
+      if (!isAdminUser) {
+        return res.status(403).json({ error: "Only admins can delete posts" });
+      }
       const post = await storage.getDiscussionPost(req.params.id);
       if (!post) return res.status(404).json({ error: "Post not found" });
-      if (!isAdminUser && post.authorId !== req.session.userId) {
-        return res.status(403).json({ error: "Not authorized to delete this post" });
-      }
       await storage.deleteDiscussionPost(req.params.id);
       res.status(204).send();
     } catch (error) {

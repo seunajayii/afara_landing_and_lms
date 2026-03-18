@@ -337,7 +337,7 @@ export default function ThreadDetailPage() {
                           </div>
                         )}
                       </div>
-                      {canDeletePost && (
+                      {isAdmin && (
                         <Button
                           size="icon"
                           variant="ghost"

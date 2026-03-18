@@ -389,21 +389,6 @@ export default function Community() {
                               </Button>
                             </>
                           )}
-                          {!isAdmin && isOwner && (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              title="Delete thread"
-                              onClick={() => {
-                                if (confirm("Delete this thread?")) {
-                                  deleteThread.mutate(thread.id);
-                                }
-                              }}
-                              data-testid={`button-delete-own-thread-${thread.id}`}
-                            >
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          )}
                           <ChevronRight className="w-4 h-4 text-muted-foreground" />
                         </div>
                       </div>
