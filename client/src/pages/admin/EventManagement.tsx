@@ -196,6 +196,35 @@ export default function EventManagement() {
     queryKey: ["/api/events"],
   });
 
+  function parseApiError(error: Error): string {
+    const colonIdx = error.message.indexOf(": ");
+    if (colonIdx !== -1) {
+      try {
+        const json: unknown = JSON.parse(error.message.slice(colonIdx + 2));
+        if (
+          json !== null &&
+          typeof json === "object" &&
+          "error" in json
+        ) {
+          const { error: apiErr } = json as { error: unknown };
+          if (Array.isArray(apiErr)) {
+            return apiErr
+              .filter(
+                (e): e is { message: string } =>
+                  typeof e === "object" && e !== null && "message" in e
+              )
+              .map((e) => e.message)
+              .join("; ");
+          }
+          if (typeof apiErr === "string") return apiErr;
+        }
+      } catch {
+        // fall through to raw message
+      }
+    }
+    return error.message;
+  }
+
   const createMutation = useMutation({
     mutationFn: async (data: EventFormData) => {
       const cleanedData = Object.fromEntries(
@@ -205,13 +234,6 @@ export default function EventManagement() {
         ])
       );
       const response = await apiRequest("POST", "/api/events", cleanedData);
-      if (!response.ok) {
-        const errBody = await response.json().catch(() => ({}));
-        const msg = Array.isArray(errBody.error)
-          ? errBody.error.map((e: any) => e.message).join("; ")
-          : (errBody.error || "Failed to create event");
-        throw new Error(msg);
-      }
       return response.json();
     },
     onSuccess: () => {
@@ -226,7 +248,7 @@ export default function EventManagement() {
     onError: (error: Error) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to create event. Please try again.",
+        description: parseApiError(error),
         variant: "destructive",
       });
     },
@@ -241,13 +263,6 @@ export default function EventManagement() {
         ])
       );
       const response = await apiRequest("PATCH", `/api/events/${id}`, cleanedData);
-      if (!response.ok) {
-        const errBody = await response.json().catch(() => ({}));
-        const msg = Array.isArray(errBody.error)
-          ? errBody.error.map((e: any) => e.message).join("; ")
-          : (errBody.error || "Failed to update event");
-        throw new Error(msg);
-      }
       return response.json();
     },
     onSuccess: () => {
@@ -262,7 +277,7 @@ export default function EventManagement() {
     onError: (error: Error) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to update event. Please try again.",
+        description: parseApiError(error),
         variant: "destructive",
       });
     },
