@@ -773,6 +773,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Resource file upload
+  const resourceUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
+  });
+
+  app.post(
+    "/api/resources/upload",
+    requireAuth,
+    requireAdminRole,
+    (req: Request, res: Response, next: NextFunction) => {
+      resourceUpload.single("file")(req, res, (err) => {
+        if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({ error: "File exceeds 50 MB limit" });
+        }
+        if (err) {
+          return res.status(400).json({ error: err.message || "Upload error" });
+        }
+        next();
+      });
+    },
+    async (req: Request, res: Response) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({ error: "No file provided" });
+        }
+
+        const { isR2Configured, uploadFile } = await import("./r2-storage");
+        const originalName = req.file.originalname || "file";
+        const ext = originalName.includes(".") ? originalName.split(".").pop()! : "bin";
+        const { randomUUID } = await import("crypto");
+        const key = `resources/${randomUUID()}.${ext}`;
+
+        let fileUrl: string;
+        if (isR2Configured()) {
+          const result = await uploadFile(key, req.file.buffer, req.file.mimetype, true);
+          fileUrl = result.url;
+        } else {
+          const base64 = req.file.buffer.toString("base64");
+          fileUrl = `data:${req.file.mimetype};base64,${base64}`;
+        }
+
+        res.json({
+          fileUrl,
+          fileName: originalName,
+          fileSize: req.file.size,
+          contentType: req.file.mimetype,
+        });
+      } catch (error) {
+        console.error("Resource upload error:", error);
+        res.status(500).json({ error: "Failed to upload file" });
+      }
+    }
+  );
+
   app.post("/api/resources", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const data = insertResourceSchema.parse(req.body);
