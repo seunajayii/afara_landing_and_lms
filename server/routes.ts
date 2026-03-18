@@ -921,7 +921,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!isAdminUser && thread.authorId !== req.session.userId) {
         return res.status(403).json({ error: "Not authorized to edit this thread" });
       }
-      const updated = await storage.updateDiscussionThread(req.params.id, req.body);
+
+      // Non-admins (even owners) cannot touch moderation fields
+      const { isPinned, isLocked, ...contentFields } = req.body;
+      const patch: Record<string, unknown> = { ...contentFields };
+      if (isAdminUser) {
+        if (isPinned !== undefined) patch.isPinned = isPinned;
+        if (isLocked !== undefined) patch.isLocked = isLocked;
+      }
+
+      const updated = await storage.updateDiscussionThread(req.params.id, patch);
       res.json(updated);
     } catch (error) {
       res.status(500).json({ error: "Failed to update thread" });
