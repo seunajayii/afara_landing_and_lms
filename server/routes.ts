@@ -866,30 +866,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const thread = await storage.createDiscussionThread(data);
 
-      // Send email notification to all participants and community_members
+      // Send individual email notifications (per-recipient to avoid PII leakage)
       try {
         const participants = await storage.getUsersByRole("participant");
         const communityMembers = await storage.getUsersByRole("community_member");
         const recipients = [...participants, ...communityMembers]
-          .filter(u => u.id !== req.session.userId && u.email)
-          .map(u => u.email);
+          .filter(u => u.id !== req.session.userId && u.email);
         if (recipients.length > 0) {
-          const { sendNewsletter } = await import("./email");
+          const { getResendClient } = await import("./email");
+          const { client, fromEmail } = await getResendClient();
           const author = await storage.getUser(req.session.userId!);
           const authorName = author ? `${author.firstName} ${author.lastName}` : "A community member";
-          await sendNewsletter(
-            `New Discussion: ${thread.title}`,
-            `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-              <h2 style="color:#166534;">New Community Discussion</h2>
-              <p><strong>${authorName}</strong> started a new discussion:</p>
-              <h3 style="color:#166534;">${thread.title}</h3>
-              ${thread.content ? `<p>${thread.content}</p>` : ""}
-              <p><a href="https://afaraaccelerator.org/lms/community/${thread.id}" style="color:#166534;">Join the discussion &rarr;</a></p>
-              <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;"/>
-              <p style="font-size:12px;color:#6b7280;">AFÁRÁ is an initiative of Open Spaces &amp; Bridges Advisory (OPSB)</p>
-            </div>`,
-            recipients
-          );
+          const subject = `New Discussion: ${thread.title}`;
+          const excerpt = thread.content
+            ? thread.content.slice(0, 200) + (thread.content.length > 200 ? "…" : "")
+            : "";
+          const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+            <h2 style="color:#166534;">New Community Discussion</h2>
+            <p><strong>${authorName}</strong> started a new discussion:</p>
+            <h3 style="color:#166534;">${thread.title}</h3>
+            ${excerpt ? `<p style="color:#555;">${excerpt}</p>` : ""}
+            <p><a href="https://afaraaccelerator.org/lms/community/${thread.id}" style="color:#166534;">Join the discussion &rarr;</a></p>
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;"/>
+            <p style="font-size:12px;color:#6b7280;">AFÁRÁ is an initiative of Open Spaces &amp; Bridges Advisory (OPSB)</p>
+          </div>`;
+          // Send individually to prevent PII leakage (recipients cannot see each other's emails)
+          for (const recipient of recipients) {
+            try {
+              await client.emails.send({ from: fromEmail, to: recipient.email, subject, html });
+            } catch (singleErr) {
+              console.error(`Failed to notify ${recipient.email}:`, singleErr);
+            }
+          }
         }
       } catch (emailErr) {
         console.error("Failed to send thread notification emails:", emailErr);

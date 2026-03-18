@@ -105,7 +105,7 @@ function Router() {
       <Route path="/lms/resources">{() => <ProtectedRoute component={Resources} />}</Route>
       <Route path="/lms/resources/:id">{() => <ProtectedRoute component={ResourceDetail} />}</Route>
       <Route path="/lms/community">{() => <ProtectedRoute component={Community} />}</Route>
-      <Route path="/lms/community/:id">{() => <ProtectedRoute component={ThreadDetail} />}</Route>
+      <Route path="/lms/community/:threadId">{() => <ProtectedRoute component={ThreadDetail} />}</Route>
       <Route path="/lms/certificates">{() => <ProtectedRoute component={Certificates} />}</Route>
       
       {/* Admin Routes */}

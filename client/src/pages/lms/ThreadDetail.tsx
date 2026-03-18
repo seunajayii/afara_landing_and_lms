@@ -8,6 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Pin,
   Lock,
   Trash2,
@@ -16,6 +23,8 @@ import {
   Eye,
   Send,
   Link2,
+  FileText,
+  CalendarDays,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -25,37 +34,70 @@ import { formatDistanceToNow } from "date-fns";
 import { useLocation, useParams } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
-import type { DiscussionThread, DiscussionPost, User } from "@shared/schema";
-
-interface Attachment {
-  url: string;
-  title: string;
-  type: "link";
-}
+import type {
+  DiscussionThread,
+  DiscussionPost,
+  User,
+  PostAttachment,
+  Resource,
+  Event,
+} from "@shared/schema";
 
 interface PostWithAuthor extends DiscussionPost {
   author?: User;
 }
 
-interface ThreadDetail extends DiscussionThread {
+interface ThreadDetailData extends DiscussionThread {
   author?: User;
   posts: PostWithAuthor[];
 }
 
-function AttachmentCard({ attachment, onRemove }: { attachment: Attachment; onRemove?: () => void }) {
+type AttachmentType = "none" | "link" | "resource" | "event";
+
+function parseAttachment(json: string | null | undefined): PostAttachment | null {
+  if (!json) return null;
+  try {
+    return JSON.parse(json) as PostAttachment;
+  } catch {
+    return null;
+  }
+}
+
+function AttachmentCard({
+  attachment,
+  onRemove,
+}: {
+  attachment: PostAttachment;
+  onRemove?: () => void;
+}) {
+  const Icon =
+    attachment.type === "resource"
+      ? FileText
+      : attachment.type === "event"
+      ? CalendarDays
+      : Link2;
+
   return (
     <div className="flex items-center gap-2 rounded-md border px-3 py-2 bg-muted/40 text-sm">
-      <Link2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+      <Icon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
       <a
         href={attachment.url}
         target="_blank"
         rel="noopener noreferrer"
         className="flex-1 min-w-0 text-primary hover:underline truncate"
       >
-        {attachment.title || attachment.url}
+        {attachment.title}
       </a>
+      {attachment.type === "event" && attachment.startTime && (
+        <span className="text-xs text-muted-foreground flex-shrink-0">
+          {new Date(attachment.startTime).toLocaleDateString()}
+        </span>
+      )}
       {onRemove && (
-        <button onClick={onRemove} className="flex-shrink-0 text-muted-foreground hover:text-foreground">
+        <button
+          onClick={onRemove}
+          className="flex-shrink-0 text-muted-foreground hover:text-foreground"
+        >
           <X className="w-3.5 h-3.5" />
         </button>
       )}
@@ -63,13 +105,198 @@ function AttachmentCard({ attachment, onRemove }: { attachment: Attachment; onRe
   );
 }
 
-function parseAttachment(json: string | null | undefined): Attachment | null {
-  if (!json) return null;
-  try {
-    return JSON.parse(json);
-  } catch {
-    return null;
+function AttachmentPicker({
+  attachment,
+  onChange,
+}: {
+  attachment: PostAttachment | null;
+  onChange: (a: PostAttachment | null) => void;
+}) {
+  const [attachType, setAttachType] = useState<AttachmentType>("none");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkTitle, setLinkTitle] = useState("");
+  const [selectedResourceId, setSelectedResourceId] = useState("");
+  const [selectedEventId, setSelectedEventId] = useState("");
+
+  const { data: resources } = useQuery<Resource[]>({
+    queryKey: ["/api/resources"],
+    enabled: attachType === "resource",
+  });
+
+  const { data: events } = useQuery<Event[]>({
+    queryKey: ["/api/events"],
+    enabled: attachType === "event",
+  });
+
+  if (attachment) {
+    return <AttachmentCard attachment={attachment} onRemove={() => onChange(null)} />;
   }
+
+  if (attachType === "none") {
+    return (
+      <div className="flex gap-2 flex-wrap">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setAttachType("link")}
+          data-testid="button-reply-attach-link"
+        >
+          <Link2 className="w-3.5 h-3.5 mr-1.5" />
+          Link
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setAttachType("resource")}
+          data-testid="button-reply-attach-resource"
+        >
+          <FileText className="w-3.5 h-3.5 mr-1.5" />
+          Resource
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setAttachType("event")}
+          data-testid="button-reply-attach-event"
+        >
+          <CalendarDays className="w-3.5 h-3.5 mr-1.5" />
+          Event
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2 p-3 border rounded-md bg-muted/30">
+      {attachType === "link" && (
+        <>
+          <div className="space-y-1.5">
+            <Label className="text-xs">URL</Label>
+            <Input
+              placeholder="https://..."
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              data-testid="input-reply-attach-url"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Title (optional)</Label>
+            <Input
+              placeholder="Descriptive title"
+              value={linkTitle}
+              onChange={(e) => setLinkTitle(e.target.value)}
+              data-testid="input-reply-attach-title"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              disabled={!linkUrl.trim()}
+              onClick={() => {
+                onChange({
+                  type: "link",
+                  url: linkUrl.trim(),
+                  title: linkTitle.trim() || linkUrl.trim(),
+                });
+                setLinkUrl("");
+                setLinkTitle("");
+              }}
+            >
+              Attach
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setAttachType("none")}>
+              Cancel
+            </Button>
+          </div>
+        </>
+      )}
+
+      {attachType === "resource" && (
+        <>
+          <Label className="text-xs">Select a Resource</Label>
+          <Select value={selectedResourceId} onValueChange={setSelectedResourceId}>
+            <SelectTrigger data-testid="select-reply-attach-resource">
+              <SelectValue placeholder="Choose resource…" />
+            </SelectTrigger>
+            <SelectContent>
+              {(resources || []).map((r) => (
+                <SelectItem key={r.id} value={r.id}>
+                  {r.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              disabled={!selectedResourceId}
+              onClick={() => {
+                const r = resources?.find((x) => x.id === selectedResourceId);
+                if (!r) return;
+                onChange({
+                  type: "resource",
+                  resourceId: r.id,
+                  url: r.fileUrl || `/lms/resources/${r.id}`,
+                  title: r.title,
+                  resourceType: r.resourceType,
+                });
+                setSelectedResourceId("");
+              }}
+            >
+              Attach
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setAttachType("none")}>
+              Cancel
+            </Button>
+          </div>
+        </>
+      )}
+
+      {attachType === "event" && (
+        <>
+          <Label className="text-xs">Select an Event</Label>
+          <Select value={selectedEventId} onValueChange={setSelectedEventId}>
+            <SelectTrigger data-testid="select-reply-attach-event">
+              <SelectValue placeholder="Choose event…" />
+            </SelectTrigger>
+            <SelectContent>
+              {(events || []).map((e) => (
+                <SelectItem key={e.id} value={e.id}>
+                  {e.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              disabled={!selectedEventId}
+              onClick={() => {
+                const e = events?.find((x) => x.id === selectedEventId);
+                if (!e) return;
+                onChange({
+                  type: "event",
+                  eventId: e.id,
+                  url: e.meetingLink || `/lms/events/${e.id}`,
+                  title: e.title,
+                  startTime: e.startTime ? new Date(e.startTime).toISOString() : undefined,
+                });
+                setSelectedEventId("");
+              }}
+            >
+              Attach
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setAttachType("none")}>
+              Cancel
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 function PostSkeleton() {
@@ -86,51 +313,47 @@ function PostSkeleton() {
 }
 
 export default function ThreadDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const { threadId } = useParams<{ threadId: string }>();
   const { user, isAdmin } = useAuth();
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const [replyText, setReplyText] = useState("");
-  const [attachment, setAttachment] = useState<Attachment | null>(null);
-  const [attachUrl, setAttachUrl] = useState("");
-  const [attachTitle, setAttachTitle] = useState("");
-  const [showAttachForm, setShowAttachForm] = useState(false);
+  const [attachment, setAttachment] = useState<PostAttachment | null>(null);
 
-  const { data: thread, isLoading } = useQuery<ThreadDetail>({
-    queryKey: ["/api/community/threads", id],
+  const { data: thread, isLoading } = useQuery<ThreadDetailData>({
+    queryKey: ["/api/community/threads", threadId],
     queryFn: async () => {
-      const res = await fetch(`/api/community/threads/${id}`, { credentials: "include" });
+      const res = await fetch(`/api/community/threads/${threadId}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load thread");
       return res.json();
     },
-    enabled: !!id,
+    enabled: !!threadId,
   });
 
   const createPost = useMutation({
-    mutationFn: async ({ content, attachmentJson }: { content: string; attachmentJson?: string }) => {
-      const res = await apiRequest("POST", `/api/community/threads/${id}/posts`, {
+    mutationFn: async ({
+      content,
+      attachmentJson,
+    }: {
+      content: string;
+      attachmentJson?: string;
+    }) => {
+      const res = await apiRequest("POST", `/api/community/threads/${threadId}/posts`, {
         content,
         attachmentJson,
       });
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/community/threads", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/community/threads", threadId] });
       queryClient.invalidateQueries({ queryKey: ["/api/community/threads"] });
       setReplyText("");
       setAttachment(null);
-      setAttachUrl("");
-      setAttachTitle("");
-      setShowAttachForm(false);
     },
     onError: (err: Error) => {
-      toast({
-        title: "Could not post reply",
-        description: err.message,
-        variant: "destructive",
-      });
+      toast({ title: "Could not post reply", description: err.message, variant: "destructive" });
     },
   });
 
@@ -139,7 +362,7 @@ export default function ThreadDetailPage() {
       await apiRequest("DELETE", `/api/community/posts/${postId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/community/threads", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/community/threads", threadId] });
       queryClient.invalidateQueries({ queryKey: ["/api/community/threads"] });
       toast({ title: "Reply deleted" });
     },
@@ -147,43 +370,35 @@ export default function ThreadDetailPage() {
 
   const pinThread = useMutation({
     mutationFn: async (isPinned: boolean) => {
-      const res = await apiRequest("PATCH", `/api/community/threads/${id}`, { isPinned });
+      const res = await apiRequest("PATCH", `/api/community/threads/${threadId}`, { isPinned });
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/community/threads", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/community/threads", threadId] });
       queryClient.invalidateQueries({ queryKey: ["/api/community/threads"] });
     },
   });
 
   const lockThread = useMutation({
     mutationFn: async (isLocked: boolean) => {
-      const res = await apiRequest("PATCH", `/api/community/threads/${id}`, { isLocked });
+      const res = await apiRequest("PATCH", `/api/community/threads/${threadId}`, { isLocked });
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/community/threads", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/community/threads", threadId] });
       queryClient.invalidateQueries({ queryKey: ["/api/community/threads"] });
     },
   });
 
   const deleteThread = useMutation({
     mutationFn: async () => {
-      await apiRequest("DELETE", `/api/community/threads/${id}`);
+      await apiRequest("DELETE", `/api/community/threads/${threadId}`);
     },
     onSuccess: () => {
       toast({ title: "Thread deleted" });
       navigate("/lms/community");
     },
   });
-
-  const handleAddAttachment = () => {
-    if (!attachUrl.trim()) return;
-    setAttachment({ url: attachUrl.trim(), title: attachTitle.trim() || attachUrl.trim(), type: "link" });
-    setAttachUrl("");
-    setAttachTitle("");
-    setShowAttachForm(false);
-  };
 
   const handleReply = () => {
     if (!replyText.trim()) return;
@@ -232,8 +447,7 @@ export default function ThreadDetailPage() {
   const authorInitials = thread.author
     ? `${thread.author.firstName[0]}${thread.author.lastName[0]}`
     : "?";
-
-  const threadAttachment = parseAttachment((thread as any).attachmentJson);
+  const threadAttachment = parseAttachment(thread.attachmentJson);
 
   return (
     <div className="flex h-screen">
@@ -315,7 +529,9 @@ export default function ThreadDetailPage() {
                       onClick={() => pinThread.mutate(!thread.isPinned)}
                       data-testid="button-pin-thread"
                     >
-                      <Pin className={`w-4 h-4 ${thread.isPinned ? "text-primary fill-primary" : ""}`} />
+                      <Pin
+                        className={`w-4 h-4 ${thread.isPinned ? "text-primary fill-primary" : ""}`}
+                      />
                     </Button>
                     <Button
                       size="icon"
@@ -324,7 +540,9 @@ export default function ThreadDetailPage() {
                       onClick={() => lockThread.mutate(!thread.isLocked)}
                       data-testid="button-lock-thread"
                     >
-                      <Lock className={`w-4 h-4 ${thread.isLocked ? "text-yellow-600" : ""}`} />
+                      <Lock
+                        className={`w-4 h-4 ${thread.isLocked ? "text-yellow-600" : ""}`}
+                      />
                     </Button>
                     <Button
                       size="icon"
@@ -429,55 +647,8 @@ export default function ThreadDetailPage() {
                       rows={3}
                       data-testid="input-reply"
                     />
-
-                    {/* Reply attachment */}
-                    {attachment ? (
-                      <AttachmentCard attachment={attachment} onRemove={() => setAttachment(null)} />
-                    ) : showAttachForm ? (
-                      <div className="space-y-2 p-3 border rounded-md bg-muted/30">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Link URL</Label>
-                          <Input
-                            placeholder="https://..."
-                            value={attachUrl}
-                            onChange={(e) => setAttachUrl(e.target.value)}
-                            data-testid="input-reply-attach-url"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Link title (optional)</Label>
-                          <Input
-                            placeholder="Descriptive title"
-                            value={attachTitle}
-                            onChange={(e) => setAttachTitle(e.target.value)}
-                            data-testid="input-reply-attach-title"
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <Button size="sm" onClick={handleAddAttachment} disabled={!attachUrl.trim()}>
-                            Attach
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setShowAttachForm(false)}>
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    <div className="flex items-center justify-between">
-                      {!showAttachForm && !attachment && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setShowAttachForm(true)}
-                          data-testid="button-add-reply-attachment"
-                        >
-                          <Link2 className="w-3.5 h-3.5 mr-1.5" />
-                          Attach link
-                        </Button>
-                      )}
-                      {(showAttachForm || attachment) && <div />}
+                    <AttachmentPicker attachment={attachment} onChange={setAttachment} />
+                    <div className="flex justify-end">
                       <Button
                         size="sm"
                         onClick={handleReply}

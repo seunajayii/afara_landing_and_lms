@@ -202,6 +202,7 @@ export const discussionThreads = pgTable("discussion_threads", {
   content: text("content"),
   authorId: varchar("author_id").notNull().references(() => users.id),
   category: text("category"),
+  attachmentJson: text("attachment_json"),
   isPinned: boolean("is_pinned").default(false),
   isLocked: boolean("is_locked").default(false),
   viewCount: integer("view_count").default(0),
@@ -370,6 +371,12 @@ export const applications = pgTable("applications", {
   updatedAt: timestamp("updated_at"),
   submittedAt: timestamp("submitted_at"),
 });
+
+// Typed attachment stored as JSON in attachmentJson columns
+export type PostAttachment =
+  | { type: "link"; url: string; title: string }
+  | { type: "resource"; resourceId: string; url: string; title: string; resourceType?: string }
+  | { type: "event"; eventId: string; url: string; title: string; startTime?: string };
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertProfileSchema = createInsertSchema(profiles).omit({ id: true });
