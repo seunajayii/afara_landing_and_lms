@@ -75,7 +75,7 @@ export default function ApplicationManagement() {
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
-  const [newStatus, setNewStatus] = useState("");
+  const [newStatus, setNewStatus] = useState<string>("submitted");
   const [reviewNotes, setReviewNotes] = useState("");
 
   const { data: applications = [], isLoading } = useQuery<Application[]>({
@@ -89,6 +89,10 @@ export default function ApplicationManagement() {
         reviewNotes,
         reviewedAt: new Date().toISOString()
       });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update application");
+      }
       return response.json();
     },
     onSuccess: () => {
@@ -96,11 +100,13 @@ export default function ApplicationManagement() {
       toast({ title: "Application Updated", description: "The application status has been updated." });
       setIsStatusDialogOpen(false);
       setSelectedApplication(null);
-      setNewStatus("");
+      setNewStatus("submitted");
       setReviewNotes("");
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to update application.", variant: "destructive" });
+    onError: (error: any) => {
+      const errorMsg = error?.message || "Failed to update application";
+      console.error("Update application error:", errorMsg);
+      toast({ title: "Error", description: errorMsg, variant: "destructive" });
     },
   });
 
