@@ -169,7 +169,7 @@ export default function EventManagement() {
       maxAttendees: 100,
       isPublic: true,
       visibility: "community",
-      status: "draft",
+      status: "published",
     },
   });
 
@@ -188,7 +188,7 @@ export default function EventManagement() {
       maxAttendees: 100,
       isPublic: true,
       visibility: "community",
-      status: "draft",
+      status: "published",
     },
   });
 
@@ -205,6 +205,13 @@ export default function EventManagement() {
         ])
       );
       const response = await apiRequest("POST", "/api/events", cleanedData);
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        const msg = Array.isArray(errBody.error)
+          ? errBody.error.map((e: any) => e.message).join("; ")
+          : (errBody.error || "Failed to create event");
+        throw new Error(msg);
+      }
       return response.json();
     },
     onSuccess: () => {
@@ -216,10 +223,10 @@ export default function EventManagement() {
         description: "The event has been created successfully.",
       });
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
         title: "Error",
-        description: "Failed to create event. Please try again.",
+        description: error.message || "Failed to create event. Please try again.",
         variant: "destructive",
       });
     },
@@ -234,6 +241,13 @@ export default function EventManagement() {
         ])
       );
       const response = await apiRequest("PATCH", `/api/events/${id}`, cleanedData);
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        const msg = Array.isArray(errBody.error)
+          ? errBody.error.map((e: any) => e.message).join("; ")
+          : (errBody.error || "Failed to update event");
+        throw new Error(msg);
+      }
       return response.json();
     },
     onSuccess: () => {
@@ -245,10 +259,10 @@ export default function EventManagement() {
         description: "The event has been updated successfully.",
       });
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
         title: "Error",
-        description: "Failed to update event. Please try again.",
+        description: error.message || "Failed to update event. Please try again.",
         variant: "destructive",
       });
     },

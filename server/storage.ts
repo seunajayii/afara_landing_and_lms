@@ -482,12 +482,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllResources(): Promise<Resource[]> {
-    return db.select().from(resources).where(eq(resources.status, "published")).orderBy(desc(resources.createdAt));
+    return db.select().from(resources).orderBy(desc(resources.createdAt));
   }
 
   async getResourcesByCategory(category: string): Promise<Resource[]> {
     return db.select().from(resources)
-      .where(and(eq(resources.category, category), eq(resources.status, "published")))
+      .where(eq(resources.category, category))
       .orderBy(desc(resources.createdAt));
   }
 

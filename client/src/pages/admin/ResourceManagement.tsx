@@ -118,7 +118,7 @@ export default function ResourceManagement() {
       fileUrl: "",
       fileName: "",
       visibility: "community",
-      status: "draft",
+      status: "published",
     },
   });
 
@@ -132,7 +132,7 @@ export default function ResourceManagement() {
       fileUrl: "",
       fileName: "",
       visibility: "community",
-      status: "draft",
+      status: "published",
     },
   });
 
@@ -235,7 +235,7 @@ export default function ResourceManagement() {
       fileUrl: resource.fileUrl || "",
       fileName: resource.fileName || "",
       visibility: (resource.visibility as ResourceFormData["visibility"]) || "community",
-      status: (resource.status as ResourceFormData["status"]) || "draft",
+      status: (resource.status as ResourceFormData["status"]) || "published",
     });
     setIsEditDialogOpen(true);
   };

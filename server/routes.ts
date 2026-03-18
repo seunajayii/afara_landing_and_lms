@@ -748,7 +748,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isAdminUser = userRole === "admin" || userRole === "superadmin";
       const visibleResources = isAdminUser
         ? allResources
-        : allResources.filter(r => canAccessVisibility(r.visibility, userRole));
+        : allResources.filter(r =>
+            r.status === "published" && canAccessVisibility(r.visibility, userRole)
+          );
       res.json(visibleResources);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch resources" });
