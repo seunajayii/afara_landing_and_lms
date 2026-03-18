@@ -858,10 +858,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/community/threads", async (req: Request, res: Response) => {
+  app.post("/api/community/threads", requireAuth, async (req: Request, res: Response) => {
     try {
-      const data = insertDiscussionThreadSchema.parse(req.body);
+      const data = insertDiscussionThreadSchema.parse({
+        ...req.body,
+        authorId: req.session.userId,
+      });
       const thread = await storage.createDiscussionThread(data);
+
+      // Send email notification to all participants and community_members
+      try {
+        const participants = await storage.getUsersByRole("participant");
+        const communityMembers = await storage.getUsersByRole("community_member");
+        const recipients = [...participants, ...communityMembers]
+          .filter(u => u.id !== req.session.userId && u.email)
+          .map(u => u.email);
+        if (recipients.length > 0) {
+          const { sendNewsletter } = await import("./email");
+          const author = await storage.getUser(req.session.userId!);
+          const authorName = author ? `${author.firstName} ${author.lastName}` : "A community member";
+          await sendNewsletter(
+            `New Discussion: ${thread.title}`,
+            `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+              <h2 style="color:#166534;">New Community Discussion</h2>
+              <p><strong>${authorName}</strong> started a new discussion:</p>
+              <h3 style="color:#166534;">${thread.title}</h3>
+              ${thread.content ? `<p>${thread.content}</p>` : ""}
+              <p><a href="https://afaraaccelerator.org/lms/community/${thread.id}" style="color:#166534;">Join the discussion &rarr;</a></p>
+              <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;"/>
+              <p style="font-size:12px;color:#6b7280;">AFÁRÁ is an initiative of Open Spaces &amp; Bridges Advisory (OPSB)</p>
+            </div>`,
+            recipients
+          );
+        }
+      } catch (emailErr) {
+        console.error("Failed to send thread notification emails:", emailErr);
+      }
+
       res.status(201).json(thread);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -871,18 +904,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/community/threads/:id", async (req: Request, res: Response) => {
+  app.patch("/api/community/threads/:id", requireAuth, async (req: Request, res: Response) => {
     try {
-      const thread = await storage.updateDiscussionThread(req.params.id, req.body);
+      const role = req.session?.userRole;
+      const isAdminUser = role === "admin" || role === "superadmin";
+      const thread = await storage.getDiscussionThread(req.params.id);
       if (!thread) return res.status(404).json({ error: "Thread not found" });
-      res.json(thread);
+      if (!isAdminUser && thread.authorId !== req.session.userId) {
+        return res.status(403).json({ error: "Not authorized to edit this thread" });
+      }
+      const updated = await storage.updateDiscussionThread(req.params.id, req.body);
+      res.json(updated);
     } catch (error) {
       res.status(500).json({ error: "Failed to update thread" });
     }
   });
 
-  app.delete("/api/community/threads/:id", async (req: Request, res: Response) => {
+  app.delete("/api/community/threads/:id", requireAuth, async (req: Request, res: Response) => {
     try {
+      const role = req.session?.userRole;
+      const isAdminUser = role === "admin" || role === "superadmin";
+      const thread = await storage.getDiscussionThread(req.params.id);
+      if (!thread) return res.status(404).json({ error: "Thread not found" });
+      if (!isAdminUser && thread.authorId !== req.session.userId) {
+        return res.status(403).json({ error: "Not authorized to delete this thread" });
+      }
       await storage.deleteDiscussionThread(req.params.id);
       res.status(204).send();
     } catch (error) {
@@ -890,27 +936,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/community/threads/:threadId/posts", async (req: Request, res: Response) => {
+  app.post("/api/community/threads/:threadId/posts", requireAuth, async (req: Request, res: Response) => {
     try {
-      const data = { ...req.body, threadId: req.params.threadId };
+      const thread = await storage.getDiscussionThread(req.params.threadId);
+      if (!thread) return res.status(404).json({ error: "Thread not found" });
+      if (thread.isLocked) {
+        const role = req.session?.userRole;
+        if (role !== "admin" && role !== "superadmin") {
+          return res.status(403).json({ error: "This thread is locked" });
+        }
+      }
+      const data = insertDiscussionPostSchema.parse({
+        ...req.body,
+        threadId: req.params.threadId,
+        authorId: req.session.userId,
+      });
       const post = await storage.createDiscussionPost(data);
-      res.status(201).json(post);
+      // bump reply count
+      await storage.updateDiscussionThread(req.params.threadId, {
+        replyCount: (thread.replyCount || 0) + 1,
+        updatedAt: new Date(),
+      });
+      const author = await storage.getUser(post.authorId);
+      res.status(201).json({ ...post, author });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
       res.status(500).json({ error: "Failed to create post" });
     }
   });
 
-  app.patch("/api/community/posts/:id", async (req: Request, res: Response) => {
+  app.patch("/api/community/posts/:id", requireAuth, async (req: Request, res: Response) => {
     try {
-      const post = await storage.updateDiscussionPost(req.params.id, req.body);
-      if (!post) return res.status(404).json({ error: "Post not found" });
-      res.json(post);
+      const role = req.session?.userRole;
+      const isAdminUser = role === "admin" || role === "superadmin";
+      const post = await storage.getDiscussionPostsByThread(req.body.threadId || "").then(posts => posts.find(p => p.id === req.params.id));
+      if (post && !isAdminUser && post.authorId !== req.session.userId) {
+        return res.status(403).json({ error: "Not authorized to edit this post" });
+      }
+      const updated = await storage.updateDiscussionPost(req.params.id, req.body);
+      if (!updated) return res.status(404).json({ error: "Post not found" });
+      res.json(updated);
     } catch (error) {
       res.status(500).json({ error: "Failed to update post" });
     }
   });
 
-  app.delete("/api/community/posts/:id", async (req: Request, res: Response) => {
+  app.delete("/api/community/posts/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       await storage.deleteDiscussionPost(req.params.id);
       res.status(204).send();

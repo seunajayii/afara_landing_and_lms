@@ -20,6 +20,7 @@ import EventDetail from "@/pages/lms/EventDetail";
 import Resources from "@/pages/lms/Resources";
 import ResourceDetail from "@/pages/lms/ResourceDetail";
 import Community from "@/pages/lms/Community";
+import ThreadDetail from "@/pages/lms/ThreadDetail";
 import Certificates from "@/pages/lms/Certificates";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import CourseManagement from "@/pages/admin/CourseManagement";
@@ -104,6 +105,7 @@ function Router() {
       <Route path="/lms/resources">{() => <ProtectedRoute component={Resources} />}</Route>
       <Route path="/lms/resources/:id">{() => <ProtectedRoute component={ResourceDetail} />}</Route>
       <Route path="/lms/community">{() => <ProtectedRoute component={Community} />}</Route>
+      <Route path="/lms/community/:id">{() => <ProtectedRoute component={ThreadDetail} />}</Route>
       <Route path="/lms/certificates">{() => <ProtectedRoute component={Certificates} />}</Route>
       
       {/* Admin Routes */}
