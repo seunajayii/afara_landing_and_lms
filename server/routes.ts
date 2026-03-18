@@ -1631,7 +1631,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           avatarUrl = `data:${req.file.mimetype};base64,${base64}`;
         }
 
-        const updated = await storage.updateUser(userId, { profileImageUrl: avatarUrl } as any);
+        const updated = await storage.updateUser(userId, { profileImageUrl: avatarUrl });
         if (!updated) {
           return res.status(404).json({ error: "User not found" });
         }

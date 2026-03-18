@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/lib/auth";
 import {
@@ -36,6 +37,10 @@ export function LMSSidebar() {
     { path: "/lms/profile", label: "Profile", icon: UserCircle },
   ];
 
+  const initials = user
+    ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase()
+    : "?";
+
   return (
     <div className="w-64 border-r bg-sidebar h-screen flex flex-col">
       <div className="p-6 border-b">
@@ -47,7 +52,7 @@ export function LMSSidebar() {
         <p className="text-xs text-muted-foreground mt-2">An OPSB Initiative</p>
       </div>
 
-      <nav className="flex-1 p-4">
+      <nav className="flex-1 p-4 overflow-y-auto">
         <div className="space-y-1">
           {navItems.map((item) => (
             <Link key={item.path} href={item.path}>
@@ -74,10 +79,10 @@ export function LMSSidebar() {
           </Link>
         )}
         <div className="flex items-center justify-between gap-2">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="gap-2" 
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-2"
             onClick={handleLogout}
             data-testid="button-logout"
           >
@@ -87,9 +92,17 @@ export function LMSSidebar() {
           <ThemeToggle />
         </div>
         {user && (
-          <p className="text-xs text-muted-foreground truncate">
-            {user.firstName} {user.lastName}
-          </p>
+          <Link href="/lms/profile">
+            <div className="flex items-center gap-2 rounded-md px-2 py-1 hover-elevate cursor-pointer" data-testid="link-sidebar-profile">
+              <Avatar className="h-7 w-7">
+                <AvatarImage src={user.profileImageUrl ?? undefined} alt={`${user.firstName} ${user.lastName}`} />
+                <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+              </Avatar>
+              <p className="text-xs text-muted-foreground truncate">
+                {user.firstName} {user.lastName}
+              </p>
+            </div>
+          </Link>
         )}
       </div>
     </div>

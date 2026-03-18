@@ -64,8 +64,8 @@ export default function Profile() {
 
     const objectUrl = URL.createObjectURL(file);
     setPreviewUrl(objectUrl);
-
     setUploading(true);
+
     try {
       const formData = new FormData();
       formData.append("avatar", file);
@@ -77,21 +77,23 @@ export default function Profile() {
       });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
+        const data = await res.json().catch(() => ({})) as { error?: string };
         throw new Error(data.error || "Upload failed");
       }
 
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/community/threads"] });
 
       toast({
         title: "Photo updated",
         description: "Your profile photo has been saved.",
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : "Something went wrong. Please try again.";
       setPreviewUrl(null);
       toast({
         title: "Upload failed",
-        description: err.message || "Something went wrong. Please try again.",
+        description: errMsg,
         variant: "destructive",
       });
     } finally {
@@ -115,31 +117,40 @@ export default function Profile() {
           <Card>
             <CardHeader>
               <CardTitle>Profile Photo</CardTitle>
-              <CardDescription>
-                JPEG, PNG, or WebP — max 500 KB
-              </CardDescription>
+              <CardDescription>JPEG, PNG, or WebP — max 500 KB</CardDescription>
             </CardHeader>
             <CardContent className="flex items-center gap-6">
-              <div className="relative">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleFileChange}
+                data-testid="input-avatar-file"
+              />
+              <button
+                type="button"
+                onClick={handleFileClick}
+                disabled={uploading}
+                className="relative rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Change profile photo"
+                data-testid="button-avatar-click"
+              >
                 <Avatar className="h-24 w-24">
                   <AvatarImage src={avatarSrc} alt={`${user?.firstName} ${user?.lastName}`} />
                   <AvatarFallback className="text-2xl">{initials}</AvatarFallback>
                 </Avatar>
-                {uploading && (
+                {uploading ? (
                   <div className="absolute inset-0 flex items-center justify-center rounded-full bg-background/70">
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
                   </div>
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 hover:opacity-100 transition-opacity">
+                    <Camera className="h-6 w-6 text-white" />
+                  </div>
                 )}
-              </div>
+              </button>
               <div className="space-y-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={handleFileChange}
-                  data-testid="input-avatar-file"
-                />
                 <Button
                   variant="outline"
                   onClick={handleFileClick}
@@ -154,7 +165,7 @@ export default function Profile() {
                   {uploading ? "Uploading…" : "Change Photo"}
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  Click to select a new photo from your device.
+                  Click the photo or this button to upload a new image.
                 </p>
               </div>
             </CardContent>
@@ -183,7 +194,7 @@ export default function Profile() {
                 <p className="text-xs text-muted-foreground mb-1">Role</p>
                 <Badge variant="secondary" data-testid="badge-role">
                   <User className="h-3 w-3 mr-1" />
-                  {user ? ROLE_LABELS[user.role] ?? user.role : "—"}
+                  {user ? (ROLE_LABELS[user.role] ?? user.role) : "—"}
                 </Badge>
               </div>
             </CardContent>
