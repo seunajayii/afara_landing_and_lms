@@ -47,7 +47,7 @@ export async function createUserWithPassword(
   });
 }
 
-const ADMIN_DEFAULT_PASSWORD = "Amin123!";
+const ADMIN_DEFAULT_PASSWORD = "Admin123!";
 
 export async function seedSuperAdmin(): Promise<void> {
   const existingAdmin = await storage.getUserByEmail("admin@afaraaccelerator.org");
