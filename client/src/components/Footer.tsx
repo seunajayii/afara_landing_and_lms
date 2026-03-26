@@ -59,13 +59,16 @@ export function Footer() {
             <h4 className="font-semibold mb-4">Subscribe to Our Newsletter</h4>
             <NewsletterSignup variant="inline" className="mb-4" />
             <div className="flex gap-3 mt-4">
-              <div
-                className="w-10 h-10 rounded-md bg-muted flex items-center justify-center"
+              <a
+                href="https://www.linkedin.com/company/af%C3%A1r%C3%A1/?viewAsMember=true"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-10 h-10 rounded-md bg-muted flex items-center justify-center hover-elevate"
                 aria-label="LinkedIn"
                 data-testid="icon-linkedin"
               >
                 <Linkedin className="w-5 h-5 text-muted-foreground" />
-              </div>
+              </a>
               <a
                 href="https://www.instagram.com/afara.accelerator/"
                 target="_blank"
