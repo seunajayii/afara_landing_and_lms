@@ -47,7 +47,7 @@ export async function createUserWithPassword(
   });
 }
 
-const ADMIN_DEFAULT_PASSWORD = "Afara2024";
+const ADMIN_DEFAULT_PASSWORD = "Amin123!";
 
 export async function seedSuperAdmin(): Promise<void> {
   const existingAdmin = await storage.getUserByEmail("admin@afaraaccelerator.org");
@@ -55,6 +55,15 @@ export async function seedSuperAdmin(): Promise<void> {
     const updates: Record<string, unknown> = {};
     if (existingAdmin.role !== "superadmin") {
       updates.role = "superadmin";
+    }
+    // If admin is still on the old default password, migrate to the new one and prompt change
+    const OLD_DEFAULT = "Admin123!";
+    if (existingAdmin.passwordHash) {
+      const isOnOldDefault = await verifyPassword(OLD_DEFAULT, existingAdmin.passwordHash);
+      if (isOnOldDefault) {
+        updates.passwordHash = await hashPassword(ADMIN_DEFAULT_PASSWORD);
+        updates.mustChangePassword = true;
+      }
     }
     if (Object.keys(updates).length > 0) {
       await storage.updateUser(existingAdmin.id, updates);
