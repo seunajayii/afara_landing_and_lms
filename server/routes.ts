@@ -1328,6 +1328,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Application Routes (Admin-only for listing/managing; public POST for submission)
+  // Application file upload (public – no auth required, anyone filling the form can upload)
+  const applicationFileUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+  });
+
+  app.post(
+    "/api/applications/upload-file",
+    (req: Request, res: Response, next: NextFunction) => {
+      applicationFileUpload.single("file")(req, res, (err) => {
+        if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({ error: "File exceeds 20 MB limit" });
+        }
+        if (err) {
+          return res.status(400).json({ error: err.message || "Upload error" });
+        }
+        next();
+      });
+    },
+    async (req: Request, res: Response) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({ error: "No file provided" });
+        }
+        const { isR2Configured, uploadFile } = await import("./r2-storage");
+        const originalName = req.file.originalname || "file";
+        const ext = originalName.includes(".") ? originalName.split(".").pop()! : "bin";
+        const { randomUUID } = await import("crypto");
+        const key = `applications/${randomUUID()}.${ext}`;
+
+        let fileUrl: string;
+        if (isR2Configured()) {
+          const result = await uploadFile(key, req.file.buffer, req.file.mimetype, true);
+          fileUrl = result.url;
+        } else {
+          const base64 = req.file.buffer.toString("base64");
+          fileUrl = `data:${req.file.mimetype};base64,${base64}`;
+        }
+
+        res.json({ fileUrl, fileName: originalName, fileSize: req.file.size });
+      } catch (error) {
+        console.error("Application file upload error:", error);
+        res.status(500).json({ error: "Failed to upload file" });
+      }
+    }
+  );
+
   app.get("/api/applications", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const status = req.query.status as string;

@@ -302,6 +302,9 @@ export const applications = pgTable("applications", {
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   phone: text("phone"),
+  countryOfOperation: text("country_of_operation"),
+  companyName: text("company_name"),
+  roleInCompany: text("role_in_company"),
   personalStatement: text("personal_statement"),
   videoEssayUrl: text("video_essay_url"),
   
@@ -309,6 +312,9 @@ export const applications = pgTable("applications", {
   professionalBackground: text("professional_background"),
   yearsOfExperience: integer("years_of_experience"),
   keyResponsibilities: text("key_responsibilities"),
+  majorAchievements: text("major_achievements"),
+  hasLedTeams: boolean("has_led_teams"),
+  teamLeadershipExperience: text("team_leadership_experience"),
   hasProjectExperience: boolean("has_project_experience"),
   projectExperience: text("project_experience"),
   primarySector: text("primary_sector"),
@@ -316,7 +322,17 @@ export const applications = pgTable("applications", {
   subSectors: text("sub_sectors").array(),
   otherSubSector: text("other_sub_sector"),
   
-  // Section 2: Business Ownership & Operations
+  // Section 2: Business Overview & Scalability
+  businessDescription: text("business_description"),
+  problemBeingSolved: text("problem_being_solved"),
+  businessStage: text("business_stage"),
+  tractionEvidence: text("traction_evidence"),
+  targetMarket: text("target_market"),
+  scalabilityExplanation: text("scalability_explanation"),
+  growthPlans: text("growth_plans"),
+  isRaisingFunding: boolean("is_raising_funding"),
+  
+  // Section 2b: Business Ownership & Operations
   companyLegalName: text("company_legal_name"),
   companyCountry: text("company_country"),
   companyHeadquarters: text("company_headquarters"),
@@ -326,6 +342,12 @@ export const applications = pgTable("applications", {
   shareholdersOver25Percent: boolean("shareholders_over_25_percent"),
   
   // Section 3: Financial Documentation & Compliance
+  isIncorporated: boolean("is_incorporated"),
+  incorporationCertificateUrl: text("incorporation_certificate_url"),
+  revenueStreams: text("revenue_streams"),
+  keepsFinancialRecords: boolean("keeps_financial_records"),
+  pitchDeckUrl: text("pitch_deck_url"),
+  businessPlanUrl: text("business_plan_url"),
   canProvideFinancials: boolean("can_provide_financials"),
   isTaxRegistered: boolean("is_tax_registered"),
   
@@ -339,6 +361,13 @@ export const applications = pgTable("applications", {
   otherProjectDocuments: text("other_project_documents"),
   projectedImpact: text("projected_impact"),
   
+  // Section 4b: Business Impact
+  businessImpact: text("business_impact"),
+  primaryBeneficiaries: text("primary_beneficiaries"),
+  infrastructureGapContribution: text("infrastructure_gap_contribution"),
+  createsWomenOpportunities: boolean("creates_women_opportunities"),
+  womenOpportunitiesDescription: text("women_opportunities_description"),
+  
   // Section 5: Support Needs & Project Advancement
   mainChallenges: text("main_challenges"),
   supportAreasNeeded: text("support_areas_needed").array(),
@@ -348,6 +377,9 @@ export const applications = pgTable("applications", {
   expectedTimeline: text("expected_timeline"),
   
   // Section 6: Founder Commitment & Peer Support
+  specificProgramOutcomes: text("specific_program_outcomes"),
+  hoursPerWeek: integer("hours_per_week"),
+  openToMentorship: boolean("open_to_mentorship"),
   canCommitToProgram: boolean("can_commit_to_program"),
   canAttendLagosEvent: boolean("can_attend_lagos_event"),
   commitmentManagementPlan: text("commitment_management_plan"),

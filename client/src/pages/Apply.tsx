@@ -48,7 +48,9 @@ import {
   Handshake,
   HelpCircle,
   Eye,
-  Video
+  Video,
+  Upload,
+  Paperclip
 } from "lucide-react";
 
 const applicationSchema = z.object({
@@ -57,6 +59,9 @@ const applicationSchema = z.object({
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Valid email is required"),
   phone: z.string().optional(),
+  countryOfOperation: z.string().optional(),
+  companyName: z.string().optional(),
+  roleInCompany: z.string().optional(),
   personalStatement: z.string().optional(),
   videoEssayUrl: z.string().optional(),
   
@@ -64,6 +69,9 @@ const applicationSchema = z.object({
   professionalBackground: z.string().optional(),
   yearsOfExperience: z.coerce.number().min(0).optional(),
   keyResponsibilities: z.string().optional(),
+  majorAchievements: z.string().optional(),
+  hasLedTeams: z.boolean().optional(),
+  teamLeadershipExperience: z.string().optional(),
   hasProjectExperience: z.boolean().optional(),
   projectExperience: z.string().optional(),
   primarySector: z.string().optional(),
@@ -71,7 +79,17 @@ const applicationSchema = z.object({
   subSectors: z.array(z.string()).optional(),
   otherSubSector: z.string().optional(),
   
-  // Section 2: Business Ownership
+  // Section 2: Business Overview & Scalability
+  businessDescription: z.string().optional(),
+  problemBeingSolved: z.string().optional(),
+  businessStage: z.string().optional(),
+  tractionEvidence: z.string().optional(),
+  targetMarket: z.string().optional(),
+  scalabilityExplanation: z.string().optional(),
+  growthPlans: z.string().optional(),
+  isRaisingFunding: z.boolean().optional(),
+  
+  // Section 2b: Business Ownership
   companyLegalName: z.string().optional(),
   companyCountry: z.string().optional(),
   companyHeadquarters: z.string().optional(),
@@ -81,6 +99,12 @@ const applicationSchema = z.object({
   shareholdersOver25Percent: z.boolean().optional(),
   
   // Section 3: Financial Documentation
+  isIncorporated: z.boolean().optional(),
+  incorporationCertificateUrl: z.string().optional(),
+  revenueStreams: z.string().optional(),
+  keepsFinancialRecords: z.boolean().optional(),
+  pitchDeckUrl: z.string().optional(),
+  businessPlanUrl: z.string().optional(),
   canProvideFinancials: z.boolean().optional(),
   isTaxRegistered: z.boolean().optional(),
   
@@ -94,6 +118,13 @@ const applicationSchema = z.object({
   otherProjectDocuments: z.string().optional(),
   projectedImpact: z.string().optional(),
   
+  // Section 4b: Business Impact
+  businessImpact: z.string().optional(),
+  primaryBeneficiaries: z.string().optional(),
+  infrastructureGapContribution: z.string().optional(),
+  createsWomenOpportunities: z.boolean().optional(),
+  womenOpportunitiesDescription: z.string().optional(),
+  
   // Section 5: Support Needs
   mainChallenges: z.string().optional(),
   supportAreasNeeded: z.array(z.string()).optional(),
@@ -103,6 +134,9 @@ const applicationSchema = z.object({
   expectedTimeline: z.string().optional(),
   
   // Section 6: Founder Commitment
+  specificProgramOutcomes: z.string().optional(),
+  hoursPerWeek: z.coerce.number().min(0).max(168).optional(),
+  openToMentorship: z.boolean().optional(),
   canCommitToProgram: z.boolean().optional(),
   canAttendLagosEvent: z.boolean().optional(),
   commitmentManagementPlan: z.string().optional(),
@@ -184,17 +218,31 @@ export default function Apply() {
       lastName: "",
       email: "",
       phone: "",
+      countryOfOperation: "",
+      companyName: "",
+      roleInCompany: "",
       personalStatement: "",
       videoEssayUrl: "",
       professionalBackground: "",
       yearsOfExperience: undefined,
       keyResponsibilities: "",
+      majorAchievements: "",
+      hasLedTeams: false,
+      teamLeadershipExperience: "",
       hasProjectExperience: false,
       projectExperience: "",
       primarySector: "",
       sectorSpecification: "",
       subSectors: [],
       otherSubSector: "",
+      businessDescription: "",
+      problemBeingSolved: "",
+      businessStage: "",
+      tractionEvidence: "",
+      targetMarket: "",
+      scalabilityExplanation: "",
+      growthPlans: "",
+      isRaisingFunding: false,
       companyLegalName: "",
       companyCountry: "",
       companyHeadquarters: "",
@@ -202,6 +250,12 @@ export default function Apply() {
       ownershipPercentage: undefined,
       numberOfShareholders: undefined,
       shareholdersOver25Percent: false,
+      isIncorporated: false,
+      incorporationCertificateUrl: "",
+      revenueStreams: "",
+      keepsFinancialRecords: false,
+      pitchDeckUrl: "",
+      businessPlanUrl: "",
       canProvideFinancials: false,
       isTaxRegistered: false,
       projectDescription: "",
@@ -212,12 +266,20 @@ export default function Apply() {
       projectDocuments: [],
       otherProjectDocuments: "",
       projectedImpact: "",
+      businessImpact: "",
+      primaryBeneficiaries: "",
+      infrastructureGapContribution: "",
+      createsWomenOpportunities: false,
+      womenOpportunitiesDescription: "",
       mainChallenges: "",
       supportAreasNeeded: [],
       otherSupportArea: "",
       keyActivitiesForNextStage: "",
       fundingRequired: "",
       expectedTimeline: "",
+      specificProgramOutcomes: "",
+      hoursPerWeek: undefined,
+      openToMentorship: false,
       canCommitToProgram: false,
       canAttendLagosEvent: false,
       commitmentManagementPlan: "",
@@ -579,6 +641,49 @@ function PersonalSection({ form }: { form: ReturnType<typeof useForm<Application
         />
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <FormField
+          control={form.control}
+          name="countryOfOperation"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Country of Operation</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g., Nigeria" {...field} data-testid="input-country-of-operation" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="roleInCompany"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Role in Company</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g., Founder & CEO" {...field} data-testid="input-role-in-company" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      <FormField
+        control={form.control}
+        name="companyName"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Company / Project Name</FormLabel>
+            <FormControl>
+              <Input placeholder="Enter your company or project name" {...field} data-testid="input-company-name" />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
       <FormField
         control={form.control}
         name="linkedinUrl"
@@ -647,6 +752,7 @@ function PersonalSection({ form }: { form: ReturnType<typeof useForm<Application
 
 function BackgroundSection({ form }: { form: ReturnType<typeof useForm<ApplicationFormData>> }) {
   const hasProjectExperience = form.watch("hasProjectExperience");
+  const hasLedTeams = form.watch("hasLedTeams");
   const subSectors = form.watch("subSectors") || [];
 
   return (
@@ -656,13 +762,13 @@ function BackgroundSection({ form }: { form: ReturnType<typeof useForm<Applicati
         name="professionalBackground"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Professional Background</FormLabel>
+            <FormLabel>Professional Journey</FormLabel>
             <FormDescription>
-              Describe your professional background in the energy or infrastructure sector. Include your role, years of experience, and key responsibilities.
+              Describe your professional journey in the energy or infrastructure sector.
             </FormDescription>
             <FormControl>
               <Textarea 
-                placeholder="Describe your experience, roles, and responsibilities..."
+                placeholder="Describe your experience, roles, and professional journey..."
                 className="min-h-[120px]"
                 {...field} 
                 data-testid="input-professional-background"
@@ -678,7 +784,7 @@ function BackgroundSection({ form }: { form: ReturnType<typeof useForm<Applicati
         name="yearsOfExperience"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Years of Experience</FormLabel>
+            <FormLabel>Years of Experience in Energy / Infrastructure</FormLabel>
             <FormControl>
               <Input 
                 type="number" 
@@ -686,6 +792,28 @@ function BackgroundSection({ form }: { form: ReturnType<typeof useForm<Applicati
                 {...field} 
                 onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
                 data-testid="input-years-experience"
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="majorAchievements"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Major Achievements</FormLabel>
+            <FormDescription>
+              Highlight up to 3 major achievements — projects delivered, deals closed, or impact created.
+            </FormDescription>
+            <FormControl>
+              <Textarea 
+                placeholder="1. …&#10;2. …&#10;3. …"
+                className="min-h-[120px]"
+                {...field} 
+                data-testid="input-major-achievements"
               />
             </FormControl>
             <FormMessage />
@@ -714,6 +842,51 @@ function BackgroundSection({ form }: { form: ReturnType<typeof useForm<Applicati
           </FormItem>
         )}
       />
+
+      <FormField
+        control={form.control}
+        name="hasLedTeams"
+        render={({ field }) => (
+          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+            <FormControl>
+              <Checkbox
+                checked={field.value}
+                onCheckedChange={field.onChange}
+                data-testid="checkbox-has-led-teams"
+              />
+            </FormControl>
+            <div className="space-y-1 leading-none">
+              <FormLabel>
+                Have you led teams or managed large-scale projects?
+              </FormLabel>
+            </div>
+          </FormItem>
+        )}
+      />
+
+      {hasLedTeams && (
+        <FormField
+          control={form.control}
+          name="teamLeadershipExperience"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Team / Project Leadership Experience</FormLabel>
+              <FormDescription>
+                Please explain your experience leading teams or managing large-scale projects.
+              </FormDescription>
+              <FormControl>
+                <Textarea 
+                  placeholder="Describe your leadership and project management experience..."
+                  className="min-h-[120px]"
+                  {...field} 
+                  data-testid="input-team-leadership-experience"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
 
       <FormField
         control={form.control}
@@ -853,9 +1026,194 @@ function BackgroundSection({ form }: { form: ReturnType<typeof useForm<Applicati
   );
 }
 
+const businessStageOptions = [
+  "Pilot",
+  "Early traction",
+  "Revenue generating",
+  "Growth / scaling",
+];
+
 function BusinessSection({ form }: { form: ReturnType<typeof useForm<ApplicationFormData>> }) {
+  const isRaisingFunding = form.watch("isRaisingFunding");
+
   return (
     <div className="space-y-6">
+      {/* Business Overview */}
+      <div className="p-4 bg-muted/50 rounded-lg">
+        <p className="text-sm font-medium text-muted-foreground">Business / Project Overview</p>
+      </div>
+
+      <FormField
+        control={form.control}
+        name="businessDescription"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Describe Your Business / Project</FormLabel>
+            <FormDescription>What do you do and who do you serve?</FormDescription>
+            <FormControl>
+              <Textarea 
+                placeholder="Describe what your business does and who it serves..."
+                className="min-h-[120px]"
+                {...field} 
+                data-testid="input-business-description"
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="problemBeingSolved"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>What Problem Are You Solving?</FormLabel>
+            <FormControl>
+              <Textarea 
+                placeholder="Describe the core problem your business addresses..."
+                className="min-h-[100px]"
+                {...field} 
+                data-testid="input-problem-being-solved"
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="businessStage"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>What Stage Is Your Business?</FormLabel>
+            <Select onValueChange={field.onChange} value={field.value}>
+              <FormControl>
+                <SelectTrigger data-testid="select-business-stage">
+                  <SelectValue placeholder="Select your business stage" />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {businessStageOptions.map((stage) => (
+                  <SelectItem key={stage} value={stage}>{stage}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="tractionEvidence"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Evidence of Traction</FormLabel>
+            <FormDescription>Share evidence such as revenue figures, number of customers/users, contracts or partnerships.</FormDescription>
+            <FormControl>
+              <Textarea 
+                placeholder="e.g., Revenue: $50k/year, 200 customers, 3 signed contracts..."
+                className="min-h-[100px]"
+                {...field} 
+                data-testid="input-traction-evidence"
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      {/* Scalability & Growth */}
+      <div className="p-4 bg-muted/50 rounded-lg mt-2">
+        <p className="text-sm font-medium text-muted-foreground">Scalability &amp; Growth</p>
+      </div>
+
+      <FormField
+        control={form.control}
+        name="targetMarket"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Target Market &amp; Its Size</FormLabel>
+            <FormDescription>What is your target market and how large is it?</FormDescription>
+            <FormControl>
+              <Textarea 
+                placeholder="Describe your target market and estimated market size..."
+                className="min-h-[100px]"
+                {...field} 
+                data-testid="input-target-market"
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="scalabilityExplanation"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>What Makes Your Solution Scalable?</FormLabel>
+            <FormControl>
+              <Textarea 
+                placeholder="Explain the scalability of your business model or solution..."
+                className="min-h-[100px]"
+                {...field} 
+                data-testid="input-scalability-explanation"
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="growthPlans"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Growth Plans for the Next 2–3 Years</FormLabel>
+            <FormControl>
+              <Textarea 
+                placeholder="Describe your growth plans and key milestones over the next 2–3 years..."
+                className="min-h-[100px]"
+                {...field} 
+                data-testid="input-growth-plans"
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="isRaisingFunding"
+        render={({ field }) => (
+          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+            <FormControl>
+              <Checkbox
+                checked={field.value}
+                onCheckedChange={field.onChange}
+                data-testid="checkbox-is-raising-funding"
+              />
+            </FormControl>
+            <div className="space-y-1 leading-none">
+              <FormLabel>
+                Are you currently raising funding or planning to?
+              </FormLabel>
+            </div>
+          </FormItem>
+        )}
+      />
+
+      {/* Business Ownership */}
+      <div className="p-4 bg-muted/50 rounded-lg mt-2">
+        <p className="text-sm font-medium text-muted-foreground">Business Ownership &amp; Operations</p>
+      </div>
+
       <FormField
         control={form.control}
         name="companyLegalName"
@@ -986,7 +1344,96 @@ function BusinessSection({ form }: { form: ReturnType<typeof useForm<Application
   );
 }
 
+function FileUploadField({
+  label,
+  description,
+  fieldName,
+  form,
+  accept = ".pdf,.doc,.docx,.jpg,.jpeg,.png",
+  testId,
+}: {
+  label: string;
+  description?: string;
+  fieldName: keyof ApplicationFormData;
+  form: ReturnType<typeof useForm<ApplicationFormData>>;
+  accept?: string;
+  testId: string;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const currentValue = form.watch(fieldName) as string | undefined;
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch("/api/applications/upload-file", {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) throw new Error("Upload failed");
+      const data = await response.json();
+      form.setValue(fieldName, data.fileUrl as any);
+      setFileName(data.fileName);
+    } catch {
+      // ignore silently
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <FormField
+      control={form.control}
+      name={fieldName}
+      render={() => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          {description && <FormDescription>{description}</FormDescription>}
+          <FormControl>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <label
+                  htmlFor={testId}
+                  className="flex items-center gap-2 px-3 py-2 rounded-md border border-input text-sm cursor-pointer hover-elevate"
+                >
+                  {uploading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Upload className="w-4 h-4" />
+                  )}
+                  {uploading ? "Uploading…" : "Choose file"}
+                </label>
+                <input
+                  id={testId}
+                  type="file"
+                  accept={accept}
+                  onChange={handleFileChange}
+                  className="hidden"
+                  data-testid={testId}
+                />
+                {(fileName || currentValue) && (
+                  <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <Paperclip className="w-3 h-3" />
+                    {fileName || "File uploaded"}
+                  </span>
+                )}
+              </div>
+            </div>
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+}
+
 function FinancialSection({ form }: { form: ReturnType<typeof useForm<ApplicationFormData>> }) {
+  const isIncorporated = form.watch("isIncorporated");
+
   return (
     <div className="space-y-6">
       <div className="p-4 bg-muted/50 rounded-lg">
@@ -994,6 +1441,99 @@ function FinancialSection({ form }: { form: ReturnType<typeof useForm<Applicatio
           This section helps us understand your company's financial documentation readiness and compliance status.
         </p>
       </div>
+
+      <FormField
+        control={form.control}
+        name="isIncorporated"
+        render={({ field }) => (
+          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+            <FormControl>
+              <Checkbox
+                checked={field.value}
+                onCheckedChange={field.onChange}
+                data-testid="checkbox-is-incorporated"
+              />
+            </FormControl>
+            <div className="space-y-1 leading-none">
+              <FormLabel>
+                Is your business formally incorporated / registered?
+              </FormLabel>
+            </div>
+          </FormItem>
+        )}
+      />
+
+      {isIncorporated && (
+        <FileUploadField
+          label="Incorporation Certificate"
+          description="Upload your certificate of incorporation (PDF or image, max 20 MB)."
+          fieldName="incorporationCertificateUrl"
+          form={form}
+          accept=".pdf,.jpg,.jpeg,.png"
+          testId="upload-incorporation-certificate"
+        />
+      )}
+
+      <FormField
+        control={form.control}
+        name="revenueStreams"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Revenue Streams</FormLabel>
+            <FormDescription>
+              Describe how your business generates revenue today (or plans to).
+            </FormDescription>
+            <FormControl>
+              <Textarea 
+                placeholder="e.g., Product sales, service contracts, licensing fees..."
+                className="min-h-[100px]"
+                {...field} 
+                data-testid="input-revenue-streams"
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="keepsFinancialRecords"
+        render={({ field }) => (
+          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+            <FormControl>
+              <Checkbox
+                checked={field.value}
+                onCheckedChange={field.onChange}
+                data-testid="checkbox-keeps-financial-records"
+              />
+            </FormControl>
+            <div className="space-y-1 leading-none">
+              <FormLabel>
+                Does your business keep regular financial records (accounts, bookkeeping)?
+              </FormLabel>
+            </div>
+          </FormItem>
+        )}
+      />
+
+      <FileUploadField
+        label="Pitch Deck (optional)"
+        description="Upload your pitch deck if available (PDF, max 20 MB)."
+        fieldName="pitchDeckUrl"
+        form={form}
+        accept=".pdf,.ppt,.pptx"
+        testId="upload-pitch-deck"
+      />
+
+      <FileUploadField
+        label="Business Plan (optional)"
+        description="Upload your business plan if available (PDF or Word, max 20 MB)."
+        fieldName="businessPlanUrl"
+        form={form}
+        accept=".pdf,.doc,.docx"
+        testId="upload-business-plan"
+      />
 
       <FormField
         control={form.control}
@@ -1188,6 +1728,115 @@ function ProjectSection({ form }: { form: ReturnType<typeof useForm<ApplicationF
           </FormItem>
         )}
       />
+
+      {/* Business Impact */}
+      <div className="p-4 bg-muted/50 rounded-lg">
+        <p className="text-sm font-medium text-muted-foreground">Social &amp; Sustainable Impact</p>
+      </div>
+
+      <FormField
+        control={form.control}
+        name="businessImpact"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Business Impact</FormLabel>
+            <FormDescription>
+              How does your business / project positively impact people's lives and communities?
+            </FormDescription>
+            <FormControl>
+              <Textarea 
+                placeholder="Describe the positive impact your business has on communities and society..."
+                className="min-h-[120px]"
+                {...field} 
+                data-testid="input-business-impact"
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="primaryBeneficiaries"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Primary Beneficiaries</FormLabel>
+            <FormDescription>Who are the primary beneficiaries of your work and how many does it reach?</FormDescription>
+            <FormControl>
+              <Textarea 
+                placeholder="e.g., Rural households in Northern Nigeria — approx. 5,000 people..."
+                className="min-h-[100px]"
+                {...field} 
+                data-testid="input-primary-beneficiaries"
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="infrastructureGapContribution"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Contribution to Closing Infrastructure Gaps</FormLabel>
+            <FormDescription>How does your work contribute to closing infrastructure gaps in Africa?</FormDescription>
+            <FormControl>
+              <Textarea 
+                placeholder="Describe how your project addresses infrastructure deficits..."
+                className="min-h-[100px]"
+                {...field} 
+                data-testid="input-infrastructure-gap"
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="createsWomenOpportunities"
+        render={({ field }) => (
+          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+            <FormControl>
+              <Checkbox
+                checked={field.value}
+                onCheckedChange={field.onChange}
+                data-testid="checkbox-creates-women-opportunities"
+              />
+            </FormControl>
+            <div className="space-y-1 leading-none">
+              <FormLabel>
+                Does your business create economic opportunities specifically for women?
+              </FormLabel>
+            </div>
+          </FormItem>
+        )}
+      />
+
+      {form.watch("createsWomenOpportunities") && (
+        <FormField
+          control={form.control}
+          name="womenOpportunitiesDescription"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Describe the Opportunities Created for Women</FormLabel>
+              <FormControl>
+                <Textarea 
+                  placeholder="Describe how your business creates economic opportunities for women..."
+                  className="min-h-[100px]"
+                  {...field} 
+                  data-testid="input-women-opportunities"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
     </div>
   );
 }
@@ -1340,6 +1989,69 @@ function SupportSection({ form }: { form: ReturnType<typeof useForm<ApplicationF
 function CommitmentSection({ form }: { form: ReturnType<typeof useForm<ApplicationFormData>> }) {
   return (
     <div className="space-y-6">
+      <FormField
+        control={form.control}
+        name="specificProgramOutcomes"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>What Specific Outcomes Do You Hope to Achieve from This Program?</FormLabel>
+            <FormDescription>
+              Be specific — what skills, networks, deals, or milestones do you want to reach?
+            </FormDescription>
+            <FormControl>
+              <Textarea 
+                placeholder="e.g., Secure seed funding, close my first enterprise contract, build my advisory board..."
+                className="min-h-[120px]"
+                {...field} 
+                data-testid="input-specific-outcomes"
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="hoursPerWeek"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>How Many Hours Per Week Can You Dedicate to the Program?</FormLabel>
+            <FormControl>
+              <Input 
+                type="number" 
+                placeholder="e.g., 10" 
+                {...field} 
+                onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                data-testid="input-hours-per-week"
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="openToMentorship"
+        render={({ field }) => (
+          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+            <FormControl>
+              <Checkbox
+                checked={field.value}
+                onCheckedChange={field.onChange}
+                data-testid="checkbox-open-to-mentorship"
+              />
+            </FormControl>
+            <div className="space-y-1 leading-none">
+              <FormLabel>
+                Are you open to receiving mentorship from experienced professionals during the program?
+              </FormLabel>
+            </div>
+          </FormItem>
+        )}
+      />
+
       <FormField
         control={form.control}
         name="canCommitToProgram"
@@ -1499,6 +2211,7 @@ function PreviewSection({ form }: { form: ReturnType<typeof useForm<ApplicationF
       </div>
 
       <div className="space-y-6">
+        {/* Personal Info */}
         <div>
           <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
             <User className="w-4 h-4" /> Personal Information
@@ -1508,6 +2221,9 @@ function PreviewSection({ form }: { form: ReturnType<typeof useForm<ApplicationF
             <div><span className="font-medium">Email:</span> {values.email}</div>
             <div><span className="font-medium">Phone:</span> {renderValue(values.phone)}</div>
             <div><span className="font-medium">LinkedIn:</span> {renderValue(values.linkedinUrl)}</div>
+            <div><span className="font-medium">Country of Operation:</span> {renderValue(values.countryOfOperation)}</div>
+            <div><span className="font-medium">Company / Project:</span> {renderValue(values.companyName)}</div>
+            <div><span className="font-medium">Role:</span> {renderValue(values.roleInCompany)}</div>
           </div>
           {values.personalStatement && (
             <div className="mt-2 text-sm">
@@ -1524,6 +2240,7 @@ function PreviewSection({ form }: { form: ReturnType<typeof useForm<ApplicationF
 
         <Separator />
 
+        {/* Background */}
         <div>
           <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
             <Briefcase className="w-4 h-4" /> Background & Sector Experience
@@ -1531,19 +2248,19 @@ function PreviewSection({ form }: { form: ReturnType<typeof useForm<ApplicationF
           <div className="space-y-2 text-sm">
             <div><span className="font-medium">Years of Experience:</span> {renderValue(values.yearsOfExperience)}</div>
             <div><span className="font-medium">Primary Sector:</span> {renderValue(values.primarySector)}</div>
-            <div><span className="font-medium">Sector Specification:</span> {renderValue(values.sectorSpecification)}</div>
             <div><span className="font-medium">Sub-sectors:</span> {renderValue(values.subSectors)}</div>
-            <div><span className="font-medium">Has Project Experience:</span> {renderValue(values.hasProjectExperience)}</div>
+            <div><span className="font-medium">Led Teams:</span> {renderValue(values.hasLedTeams)}</div>
+            <div><span className="font-medium">Project Experience:</span> {renderValue(values.hasProjectExperience)}</div>
           </div>
-          {values.keyResponsibilities && (
+          {values.majorAchievements && (
             <div className="mt-2 text-sm">
-              <span className="font-medium">Key Responsibilities:</span>
-              <p className="mt-1 text-muted-foreground">{values.keyResponsibilities}</p>
+              <span className="font-medium">Major Achievements:</span>
+              <p className="mt-1 text-muted-foreground">{values.majorAchievements}</p>
             </div>
           )}
           {values.professionalBackground && (
             <div className="mt-2 text-sm">
-              <span className="font-medium">Professional Background:</span>
+              <span className="font-medium">Professional Journey:</span>
               <p className="mt-1 text-muted-foreground">{values.professionalBackground}</p>
             </div>
           )}
@@ -1551,43 +2268,89 @@ function PreviewSection({ form }: { form: ReturnType<typeof useForm<ApplicationF
 
         <Separator />
 
+        {/* Business Overview */}
         <div>
           <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-            <Building2 className="w-4 h-4" /> Business Ownership & Operations
+            <Building2 className="w-4 h-4" /> Business / Project Overview
+          </h3>
+          <div className="space-y-2 text-sm">
+            <div><span className="font-medium">Business Stage:</span> {renderValue(values.businessStage)}</div>
+            <div><span className="font-medium">Target Market:</span> {renderValue(values.targetMarket)}</div>
+            <div><span className="font-medium">Raising Funding:</span> {renderValue(values.isRaisingFunding)}</div>
+          </div>
+          {values.businessDescription && (
+            <div className="mt-2 text-sm">
+              <span className="font-medium">Business Description:</span>
+              <p className="mt-1 text-muted-foreground">{values.businessDescription}</p>
+            </div>
+          )}
+          {values.tractionEvidence && (
+            <div className="mt-2 text-sm">
+              <span className="font-medium">Traction Evidence:</span>
+              <p className="mt-1 text-muted-foreground">{values.tractionEvidence}</p>
+            </div>
+          )}
+          {values.growthPlans && (
+            <div className="mt-2 text-sm">
+              <span className="font-medium">Growth Plans:</span>
+              <p className="mt-1 text-muted-foreground">{values.growthPlans}</p>
+            </div>
+          )}
+        </div>
+
+        <Separator />
+
+        {/* Ownership */}
+        <div>
+          <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+            <Building2 className="w-4 h-4" /> Ownership & Operations
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <div><span className="font-medium">Company Name:</span> {renderValue(values.companyLegalName)}</div>
+            <div><span className="font-medium">Legal Name:</span> {renderValue(values.companyLegalName)}</div>
             <div><span className="font-medium">Country:</span> {renderValue(values.companyCountry)}</div>
             <div><span className="font-medium">Headquarters:</span> {renderValue(values.companyHeadquarters)}</div>
             <div><span className="font-medium">Incorporation Year:</span> {renderValue(values.incorporationYear)}</div>
             <div><span className="font-medium">Ownership %:</span> {renderValue(values.ownershipPercentage)}</div>
-            <div><span className="font-medium">Other Shareholders:</span> {renderValue(values.numberOfShareholders)}</div>
           </div>
         </div>
 
         <Separator />
 
+        {/* Financial */}
         <div>
           <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
             <FileText className="w-4 h-4" /> Financial Documentation
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+            <div><span className="font-medium">Formally Incorporated:</span> {renderValue(values.isIncorporated)}</div>
+            <div><span className="font-medium">Keeps Financial Records:</span> {renderValue(values.keepsFinancialRecords)}</div>
             <div><span className="font-medium">Can Provide Financials:</span> {renderValue(values.canProvideFinancials)}</div>
             <div><span className="font-medium">Tax Registered:</span> {renderValue(values.isTaxRegistered)}</div>
+            <div><span className="font-medium">Pitch Deck:</span> {values.pitchDeckUrl ? "Uploaded" : "Not provided"}</div>
+            <div><span className="font-medium">Business Plan:</span> {values.businessPlanUrl ? "Uploaded" : "Not provided"}</div>
+            <div><span className="font-medium">Inc. Certificate:</span> {values.incorporationCertificateUrl ? "Uploaded" : "Not provided"}</div>
           </div>
+          {values.revenueStreams && (
+            <div className="mt-2 text-sm">
+              <span className="font-medium">Revenue Streams:</span>
+              <p className="mt-1 text-muted-foreground">{values.revenueStreams}</p>
+            </div>
+          )}
         </div>
 
         <Separator />
 
+        {/* Project Readiness */}
         <div>
           <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-            <Target className="w-4 h-4" /> Project Readiness
+            <Target className="w-4 h-4" /> Project Readiness & Impact
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
             <div><span className="font-medium">Location:</span> {renderValue(values.projectLocation)}</div>
             <div><span className="font-medium">Sector:</span> {renderValue(values.projectSector)}</div>
             <div><span className="font-medium">Stage:</span> {renderValue(values.projectStage)}</div>
             <div><span className="font-medium">Documents:</span> {renderValue(values.projectDocuments)}</div>
+            <div><span className="font-medium">Creates Women Opportunities:</span> {renderValue(values.createsWomenOpportunities)}</div>
           </div>
           {values.projectDescription && (
             <div className="mt-2 text-sm">
@@ -1595,16 +2358,23 @@ function PreviewSection({ form }: { form: ReturnType<typeof useForm<ApplicationF
               <p className="mt-1 text-muted-foreground">{values.projectDescription}</p>
             </div>
           )}
-          {values.projectedImpact && (
+          {values.businessImpact && (
             <div className="mt-2 text-sm">
-              <span className="font-medium">Projected Impact:</span>
-              <p className="mt-1 text-muted-foreground">{values.projectedImpact}</p>
+              <span className="font-medium">Business Impact:</span>
+              <p className="mt-1 text-muted-foreground">{values.businessImpact}</p>
+            </div>
+          )}
+          {values.primaryBeneficiaries && (
+            <div className="mt-2 text-sm">
+              <span className="font-medium">Primary Beneficiaries:</span>
+              <p className="mt-1 text-muted-foreground">{values.primaryBeneficiaries}</p>
             </div>
           )}
         </div>
 
         <Separator />
 
+        {/* Support Needs */}
         <div>
           <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
             <Handshake className="w-4 h-4" /> Support Needs
@@ -1623,18 +2393,27 @@ function PreviewSection({ form }: { form: ReturnType<typeof useForm<ApplicationF
 
         <Separator />
 
+        {/* Commitment */}
         <div>
           <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
             <HelpCircle className="w-4 h-4" /> Founder Commitment
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+            <div><span className="font-medium">Hours per Week:</span> {renderValue(values.hoursPerWeek)}</div>
+            <div><span className="font-medium">Open to Mentorship:</span> {renderValue(values.openToMentorship)}</div>
             <div><span className="font-medium">Commit to Program:</span> {renderValue(values.canCommitToProgram)}</div>
             <div><span className="font-medium">Attend Lagos Event:</span> {renderValue(values.canAttendLagosEvent)}</div>
-            <div><span className="font-medium">Willing to Mentor:</span> {renderValue(values.willingToMentor)}</div>
+            <div><span className="font-medium">Willing to Mentor Others:</span> {renderValue(values.willingToMentor)}</div>
           </div>
+          {values.specificProgramOutcomes && (
+            <div className="mt-2 text-sm">
+              <span className="font-medium">Specific Outcomes Sought:</span>
+              <p className="mt-1 text-muted-foreground">{values.specificProgramOutcomes}</p>
+            </div>
+          )}
           {values.whyAfaraIsRight && (
             <div className="mt-2 text-sm">
-              <span className="font-medium">Why AFARA:</span>
+              <span className="font-medium">Why AFÁRA:</span>
               <p className="mt-1 text-muted-foreground">{values.whyAfaraIsRight}</p>
             </div>
           )}
