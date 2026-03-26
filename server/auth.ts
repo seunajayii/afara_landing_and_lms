@@ -14,13 +14,11 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 
 export async function authenticateUser(email: string, password: string): Promise<User | null> {
   const user = await storage.getUserByEmail(email);
-  console.log("[AUTH] getUserByEmail:", email, "found:", !!user, "hasHash:", !!user?.passwordHash);
   if (!user || !user.passwordHash) {
     return null;
   }
   
   const isValid = await verifyPassword(password, user.passwordHash);
-  console.log("[AUTH] verifyPassword result:", isValid, "hashPrefix:", user.passwordHash.substring(0, 10));
   if (!isValid) {
     return null;
   }
@@ -49,7 +47,7 @@ export async function createUserWithPassword(
   });
 }
 
-const ADMIN_DEFAULT_PASSWORD = "Amin123!";
+const ADMIN_DEFAULT_PASSWORD = "Afara2024";
 
 export async function seedSuperAdmin(): Promise<void> {
   const existingAdmin = await storage.getUserByEmail("admin@afaraaccelerator.org");
@@ -57,15 +55,6 @@ export async function seedSuperAdmin(): Promise<void> {
     const updates: Record<string, unknown> = {};
     if (existingAdmin.role !== "superadmin") {
       updates.role = "superadmin";
-    }
-    // If admin is still on the old default password, migrate to the new one and prompt change
-    const OLD_DEFAULT = "Admin123!";
-    if (existingAdmin.passwordHash) {
-      const isOnOldDefault = await verifyPassword(OLD_DEFAULT, existingAdmin.passwordHash);
-      if (isOnOldDefault) {
-        updates.passwordHash = await hashPassword(ADMIN_DEFAULT_PASSWORD);
-        updates.mustChangePassword = true;
-      }
     }
     if (Object.keys(updates).length > 0) {
       await storage.updateUser(existingAdmin.id, updates);
