@@ -10,6 +10,7 @@ interface User {
   role: "community_member" | "participant" | "mentor" | "facilitator" | "admin" | "superadmin";
   profileImageUrl: string | null;
   isActive: boolean;
+  mustChangePassword: boolean;
   createdAt: string;
   lastLoginAt: string | null;
 }
@@ -75,7 +76,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const canManageContent = isAdmin || isSuperAdmin;
 
   const login = async (email: string, password: string) => {
-    await loginMutation.mutateAsync({ email, password });
+    const result = await loginMutation.mutateAsync({ email, password });
+    return result?.user;
   };
 
   const register = async (email: string, password: string, firstName: string, lastName: string) => {

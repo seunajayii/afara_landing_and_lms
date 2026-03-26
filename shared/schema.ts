@@ -22,6 +22,7 @@ export const users = pgTable("users", {
   role: userRoleEnum("role").notNull().default("participant"),
   profileImageUrl: text("profile_image_url"),
   isActive: boolean("is_active").notNull().default(true),
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   lastLoginAt: timestamp("last_login_at"),
 });

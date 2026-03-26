@@ -32,7 +32,8 @@ export async function createUserWithPassword(
   password: string, 
   firstName: string, 
   lastName: string,
-  role: "community_member" | "participant" | "mentor" | "facilitator" | "admin" | "superadmin" = "participant"
+  role: "community_member" | "participant" | "mentor" | "facilitator" | "admin" | "superadmin" = "participant",
+  mustChangePassword = false
 ): Promise<User> {
   const passwordHash = await hashPassword(password);
   return storage.createUser({
@@ -41,30 +42,47 @@ export async function createUserWithPassword(
     firstName,
     lastName,
     role,
-    isActive: true
+    isActive: true,
+    mustChangePassword,
   });
 }
+
+const ADMIN_DEFAULT_PASSWORD = "Amin123!";
 
 export async function seedSuperAdmin(): Promise<void> {
   const existingAdmin = await storage.getUserByEmail("admin@afaraaccelerator.org");
   if (existingAdmin) {
+    const updates: Record<string, unknown> = {};
     if (existingAdmin.role !== "superadmin") {
-      await storage.updateUser(existingAdmin.id, { role: "superadmin" });
-      console.log("Updated existing admin to superadmin role");
+      updates.role = "superadmin";
+    }
+    // If admin is still on the old default password, migrate to the new one and prompt change
+    const OLD_DEFAULT = "Admin123!";
+    if (existingAdmin.passwordHash) {
+      const isOnOldDefault = await verifyPassword(OLD_DEFAULT, existingAdmin.passwordHash);
+      if (isOnOldDefault) {
+        updates.passwordHash = await hashPassword(ADMIN_DEFAULT_PASSWORD);
+        updates.mustChangePassword = true;
+      }
+    }
+    if (Object.keys(updates).length > 0) {
+      await storage.updateUser(existingAdmin.id, updates);
+      console.log("Super admin updated");
     } else {
       console.log("Super admin already exists");
     }
     return;
   }
   
-  const passwordHash = await hashPassword("Admin123!");
+  const passwordHash = await hashPassword(ADMIN_DEFAULT_PASSWORD);
   await storage.createUser({
     email: "admin@afaraaccelerator.org",
     passwordHash,
     firstName: "Super",
     lastName: "Admin",
     role: "superadmin",
-    isActive: true
+    isActive: true,
+    mustChangePassword: true,
   });
   console.log("Super admin created: admin@afaraaccelerator.org");
 }

@@ -32,6 +32,7 @@ import EventManagement from "@/pages/admin/EventManagement";
 import NewsletterManagement from "@/pages/admin/NewsletterManagement";
 import Apply from "@/pages/Apply";
 import Profile from "@/pages/lms/Profile";
+import ChangePassword from "@/pages/ChangePassword";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -97,6 +98,7 @@ function Router() {
       <Route path="/contact" component={Contact} />
       <Route path="/apply" component={Apply} />
       <Route path="/login" component={Login} />
+      <Route path="/change-password" component={ChangePassword} />
       
       <Route path="/lms/dashboard">{() => <ProtectedRoute component={Dashboard} />}</Route>
       <Route path="/lms/courses">{() => <ProtectedRoute component={Courses} />}</Route>

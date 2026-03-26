@@ -98,6 +98,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  app.post("/api/auth/change-password", async (req: Request, res: Response) => {
+    if (!req.session.userId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    try {
+      const { newPassword } = req.body;
+      if (!newPassword || typeof newPassword !== "string" || newPassword.length < 6) {
+        return res.status(400).json({ error: "New password must be at least 6 characters" });
+      }
+      const { hashPassword } = await import("./auth");
+      const passwordHash = await hashPassword(newPassword);
+      const updated = await storage.updateUser(req.session.userId, {
+        passwordHash,
+        mustChangePassword: false,
+      });
+      if (!updated) return res.status(404).json({ error: "User not found" });
+      const { passwordHash: _ph, ...safeUser } = updated;
+      res.json({ user: safeUser });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to change password" });
+    }
+  });
+
   app.get("/api/auth/me", async (req: Request, res: Response) => {
     if (!req.session.userId) {
       return res.status(401).json({ error: "Not authenticated" });
@@ -1407,8 +1430,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const existingUser = await storage.getUserByEmail(data.email);
           if (!existingUser) {
-            const tempPassword = randomUUID().replace(/-/g, '');
-            await createUserWithPassword(data.email, tempPassword, data.firstName, data.lastName, "community_member");
+            await createUserWithPassword(data.email, "Comm123!", data.firstName, data.lastName, "community_member", true);
           }
           const { sendApplicationConfirmationEmail } = await import("./email");
           await sendApplicationConfirmationEmail(data.email, data.firstName);
@@ -1452,8 +1474,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const existingUser = await storage.getUserByEmail(application.email);
           if (!existingUser) {
-            const tempPassword = randomUUID().replace(/-/g, '');
-            await createUserWithPassword(application.email, tempPassword, application.firstName, application.lastName, "community_member");
+            await createUserWithPassword(application.email, "Comm123!", application.firstName, application.lastName, "community_member", true);
           }
           const { sendApplicationConfirmationEmail } = await import("./email");
           await sendApplicationConfirmationEmail(application.email, application.firstName);

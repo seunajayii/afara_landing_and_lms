@@ -40,12 +40,16 @@ export default function Login() {
     setIsLoginLoading(true);
     
     try {
-      await login(loginEmail, loginPassword);
-      toast({
-        title: "Welcome back!",
-        description: "You have successfully logged in.",
-      });
-      setLocation("/lms/dashboard");
+      const result = await login(loginEmail, loginPassword);
+      if ((result as any)?.mustChangePassword) {
+        setLocation("/change-password");
+      } else {
+        toast({
+          title: "Welcome back!",
+          description: "You have successfully logged in.",
+        });
+        setLocation("/lms/dashboard");
+      }
     } catch (error: any) {
       toast({
         title: "Login failed",
