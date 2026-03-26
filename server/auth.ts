@@ -14,11 +14,13 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 
 export async function authenticateUser(email: string, password: string): Promise<User | null> {
   const user = await storage.getUserByEmail(email);
+  console.log("[AUTH] getUserByEmail:", email, "found:", !!user, "hasHash:", !!user?.passwordHash);
   if (!user || !user.passwordHash) {
     return null;
   }
   
   const isValid = await verifyPassword(password, user.passwordHash);
+  console.log("[AUTH] verifyPassword result:", isValid, "hashPrefix:", user.passwordHash.substring(0, 10));
   if (!isValid) {
     return null;
   }
