@@ -10,7 +10,7 @@ import { Loader2, ArrowRight } from "lucide-react";
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const { login, isAuthenticated, isLoading } = useAuth();
+  const { login, isAuthenticated, isLoading, user } = useAuth();
   const { toast } = useToast();
   
   const [loginEmail, setLoginEmail] = useState("");
@@ -18,10 +18,14 @@ export default function Login() {
   const [isLoginLoading, setIsLoginLoading] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      setLocation("/lms/dashboard");
+    if (!isLoading && isAuthenticated && user) {
+      if (user.mustChangePassword) {
+        setLocation("/change-password");
+      } else {
+        setLocation("/lms/dashboard");
+      }
     }
-  }, [isLoading, isAuthenticated, setLocation]);
+  }, [isLoading, isAuthenticated, user, setLocation]);
 
   if (isLoading) {
     return (
@@ -38,18 +42,9 @@ export default function Login() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoginLoading(true);
-    
     try {
-      const result = await login(loginEmail, loginPassword);
-      if ((result as any)?.mustChangePassword) {
-        setLocation("/change-password");
-      } else {
-        toast({
-          title: "Welcome back!",
-          description: "You have successfully logged in.",
-        });
-        setLocation("/lms/dashboard");
-      }
+      await login(loginEmail, loginPassword);
+      // redirect is handled by the useEffect above when user state updates
     } catch (error: any) {
       toast({
         title: "Login failed",
