@@ -37,13 +37,13 @@ import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated, isLoading } = useAuth();
-  const [, setLocation] = useLocation();
+  const [, navigate] = useLocation();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      setLocation("/login");
+      navigate("/login", { replace: true });
     }
-  }, [isLoading, isAuthenticated, setLocation]);
+  }, [isLoading, isAuthenticated, navigate]);
 
   if (isLoading) {
     return (
@@ -62,17 +62,17 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 
 function AdminProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated, isLoading, isAdmin } = useAuth();
-  const [, setLocation] = useLocation();
+  const [, navigate] = useLocation();
 
   useEffect(() => {
     if (!isLoading) {
       if (!isAuthenticated) {
-        setLocation("/login");
+        navigate("/login", { replace: true });
       } else if (!isAdmin) {
-        setLocation("/lms/dashboard");
+        navigate("/lms/dashboard", { replace: true });
       }
     }
-  }, [isLoading, isAuthenticated, isAdmin, setLocation]);
+  }, [isLoading, isAuthenticated, isAdmin, navigate]);
 
   if (isLoading) {
     return (
