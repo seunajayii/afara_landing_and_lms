@@ -137,19 +137,21 @@ export default function Contact() {
                 </CardContent>
               </Card>
 
-              <Card className="hover-elevate transition-all duration-300">
-                <CardContent className="pt-6">
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <Linkedin className="w-5 h-5 text-primary" />
+              <a href="https://www.linkedin.com/company/af%C3%A1r%C3%A1/?viewAsMember=true" target="_blank" rel="noopener noreferrer">
+                <Card className="hover-elevate transition-all duration-300">
+                  <CardContent className="pt-6">
+                    <div className="flex items-start gap-4">
+                      <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Linkedin className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold mb-2">Follow Us</h3>
+                        <p className="text-sm text-muted-foreground">Connect on LinkedIn</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold mb-2">Follow Us</h3>
-                      <p className="text-sm text-muted-foreground">Connect on LinkedIn</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </a>
 
               <Card className="bg-primary text-primary-foreground">
                 <CardContent className="pt-6">
