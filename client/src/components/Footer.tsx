@@ -9,7 +9,7 @@ export function Footer() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
-            <img src={afaraLogo} alt="AFÁRÁ" className="h-16 w-auto mb-4" />
+            <img src={afaraLogo} alt="AFÁRÁ" className="h-16 w-auto mb-4 dark:brightness-0 dark:invert dark:opacity-90" />
             <p className="text-sm text-muted-foreground">
               Empowering female entrepreneurs to lead transformative energy and infrastructure projects across Africa.
             </p>

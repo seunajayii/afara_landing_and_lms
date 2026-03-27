@@ -46,7 +46,7 @@ export function LMSSidebar() {
       <div className="p-6 border-b">
         <Link href="/lms/dashboard">
           <div className="cursor-pointer">
-            <img src={afaraLogo} alt="AFÁRÁ" className="h-12 w-auto" />
+            <img src={afaraLogo} alt="AFÁRÁ" className="h-12 w-auto dark:brightness-0 dark:invert dark:opacity-90" />
           </div>
         </Link>
         <p className="text-xs text-muted-foreground mt-2">An OPSB Initiative</p>

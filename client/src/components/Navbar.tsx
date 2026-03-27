@@ -24,7 +24,7 @@ export function Navbar() {
         <div className="flex justify-between items-center h-16">
           <Link href="/" data-testid="link-home">
             <div className="flex items-center gap-3 cursor-pointer">
-              <img src={afaraLogo} alt="AFÁRÁ" className="h-16 w-auto" />
+              <img src={afaraLogo} alt="AFÁRÁ" className="h-16 w-auto dark:brightness-0 dark:invert dark:opacity-90" />
             </div>
           </Link>
 
