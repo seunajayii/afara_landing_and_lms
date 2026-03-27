@@ -16,7 +16,7 @@ export default function Home() {
     },
     {
       icon: Users,
-      title: "Mentorship",
+      title: "Project Support",
       description: "One-on-one guidance from experienced leaders in energy and infrastructure across Africa."
     },
     {
