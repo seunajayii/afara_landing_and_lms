@@ -98,7 +98,7 @@ export function Footer() {
             </a>
             {" "}Initiative
           </p>
-          <p>Built by PLM Creative</p>
+          <p>Built by <a href="https://plmcreative.co" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">PLM Creative</a></p>
         </div>
       </div>
     </footer>
