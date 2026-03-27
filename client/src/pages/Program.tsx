@@ -20,7 +20,7 @@ export default function Program() {
   const programPillars = [
     {
       icon: GraduationCap,
-      title: "Training & Education",
+      title: "Capacity Building",
       description: "Comprehensive courses covering project development, financial structuring, regulatory compliance, and leadership skills.",
       features: ["Self-paced online modules", "Live workshops", "Expert-led masterclasses", "Practical case studies"]
     },
