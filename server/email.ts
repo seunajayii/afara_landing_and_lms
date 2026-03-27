@@ -145,6 +145,42 @@ export async function sendAcceptanceEmail(email: string, firstName?: string): Pr
   }
 }
 
+export async function sendContactNotificationEmail(data: {
+  name: string;
+  email: string;
+  organization?: string;
+  interest?: string;
+  message: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const { error } = await client.emails.send({
+      from: fromEmail,
+      to: "hello@afaraaccelerator.org",
+      replyTo: data.email,
+      subject: `New contact message from ${data.name}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #166534;">New Contact Form Submission</h2>
+          <table style="width:100%; border-collapse: collapse;">
+            <tr><td style="padding: 8px; font-weight: bold;">Name</td><td style="padding: 8px;">${data.name}</td></tr>
+            <tr style="background:#f9fafb"><td style="padding: 8px; font-weight: bold;">Email</td><td style="padding: 8px;"><a href="mailto:${data.email}">${data.email}</a></td></tr>
+            ${data.organization ? `<tr><td style="padding: 8px; font-weight: bold;">Organisation</td><td style="padding: 8px;">${data.organization}</td></tr>` : ""}
+            ${data.interest ? `<tr style="background:#f9fafb"><td style="padding: 8px; font-weight: bold;">Area of Interest</td><td style="padding: 8px;">${data.interest}</td></tr>` : ""}
+            <tr><td style="padding: 8px; font-weight: bold; vertical-align:top;">Message</td><td style="padding: 8px; white-space: pre-wrap;">${data.message}</td></tr>
+          </table>
+          <hr style="border:none; border-top:1px solid #e5e7eb; margin: 20px 0;" />
+          <p style="font-size:12px; color:#6b7280;">Sent via the AFÁRÁ website contact form.</p>
+        </div>
+      `,
+    });
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 export async function sendWelcomeEmail(email: string, firstName?: string): Promise<{ success: boolean; error?: string }> {
   try {
     const { client, fromEmail } = await getResendClient();

@@ -5,10 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Mail, MapPin, Linkedin } from "lucide-react";
+import { Mail, MapPin, Linkedin, Send, CheckCircle } from "lucide-react";
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Contact() {
+  const { toast } = useToast();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -16,10 +18,33 @@ export default function Contact() {
     interest: "",
     message: ""
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Form submitted:", formData);
+    if (!formData.name || !formData.email || !formData.message) {
+      toast({ title: "Please fill in all required fields", variant: "destructive" });
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      if (res.ok) {
+        setSubmitted(true);
+        setFormData({ name: "", email: "", organization: "", interest: "", message: "" });
+      } else {
+        toast({ title: "Failed to send message", description: "Please try again or email us directly.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Something went wrong", description: "Please try again later.", variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -41,6 +66,14 @@ export default function Contact() {
                   <CardTitle>Apply or Send a Message</CardTitle>
                 </CardHeader>
                 <CardContent>
+                  {submitted ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center gap-4">
+                      <CheckCircle className="w-14 h-14 text-primary" />
+                      <h3 className="text-xl font-semibold">Message Sent!</h3>
+                      <p className="text-muted-foreground max-w-sm">Thank you for reaching out. We'll get back to you at {formData.email || "your email"} as soon as possible.</p>
+                      <Button variant="outline" onClick={() => setSubmitted(false)}>Send Another Message</Button>
+                    </div>
+                  ) : (
                   <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="grid md:grid-cols-2 gap-4">
                       <div className="space-y-2">
@@ -98,10 +131,11 @@ export default function Contact() {
                         data-testid="input-message"
                       />
                     </div>
-                    <Button type="submit" size="lg" className="w-full" data-testid="button-submit">
-                      Send Message
+                    <Button type="submit" size="lg" className="w-full" disabled={isSubmitting} data-testid="button-submit">
+                      {isSubmitting ? "Sending..." : "Send Message"}
                     </Button>
                   </form>
+                  )}
                 </CardContent>
               </Card>
             </div>

@@ -1577,6 +1577,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return role === "admin" || role === "superadmin";
   };
 
+  app.post("/api/contact", async (req: Request, res: Response) => {
+    const { name, email, organization, interest, message } = req.body;
+    if (!name || !email || !message) {
+      return res.status(400).json({ error: "Name, email, and message are required" });
+    }
+    try {
+      const { sendContactNotificationEmail } = await import("./email");
+      await sendContactNotificationEmail({ name, email, organization, interest, message });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
   app.get("/api/newsletter/subscribers", async (req: Request, res: Response) => {
     if (!req.session?.userId || !isAdmin(req)) {
       return res.status(403).json({ error: "Admin access required" });
