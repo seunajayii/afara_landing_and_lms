@@ -143,7 +143,7 @@ export default function Program() {
             </div>
 
             <div>
-              <h2 className="text-4xl font-bold mb-6">Program Timeline</h2>
+              <h2 className="text-4xl font-bold mb-6">Program Milestones</h2>
               <div className="space-y-4">
                 {timeline.map((item, i) => (
                   <div key={i} className="flex items-start gap-4 p-4 bg-card rounded-md border">
@@ -153,7 +153,6 @@ export default function Program() {
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <h4 className="font-semibold">{item.phase}</h4>
-                        <span className="text-xs bg-muted px-2 py-0.5 rounded-md">{item.duration}</span>
                       </div>
                       <p className="text-sm text-muted-foreground">{item.description}</p>
                     </div>
