@@ -8,7 +8,7 @@ export function Hero() {
       <div className="absolute inset-0 z-0">
         <img
           src={heroBackground}
-          alt="African woman entrepreneur in energy sector"
+          alt="African woman infrapreneur in energy sector"
           className="w-full h-full object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/75 to-black/50" />

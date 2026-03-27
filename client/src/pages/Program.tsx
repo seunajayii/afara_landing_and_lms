@@ -48,7 +48,7 @@ export default function Program() {
     "Access to a curated network of investors and DFIs",
     "Comprehensive training on project development and finance",
     "Personalized mentorship from industry leaders",
-    "Community of peer entrepreneurs for support and collaboration",
+    "Community of peer infrapreneurs for support and collaboration",
     "Technical assistance for regulatory and legal matters",
     "Certification upon program completion",
     "Alumni network and ongoing support",
@@ -73,7 +73,7 @@ export default function Program() {
           <div className="text-center mb-16">
             <h1 className="text-5xl font-bold mb-4">The AFÁRÁ Program</h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-              A comprehensive accelerator designed to support female entrepreneurs building transformative energy and infrastructure ventures across Africa.
+              A comprehensive accelerator designed to support female infrapreneurs building transformative energy and infrastructure ventures across Africa.
             </p>
           </div>
 
@@ -173,7 +173,7 @@ export default function Program() {
                 <Globe className="w-8 h-8 text-primary" />
               </div>
               <h3 className="text-xl font-bold mb-2">Pan-African</h3>
-              <p className="text-muted-foreground">Supporting entrepreneurs across the continent</p>
+              <p className="text-muted-foreground">Supporting infrapreneurs across the continent</p>
             </div>
             <div>
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
@@ -197,7 +197,7 @@ export default function Program() {
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-4xl font-bold mb-6">Ready to Join?</h2>
           <p className="text-lg text-muted-foreground mb-8">
-            Are you a female entrepreneur building or scaling a venture in Africa's energy or infrastructure sectors? Apply to join the next AFÁRÁ cohort and access the support you need to succeed.
+            Are you a female infrapreneur building or scaling a venture in Africa's energy or infrastructure sectors? Apply to join the next AFÁRÁ cohort and access the support you need to succeed.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <Link href="/contact">

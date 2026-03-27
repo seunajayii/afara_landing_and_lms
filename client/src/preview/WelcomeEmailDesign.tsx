@@ -18,7 +18,7 @@ export default function WelcomeEmailDesign() {
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-green-700 mb-4">Welcome to AFÁRÁ!</h2>
             <p className="text-gray-700 leading-relaxed mb-4">
-              Thank you for subscribing to our community. You're now part of a vibrant network of women entrepreneurs and leaders transforming Africa's energy and infrastructure landscape.
+              Thank you for subscribing to our community. You're now part of a vibrant network of women infrapreneurs and leaders transforming Africa's energy and infrastructure landscape.
             </p>
           </div>
 
@@ -32,7 +32,7 @@ export default function WelcomeEmailDesign() {
               </li>
               <li className="flex items-start">
                 <span className="text-green-600 font-bold mr-3">✓</span>
-                <span className="text-gray-700"><strong>Success Stories</strong> – Inspiring journeys from our alumni entrepreneurs</span>
+                <span className="text-gray-700"><strong>Success Stories</strong> – Inspiring journeys from our alumni infrapreneurs</span>
               </li>
               <li className="flex items-start">
                 <span className="text-green-600 font-bold mr-3">✓</span>

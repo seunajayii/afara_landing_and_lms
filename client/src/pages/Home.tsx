@@ -95,7 +95,7 @@ export default function Home() {
                 Who We Support
               </h2>
               <p className="text-lg text-muted-foreground mb-6">
-                AFÁRÁ is designed for female entrepreneurs and business leaders who are building or scaling ventures in:
+                AFÁRÁ is designed for female infrapreneurs and business leaders who are building or scaling ventures in:
               </p>
               <ul className="space-y-4 mb-8">
                 <li className="flex items-start gap-3">
@@ -141,7 +141,7 @@ export default function Home() {
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-4xl font-bold mb-6">Ready to Bridge the Gap?</h2>
           <p className="text-lg text-muted-foreground mb-8">
-            Join a community of ambitious women entrepreneurs transforming Africa's energy and infrastructure landscape. Access training, mentorship, and funding opportunities.
+            Join a community of ambitious women infrapreneurs transforming Africa's energy and infrastructure landscape. Access training, mentorship, and funding opportunities.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <Link href="/apply">

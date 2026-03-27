@@ -32,7 +32,7 @@ export default function About() {
           <div className="text-center mb-16">
             <h1 className="text-5xl font-bold mb-4">About AFÁRÁ</h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-              Empowering female entrepreneurs to lead transformative energy and infrastructure projects across Africa.
+              Empowering female infrapreneurs to lead transformative energy and infrastructure projects across Africa.
             </p>
           </div>
 
@@ -64,7 +64,7 @@ export default function About() {
                 </div>
                 <h3 className="font-bold text-lg mb-3">Mission</h3>
                 <p className="text-muted-foreground text-sm">
-                  Provide holistic personal development, project development, and funding support to female entrepreneurs in energy and infrastructure.
+                  Provide holistic personal development, project development, and funding support to female infrapreneurs in energy and infrastructure.
                 </p>
               </CardContent>
             </Card>
@@ -88,7 +88,7 @@ export default function About() {
                 </div>
                 <h3 className="font-bold text-lg mb-3">Reach</h3>
                 <p className="text-muted-foreground text-sm">
-                  Pan-African coverage supporting entrepreneurs across East, West, South, and North Africa.
+                  Pan-African coverage supporting infrapreneurs across East, West, South, and North Africa.
                 </p>
               </CardContent>
             </Card>

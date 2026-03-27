@@ -11,7 +11,7 @@ export function Footer() {
           <div>
             <img src={afaraLogo} alt="AFÁRÁ" className="h-16 w-auto mb-4 dark:brightness-0 dark:invert dark:opacity-90" />
             <p className="text-sm text-muted-foreground">
-              Empowering female entrepreneurs to lead transformative energy and infrastructure projects across Africa.
+              Empowering female infrapreneurs to lead transformative energy and infrastructure projects across Africa.
             </p>
           </div>
 
