@@ -98,6 +98,7 @@ export function Footer() {
             </a>
             {" "}Initiative
           </p>
+          <p>Built by PLM Creative</p>
         </div>
       </div>
     </footer>
