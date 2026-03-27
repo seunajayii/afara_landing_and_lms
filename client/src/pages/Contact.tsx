@@ -25,7 +25,6 @@ export default function Contact() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      
       <section className="py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
@@ -131,7 +130,7 @@ export default function Contact() {
                     </div>
                     <div>
                       <h3 className="font-semibold mb-2">Email Us</h3>
-                      <p className="text-sm text-muted-foreground">info@afara.africa</p>
+                      <p className="text-sm text-muted-foreground">hello@afaraaccelerator.org</p>
                     </div>
                   </div>
                 </CardContent>
@@ -168,7 +167,6 @@ export default function Contact() {
           </div>
         </div>
       </section>
-
       <Footer />
     </div>
   );
