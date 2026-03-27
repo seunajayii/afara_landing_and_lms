@@ -26,9 +26,9 @@ export default function Program() {
     },
     {
       icon: Users,
-      title: "Mentorship",
-      description: "One-on-one guidance from experienced leaders in energy and infrastructure sectors across Africa.",
-      features: ["Matched with industry experts", "Regular coaching sessions", "Career guidance", "Network introductions"]
+      title: "Project Support",
+      description: "Participants receive expert support across transaction structuring, legal and financial advisory, project management, ESG, technical guidance, fundraising, and feasibility and market studies.",
+      features: ["Transaction structuring and advisory", "Legal and financial advisory", "Project management advice", "ESG advisory", "Operational and management support", "Fundraising support", "Technical advisory", "Feasibility and market studies"]
     },
     {
       icon: Briefcase,
