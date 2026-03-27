@@ -17,7 +17,7 @@ export default function Home() {
     {
       icon: Users,
       title: "Project Support",
-      description: "One-on-one guidance from experienced leaders in energy and infrastructure across Africa."
+      description: "Participants receive expert support across transaction structuring, legal and financial advisory, project management, ESG, technical guidance, fundraising, and feasibility and market studies."
     },
     {
       icon: Briefcase,
