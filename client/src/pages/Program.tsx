@@ -27,7 +27,7 @@ export default function Program() {
     {
       icon: Users,
       title: "Project Support",
-      description: "Participants receive expert support across transaction structuring, legal and financial advisory, project management, ESG, technical guidance, fundraising, and feasibility and market studies.",
+      description: "Participants receive expert support across:",
       features: ["Transaction structuring and advisory", "Legal and financial advisory", "Project management advice", "ESG advisory", "Operational and management support", "Fundraising support", "Technical advisory", "Feasibility and market studies"]
     },
     {
