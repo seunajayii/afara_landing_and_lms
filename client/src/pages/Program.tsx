@@ -199,7 +199,7 @@ export default function Program() {
             Are you a female infrapreneur building or scaling a venture in Africa's energy or infrastructure sectors? Apply to join the next AFÁRÁ cohort and access the support you need to succeed.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
-            <Link href="/contact">
+            <Link href="/apply">
               <Button size="lg" data-testid="button-apply-now">
                 Apply Now
                 <ArrowRight className="w-4 h-4 ml-2" />
