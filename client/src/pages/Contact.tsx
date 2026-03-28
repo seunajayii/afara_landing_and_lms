@@ -63,7 +63,7 @@ export default function Contact() {
             <div className="lg:col-span-2">
               <Card>
                 <CardHeader>
-                  <CardTitle>Apply or Send a Message</CardTitle>
+                  <CardTitle>Send a Message</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {submitted ? (
