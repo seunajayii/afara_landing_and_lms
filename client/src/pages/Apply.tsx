@@ -1569,7 +1569,7 @@ function FinancialSection({ form }: { form: ReturnType<typeof useForm<Applicatio
         name="revenueStreams"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Revenue Streams</FormLabel>
+            <FormLabel>Business Model</FormLabel>
             <FormDescription>
               Describe how your business generates revenue today (or plans to).
             </FormDescription>
@@ -2456,7 +2456,7 @@ function PreviewSection({ form }: { form: ReturnType<typeof useForm<ApplicationF
           </div>
           {values.revenueStreams && (
             <div className="mt-2 text-sm">
-              <span className="font-medium">Revenue Streams:</span>
+              <span className="font-medium">Business Model:</span>
               <p className="mt-1 text-muted-foreground">{values.revenueStreams}</p>
             </div>
           )}
