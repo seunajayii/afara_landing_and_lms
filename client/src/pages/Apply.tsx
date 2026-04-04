@@ -1518,20 +1518,22 @@ function FinancialSection({ form }: { form: ReturnType<typeof useForm<Applicatio
 
       <FileUploadField
         label="Pitch Deck (optional)"
-        description="Upload your pitch deck if available (PDF, max 20 MB)."
+        description="Upload your pitch deck if available (PDF, max 1000 KB)."
         fieldName="pitchDeckUrl"
         form={form}
         accept=".pdf,.ppt,.pptx"
         testId="upload-pitch-deck"
+        maxSizeKB={1000}
       />
 
       <FileUploadField
         label="Business Plan (optional)"
-        description="Upload your business plan if available (PDF or Word, max 20 MB)."
+        description="Upload your business plan if available (PDF or Word, max 1000 KB)."
         fieldName="businessPlanUrl"
         form={form}
         accept=".pdf,.doc,.docx"
         testId="upload-business-plan"
+        maxSizeKB={1000}
       />
 
       <FormField
