@@ -88,7 +88,7 @@ export function Footer() {
           <p>
             An{" "}
             <a 
-              href="https://opsb.africa" 
+              href="https://openspacesandbridges.com/" 
               target="_blank" 
               rel="noopener noreferrer"
               className="text-primary hover:underline"
