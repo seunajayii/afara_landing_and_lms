@@ -1731,9 +1731,14 @@ function ProjectSection({ form }: { form: ReturnType<typeof useForm<ApplicationF
           name="projectLocation"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Project Location</FormLabel>
+              <FormLabel>Project Country</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Nairobi, Kenya" {...field} data-testid="input-project-location" />
+                <CountrySelect
+                  value={field.value || ""}
+                  onChange={field.onChange}
+                  placeholder="Select a country"
+                  testId="input-project-location"
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
