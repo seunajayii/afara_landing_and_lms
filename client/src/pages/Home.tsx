@@ -4,7 +4,7 @@ import { Footer } from "@/components/Footer";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { GraduationCap, Users, Briefcase, TrendingUp, Lightbulb, Target, ArrowRight } from "lucide-react";
+import { GraduationCap, Users, Briefcase, TrendingUp, Lightbulb, Flame, Leaf, Truck, Wifi, ArrowRight } from "lucide-react";
 import solarImage from "@assets/generated_images/African_solar_farm_infrastructure_d819497d.png";
 
 export default function Home() {
@@ -100,29 +100,47 @@ export default function Home() {
               <ul className="space-y-4 mb-8">
                 <li className="flex items-start gap-3">
                   <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center mt-0.5">
+                    <Flame className="w-3.5 h-3.5 text-primary" />
+                  </div>
+                  <div>
+                    <span className="font-semibold">Gas & Power</span>
+                    <p className="text-sm text-muted-foreground">Gas-to-power infrastructure, refinery operations, and gas utilisation</p>
+                  </div>
+                </li>
+                <li className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center mt-0.5">
                     <Lightbulb className="w-3.5 h-3.5 text-primary" />
                   </div>
                   <div>
                     <span className="font-semibold">Renewable Energy</span>
-                    <p className="text-sm text-muted-foreground">Solar, wind, mini-grids, and clean energy solutions</p>
+                    <p className="text-sm text-muted-foreground">Solar, wind, battery storage, distributed generation, and mini-grids</p>
                   </div>
                 </li>
                 <li className="flex items-start gap-3">
                   <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center mt-0.5">
-                    <Target className="w-3.5 h-3.5 text-primary" />
+                    <Leaf className="w-3.5 h-3.5 text-primary" />
                   </div>
                   <div>
-                    <span className="font-semibold">Infrastructure Development</span>
-                    <p className="text-sm text-muted-foreground">Transport, water, housing, and urban development</p>
+                    <span className="font-semibold">Clean Energy Access</span>
+                    <p className="text-sm text-muted-foreground">Clean cooking solutions and last-mile energy delivery</p>
                   </div>
                 </li>
                 <li className="flex items-start gap-3">
                   <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center mt-0.5">
-                    <TrendingUp className="w-3.5 h-3.5 text-primary" />
+                    <Truck className="w-3.5 h-3.5 text-primary" />
                   </div>
                   <div>
-                    <span className="font-semibold">Energy Access & Distribution</span>
-                    <p className="text-sm text-muted-foreground">Last-mile energy solutions and utility services</p>
+                    <span className="font-semibold">Transport & Logistics</span>
+                    <p className="text-sm text-muted-foreground">Roads, rail, ports, and logistics infrastructure</p>
+                  </div>
+                </li>
+                <li className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center mt-0.5">
+                    <Wifi className="w-3.5 h-3.5 text-primary" />
+                  </div>
+                  <div>
+                    <span className="font-semibold">Digital & Communications Infrastructure</span>
+                    <p className="text-sm text-muted-foreground">Telecoms networks and digital connectivity projects</p>
                   </div>
                 </li>
               </ul>
