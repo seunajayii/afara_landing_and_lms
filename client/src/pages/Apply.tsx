@@ -1439,8 +1439,6 @@ function FileUploadField({
 }
 
 function FinancialSection({ form }: { form: ReturnType<typeof useForm<ApplicationFormData>> }) {
-  const isIncorporated = form.watch("isIncorporated");
-
   return (
     <div className="space-y-6">
       <div className="p-4 bg-muted/50 rounded-lg">
@@ -1448,38 +1446,6 @@ function FinancialSection({ form }: { form: ReturnType<typeof useForm<Applicatio
           This section helps us understand your company's financial documentation readiness and compliance status.
         </p>
       </div>
-
-      <FormField
-        control={form.control}
-        name="isIncorporated"
-        render={({ field }) => (
-          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-            <FormControl>
-              <Checkbox
-                checked={field.value}
-                onCheckedChange={field.onChange}
-                data-testid="checkbox-is-incorporated"
-              />
-            </FormControl>
-            <div className="space-y-1 leading-none">
-              <FormLabel>
-                Is your business formally incorporated / registered?
-              </FormLabel>
-            </div>
-          </FormItem>
-        )}
-      />
-
-      {isIncorporated && (
-        <FileUploadField
-          label="Incorporation Certificate"
-          description="Upload your certificate of incorporation (PDF or image, max 20 MB)."
-          fieldName="incorporationCertificateUrl"
-          form={form}
-          accept=".pdf,.jpg,.jpeg,.png"
-          testId="upload-incorporation-certificate"
-        />
-      )}
 
       <FormField
         control={form.control}
@@ -2329,7 +2295,6 @@ function PreviewSection({ form }: { form: ReturnType<typeof useForm<ApplicationF
             <FileText className="w-4 h-4" /> Financial Documentation
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <div><span className="font-medium">Formally Incorporated:</span> {renderValue(values.isIncorporated)}</div>
             <div><span className="font-medium">Keeps Financial Records:</span> {renderValue(values.keepsFinancialRecords)}</div>
             <div><span className="font-medium">Can Provide Financials:</span> {renderValue(values.canProvideFinancials)}</div>
             <div><span className="font-medium">Tax Registered:</span> {renderValue(values.isTaxRegistered)}</div>
