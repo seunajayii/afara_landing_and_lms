@@ -59,6 +59,9 @@ import {
   X,
   Loader2,
   Link as LinkIcon,
+  ExternalLink,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import type { Resource } from "@shared/schema";
 
@@ -183,13 +186,17 @@ function ResourceCardSkeleton() {
 const resourceFormSchema = z.object({
   title: z.string().min(1, "Title is required").min(3, "Title must be at least 3 characters"),
   description: z.string().optional(),
-  resourceType: z.enum(["document", "template", "toolkit", "guide"]),
+  resourceType: z.enum(["document", "template", "toolkit", "guide", "resource_partner"]),
   category: z.string().min(1, "Category is required"),
   fileUrl: z.string().optional().or(z.literal("")),
   fileName: z.string().optional(),
   fileSize: z.number().optional(),
   visibility: z.enum(["public", "community", "cohort_only"]).default("community"),
   status: z.enum(["draft", "pending_review", "published", "archived"]),
+  partnerName: z.string().optional(),
+  partnerLoginUrl: z.string().optional().or(z.literal("")),
+  partnerLoginUsername: z.string().optional(),
+  partnerLoginPassword: z.string().optional(),
 });
 
 type ResourceFormData = z.infer<typeof resourceFormSchema>;
@@ -221,6 +228,7 @@ function getResourceTypeIcon(type: string) {
     case "template": return <FileSpreadsheet className="w-5 h-5" />;
     case "toolkit": return <File className="w-5 h-5" />;
     case "guide": return <FileImage className="w-5 h-5" />;
+    case "resource_partner": return <ExternalLink className="w-5 h-5" />;
     default: return <FileText className="w-5 h-5" />;
   }
 }
@@ -231,6 +239,7 @@ function getResourceTypeColor(type: string) {
     case "template": return "bg-green-500/10 text-green-600 dark:text-green-400";
     case "toolkit": return "bg-purple-500/10 text-purple-600 dark:text-purple-400";
     case "guide": return "bg-orange-500/10 text-orange-600 dark:text-orange-400";
+    case "resource_partner": return "bg-teal-500/10 text-teal-600 dark:text-teal-400";
     default: return "";
   }
 }
@@ -245,6 +254,10 @@ const emptyDefaults: ResourceFormData = {
   fileSize: undefined,
   visibility: "community",
   status: "published",
+  partnerName: "",
+  partnerLoginUrl: "",
+  partnerLoginUsername: "",
+  partnerLoginPassword: "",
 };
 
 export default function ResourceManagement() {
@@ -372,6 +385,10 @@ export default function ResourceManagement() {
       fileSize: resource.fileSize ?? undefined,
       visibility: (resource.visibility as ResourceFormData["visibility"]) || "community",
       status: (resource.status as ResourceFormData["status"]) || "published",
+      partnerName: (resource as any).partnerName || "",
+      partnerLoginUrl: (resource as any).partnerLoginUrl || "",
+      partnerLoginUsername: (resource as any).partnerLoginUsername || "",
+      partnerLoginPassword: (resource as any).partnerLoginPassword || "",
     });
     setIsEditDialogOpen(true);
   }
@@ -398,6 +415,10 @@ export default function ResourceManagement() {
     onCleared: () => void;
     idPrefix: string;
   }) {
+    const [showPassword, setShowPassword] = useState(false);
+    const watchedType = form.watch("resourceType");
+    const isPartner = watchedType === "resource_partner";
+
     return (
       <div className="space-y-4">
         <FormField
@@ -444,6 +465,7 @@ export default function ResourceManagement() {
                     <SelectItem value="template">Template</SelectItem>
                     <SelectItem value="toolkit">Toolkit</SelectItem>
                     <SelectItem value="guide">Guide</SelectItem>
+                    <SelectItem value="resource_partner">Resource Partner</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -474,35 +496,131 @@ export default function ResourceManagement() {
           />
         </div>
 
-        <div className="space-y-3">
-          <p className="text-sm font-medium">File</p>
-          <ResourceFileUploader current={upload} onUploaded={onUploaded} onCleared={onCleared} />
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-border" />
-            <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <LinkIcon className="w-3 h-3" />
-              or link to an external URL
-            </span>
-            <div className="flex-1 h-px bg-border" />
+        {!isPartner && (
+          <div className="space-y-3">
+            <p className="text-sm font-medium">File</p>
+            <ResourceFileUploader current={upload} onUploaded={onUploaded} onCleared={onCleared} />
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <LinkIcon className="w-3 h-3" />
+                or link to an external URL
+              </span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+            <FormField
+              control={form.control}
+              name="fileUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <Input
+                      placeholder="https://example.com/file.pdf"
+                      {...field}
+                      disabled={!!upload}
+                      data-testid={`input-${idPrefix}-resource-fileurl`}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </div>
-          <FormField
-            control={form.control}
-            name="fileUrl"
-            render={({ field }) => (
-              <FormItem>
-                <FormControl>
-                  <Input
-                    placeholder="https://example.com/file.pdf"
-                    {...field}
-                    disabled={!!upload}
-                    data-testid={`input-${idPrefix}-resource-fileurl`}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
+        )}
+
+        {isPartner && (
+          <div className="space-y-4 rounded-md border p-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-teal-600 dark:text-teal-400">
+              <ExternalLink className="w-4 h-4" />
+              Resource Partner Details
+            </div>
+            <FormField
+              control={form.control}
+              name="partnerName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Partner Name *</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="e.g., Coursera, edX, LinkedIn Learning"
+                      {...field}
+                      data-testid={`input-${idPrefix}-partner-name`}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="partnerLoginUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Partner LMS / Login URL *</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="https://partner-lms.example.com/login"
+                      {...field}
+                      data-testid={`input-${idPrefix}-partner-login-url`}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="partnerLoginUsername"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Login Username / Email</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="shared@example.com"
+                        {...field}
+                        data-testid={`input-${idPrefix}-partner-username`}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="partnerLoginPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Login Password</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Input
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Shared access password"
+                          {...field}
+                          data-testid={`input-${idPrefix}-partner-password`}
+                        />
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="absolute right-0 top-0"
+                          onClick={() => setShowPassword(p => !p)}
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </Button>
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Login credentials are only visible to admins and will be displayed securely to enrolled participants when they access this resource.
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <FormField

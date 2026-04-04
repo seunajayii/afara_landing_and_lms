@@ -9,7 +9,7 @@ export const videoSourceEnum = pgEnum("video_source", ["youtube", "vimeo", "uplo
 export const progressStatusEnum = pgEnum("progress_status", ["not_started", "in_progress", "completed"]);
 export const sessionStatusEnum = pgEnum("session_status", ["scheduled", "completed", "cancelled"]);
 export const eventTypeEnum = pgEnum("event_type", ["webinar", "workshop", "live_session", "networking"]);
-export const resourceTypeEnum = pgEnum("resource_type", ["document", "template", "toolkit", "guide"]);
+export const resourceTypeEnum = pgEnum("resource_type", ["document", "template", "toolkit", "guide", "resource_partner"]);
 export const contentStatusEnum = pgEnum("content_status", ["draft", "pending_review", "published", "archived"]);
 export const visibilityEnum = pgEnum("content_visibility", ["public", "community", "cohort_only"]);
 
@@ -194,6 +194,10 @@ export const resources = pgTable("resources", {
   uploadedById: varchar("uploaded_by_id").references(() => users.id),
   visibility: visibilityEnum("visibility").notNull().default("community"),
   status: contentStatusEnum("status").notNull().default("published"),
+  partnerName: text("partner_name"),
+  partnerLoginUrl: text("partner_login_url"),
+  partnerLoginUsername: text("partner_login_username"),
+  partnerLoginPassword: text("partner_login_password"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
