@@ -22,7 +22,7 @@ export default function Home() {
     {
       icon: Briefcase,
       title: "Funding Access",
-      description: "Connect with investors, development finance institutions, and capital partners."
+      description: "Connect with investors, lenders, development finance institutions, and capital partners."
     },
     {
       icon: TrendingUp,
