@@ -2087,7 +2087,7 @@ function CommitmentSection({ form }: { form: ReturnType<typeof useForm<Applicati
             </FormControl>
             <div className="space-y-1 leading-none">
               <FormLabel>
-                Are you able to commit to our 3-day immersive, in-person event in Lagos, Nigeria?
+                Are you able to commit to our 2-day immersive, in-person event in Lagos, Nigeria?
               </FormLabel>
             </div>
           </FormItem>
