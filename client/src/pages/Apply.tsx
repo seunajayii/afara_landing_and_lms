@@ -186,8 +186,9 @@ const applicationSchema = z.object({
   keepsFinancialRecords: z.boolean().optional(),
   pitchDeckUrl: z.string().optional(),
   businessPlanUrl: z.string().optional(),
-  canProvideFinancials: z.boolean().optional(),
-  isTaxRegistered: z.boolean().optional(),
+  canProvideFinancials: z.enum(["yes", "no"]).optional(),
+  financialStatementsUrl: z.string().optional(),
+  isTaxRegistered: z.enum(["yes", "no"]).optional(),
   
   // Section 4: Project Readiness
   projectDescription: z.string().optional(),
@@ -345,8 +346,9 @@ export default function Apply() {
       keepsFinancialRecords: false,
       pitchDeckUrl: "",
       businessPlanUrl: "",
-      canProvideFinancials: false,
-      isTaxRegistered: false,
+      canProvideFinancials: undefined,
+      financialStatementsUrl: "",
+      isTaxRegistered: undefined,
       projectDescription: "",
       projectLocation: "",
       projectSector: "",
@@ -1553,6 +1555,7 @@ function FileUploadField({
 }
 
 function FinancialSection({ form }: { form: ReturnType<typeof useForm<ApplicationFormData>> }) {
+  const canProvideFinancials = form.watch("canProvideFinancials");
   return (
     <div className="space-y-6">
       <div className="p-4 bg-muted/50 rounded-lg">
@@ -1628,40 +1631,66 @@ function FinancialSection({ form }: { form: ReturnType<typeof useForm<Applicatio
         control={form.control}
         name="canProvideFinancials"
         render={({ field }) => (
-          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+          <FormItem className="space-y-3">
+            <FormLabel>Are you able to provide management accounts or audited financial statements for the past two years?</FormLabel>
             <FormControl>
-              <Checkbox
-                checked={field.value}
-                onCheckedChange={field.onChange}
-                data-testid="checkbox-can-provide-financials"
-              />
+              <RadioGroup
+                onValueChange={field.onChange}
+                value={field.value}
+                className="flex gap-6"
+                data-testid="radio-can-provide-financials"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="yes" id="financials-yes" data-testid="radio-financials-yes" />
+                  <Label htmlFor="financials-yes">Yes</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="no" id="financials-no" data-testid="radio-financials-no" />
+                  <Label htmlFor="financials-no">No</Label>
+                </div>
+              </RadioGroup>
             </FormControl>
-            <div className="space-y-1 leading-none">
-              <FormLabel>
-                Are you able to provide management accounts or audited financial statements for the past two years?
-              </FormLabel>
-            </div>
+            <FormMessage />
           </FormItem>
         )}
       />
+
+      {canProvideFinancials === "yes" && (
+        <FileUploadField
+          label="Financial Statements"
+          description="Upload management accounts or audited financial statements (PDF or image, max 1000 KB)."
+          fieldName="financialStatementsUrl"
+          form={form}
+          accept=".pdf,.jpg,.jpeg,.png"
+          testId="upload-financial-statements"
+          maxSizeKB={1000}
+        />
+      )}
 
       <FormField
         control={form.control}
         name="isTaxRegistered"
         render={({ field }) => (
-          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+          <FormItem className="space-y-3">
+            <FormLabel>Is your company registered to pay tax?</FormLabel>
             <FormControl>
-              <Checkbox
-                checked={field.value}
-                onCheckedChange={field.onChange}
-                data-testid="checkbox-tax-registered"
-              />
+              <RadioGroup
+                onValueChange={field.onChange}
+                value={field.value}
+                className="flex gap-6"
+                data-testid="radio-is-tax-registered"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="yes" id="tax-yes" data-testid="radio-tax-yes" />
+                  <Label htmlFor="tax-yes">Yes</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="no" id="tax-no" data-testid="radio-tax-no" />
+                  <Label htmlFor="tax-no">No</Label>
+                </div>
+              </RadioGroup>
             </FormControl>
-            <div className="space-y-1 leading-none">
-              <FormLabel>
-                Is your company registered to pay tax?
-              </FormLabel>
-            </div>
+            <FormMessage />
           </FormItem>
         )}
       />
@@ -2413,8 +2442,9 @@ function PreviewSection({ form }: { form: ReturnType<typeof useForm<ApplicationF
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
             <div><span className="font-medium">Keeps Financial Records:</span> {renderValue(values.keepsFinancialRecords)}</div>
-            <div><span className="font-medium">Can Provide Financials:</span> {renderValue(values.canProvideFinancials)}</div>
-            <div><span className="font-medium">Tax Registered:</span> {renderValue(values.isTaxRegistered)}</div>
+            <div><span className="font-medium">Can Provide Financials:</span> {values.canProvideFinancials === "yes" ? "Yes" : values.canProvideFinancials === "no" ? "No" : "Not answered"}</div>
+            {values.canProvideFinancials === "yes" && <div><span className="font-medium">Financial Statements:</span> {values.financialStatementsUrl ? "Uploaded" : "Not provided"}</div>}
+            <div><span className="font-medium">Tax Registered:</span> {values.isTaxRegistered === "yes" ? "Yes" : values.isTaxRegistered === "no" ? "No" : "Not answered"}</div>
             <div><span className="font-medium">Pitch Deck:</span> {values.pitchDeckUrl ? "Uploaded" : "Not provided"}</div>
             <div><span className="font-medium">Business Plan:</span> {values.businessPlanUrl ? "Uploaded" : "Not provided"}</div>
             <div><span className="font-medium">Inc. Certificate:</span> {values.incorporationCertificateUrl ? "Uploaded" : "Not provided"}</div>
