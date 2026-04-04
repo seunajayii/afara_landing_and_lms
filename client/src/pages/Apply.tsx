@@ -98,6 +98,9 @@ const applicationSchema = z.object({
   numberOfShareholders: z.coerce.number().min(0).optional(),
   shareholdersOver25Percent: z.boolean().optional(),
   
+  // Section 2: Business Ownership
+  registrationProofUrl: z.string().optional(),
+
   // Section 3: Financial Documentation
   isIncorporated: z.boolean().optional(),
   incorporationCertificateUrl: z.string().optional(),
@@ -257,6 +260,7 @@ export default function Apply() {
       ownershipPercentage: undefined,
       numberOfShareholders: undefined,
       shareholdersOver25Percent: false,
+      registrationProofUrl: "",
       isIncorporated: false,
       incorporationCertificateUrl: "",
       revenueStreams: "",
@@ -1264,6 +1268,16 @@ function BusinessSection({ form }: { form: ReturnType<typeof useForm<Application
         />
       </div>
 
+      <FileUploadField
+        label="Proof of Registration"
+        description="Upload a scanned copy of your certificate of incorporation or business registration document (PDF or image, max 250 KB)."
+        fieldName="registrationProofUrl"
+        form={form}
+        accept=".pdf,.jpg,.jpeg,.png"
+        testId="upload-registration-proof"
+        maxSizeKB={250}
+      />
+
       <FormField
         control={form.control}
         name="incorporationYear"
@@ -1358,6 +1372,7 @@ function FileUploadField({
   form,
   accept = ".pdf,.doc,.docx,.jpg,.jpeg,.png",
   testId,
+  maxSizeKB,
 }: {
   label: string;
   description?: string;
@@ -1365,14 +1380,22 @@ function FileUploadField({
   form: ReturnType<typeof useForm<ApplicationFormData>>;
   accept?: string;
   testId: string;
+  maxSizeKB?: number;
 }) {
   const [uploading, setUploading] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [sizeError, setSizeError] = useState<string | null>(null);
   const currentValue = form.watch(fieldName) as string | undefined;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setSizeError(null);
+    if (maxSizeKB && file.size > maxSizeKB * 1024) {
+      setSizeError(`File is too large. Maximum size is ${maxSizeKB} KB.`);
+      e.target.value = "";
+      return;
+    }
     setUploading(true);
     try {
       const formData = new FormData();
@@ -1429,6 +1452,9 @@ function FileUploadField({
                   </span>
                 )}
               </div>
+              {sizeError && (
+                <p className="text-sm font-medium text-destructive">{sizeError}</p>
+              )}
             </div>
           </FormControl>
           <FormMessage />
@@ -2284,6 +2310,7 @@ function PreviewSection({ form }: { form: ReturnType<typeof useForm<ApplicationF
             <div><span className="font-medium">Headquarters:</span> {renderValue(values.companyHeadquarters)}</div>
             <div><span className="font-medium">Incorporation Year:</span> {renderValue(values.incorporationYear)}</div>
             <div><span className="font-medium">Ownership %:</span> {renderValue(values.ownershipPercentage)}</div>
+            <div><span className="font-medium">Proof of Registration:</span> {values.registrationProofUrl ? "Uploaded" : "Not provided"}</div>
           </div>
         </div>
 
