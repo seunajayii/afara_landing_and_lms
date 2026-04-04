@@ -49,7 +49,7 @@ export function LMSSidebar() {
             <img src={afaraLogo} alt="AFÁRÁ" className="h-12 w-auto dark:brightness-0 dark:invert dark:opacity-90" />
           </div>
         </Link>
-        <p className="text-xs text-muted-foreground mt-2">An OPSB Initiative</p>
+        <p className="text-xs text-muted-foreground mt-2">An <a href="https://openspacesandbridges.com/" target="_blank" rel="noopener noreferrer" className="hover:underline">OPSB</a> Initiative</p>
       </div>
 
       <nav className="flex-1 p-4 overflow-y-auto">

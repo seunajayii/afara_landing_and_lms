@@ -106,7 +106,7 @@ export default function About() {
           <div className="bg-card rounded-md p-8 md:p-12">
             <h2 className="text-3xl font-bold mb-6 text-center">Part of the OPSB Family</h2>
             <p className="text-center text-lg text-muted-foreground mb-4 max-w-3xl mx-auto">
-              AFÁRÁ is an initiative of Open Spaces & Bridges Advisory (OPSB), a leading advisory catalyst for transformative energy and infrastructure projects across Africa.
+              AFÁRÁ is an initiative of <a href="https://openspacesandbridges.com/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Open Spaces & Bridges Advisory (OPSB)</a>, a leading advisory catalyst for transformative energy and infrastructure projects across Africa.
             </p>
             <p className="text-center text-muted-foreground max-w-3xl mx-auto">
               With offices in Lagos and London, OPSB brings decades of experience in project advisory, regulatory strategy, and capital matchmaking to support the AFÁRÁ accelerator program.
