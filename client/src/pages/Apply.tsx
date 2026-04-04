@@ -50,8 +50,86 @@ import {
   Eye,
   Video,
   Upload,
-  Paperclip
+  Paperclip,
+  ChevronsUpDown,
+  Check
 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
+
+const COUNTRIES = [
+  "Afghanistan","Albania","Algeria","Angola","Argentina","Armenia","Australia","Austria","Azerbaijan",
+  "Bahrain","Bangladesh","Belarus","Belgium","Benin","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Bulgaria","Burkina Faso","Burundi",
+  "Cambodia","Cameroon","Canada","Cape Verde","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo (Brazzaville)","Congo (DRC)","Costa Rica","Côte d'Ivoire","Croatia","Cuba","Cyprus","Czech Republic",
+  "Denmark","Djibouti","Dominican Republic",
+  "Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Eswatini","Ethiopia",
+  "Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Guatemala","Guinea","Guinea-Bissau","Guyana",
+  "Haiti","Honduras","Hungary",
+  "Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy",
+  "Jamaica","Japan","Jordan",
+  "Kazakhstan","Kenya","Kuwait","Kyrgyzstan",
+  "Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Lithuania","Luxembourg",
+  "Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Mauritania","Mauritius","Mexico","Moldova","Mongolia","Morocco","Mozambique","Myanmar",
+  "Namibia","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Macedonia","Norway",
+  "Oman",
+  "Pakistan","Palestine","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal",
+  "Qatar",
+  "Romania","Russia","Rwanda",
+  "Saudi Arabia","Senegal","Serbia","Sierra Leone","Singapore","Slovakia","Slovenia","Somalia","South Africa","South Sudan","Spain","Sri Lanka","Sudan","Sweden","Switzerland","Syria",
+  "Taiwan","Tajikistan","Tanzania","Thailand","Togo","Trinidad and Tobago","Tunisia","Turkey","Turkmenistan",
+  "Uganda","Ukraine","United Arab Emirates","United Kingdom","United States","Uruguay","Uzbekistan",
+  "Venezuela","Vietnam",
+  "Yemen","Zambia","Zimbabwe"
+];
+
+function CountrySelect({ value, onChange, placeholder = "Select a country", testId }: {
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+  testId?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between font-normal"
+          data-testid={testId}
+        >
+          {value || <span className="text-muted-foreground">{placeholder}</span>}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-full p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Search country..." />
+          <CommandList>
+            <CommandEmpty>No country found.</CommandEmpty>
+            <CommandGroup>
+              {COUNTRIES.map((country) => (
+                <CommandItem
+                  key={country}
+                  value={country}
+                  onSelect={(val) => {
+                    onChange(val === value ? "" : val);
+                    setOpen(false);
+                  }}
+                >
+                  <Check className={cn("mr-2 h-4 w-4", value === country ? "opacity-100" : "opacity-0")} />
+                  {country}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 const applicationSchema = z.object({
   // Personal Section
@@ -660,7 +738,12 @@ function PersonalSection({ form }: { form: ReturnType<typeof useForm<Application
             <FormItem>
               <FormLabel>Country of Operation</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Kenya" {...field} data-testid="input-country-of-operation" />
+                <CountrySelect
+                  value={field.value || ""}
+                  onChange={field.onChange}
+                  placeholder="Select a country"
+                  testId="input-country-of-operation"
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -1247,7 +1330,12 @@ function BusinessSection({ form }: { form: ReturnType<typeof useForm<Application
             <FormItem>
               <FormLabel>Country of Registration</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Kenya" {...field} data-testid="input-company-country" />
+                <CountrySelect
+                  value={field.value || ""}
+                  onChange={field.onChange}
+                  placeholder="Select a country"
+                  testId="input-company-country"
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
