@@ -162,15 +162,22 @@ const steps = [
 ];
 
 const subSectorOptions = [
-  "Gas",
-  "Power generation or transmission",
-  "Renewables",
-  "Mini-grids or distributed generation",
-  "Clean cooking",
-  "Roads or rail",
-  "Transport or logistics",
+  "Gas-to-power infrastructure",
+  "Refinery operations",
+  "Gas utilisation",
+  "Solar",
+  "Wind",
+  "Battery storage",
+  "Distributed generation",
+  "Mini-grids",
+  "Clean cooking solutions",
+  "Last-mile energy delivery",
+  "Roads",
+  "Rail",
   "Ports",
-  "Digital or communications infrastructure",
+  "Logistics infrastructure",
+  "Telecoms networks",
+  "Digital connectivity",
 ];
 
 const projectDocumentOptions = [
