@@ -649,7 +649,7 @@ function PersonalSection({ form }: { form: ReturnType<typeof useForm<Application
             <FormItem>
               <FormLabel>Country of Operation</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Nigeria" {...field} data-testid="input-country-of-operation" />
+                <Input placeholder="e.g., Kenya" {...field} data-testid="input-country-of-operation" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -1236,7 +1236,7 @@ function BusinessSection({ form }: { form: ReturnType<typeof useForm<Application
             <FormItem>
               <FormLabel>Country of Registration</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Nigeria" {...field} data-testid="input-company-country" />
+                <Input placeholder="e.g., Kenya" {...field} data-testid="input-company-country" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -1249,7 +1249,7 @@ function BusinessSection({ form }: { form: ReturnType<typeof useForm<Application
             <FormItem>
               <FormLabel>Headquarters Location</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Lagos" {...field} data-testid="input-company-headquarters" />
+                <Input placeholder="e.g., Nairobi" {...field} data-testid="input-company-headquarters" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -1615,7 +1615,7 @@ function ProjectSection({ form }: { form: ReturnType<typeof useForm<ApplicationF
             <FormItem>
               <FormLabel>Project Location</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Lagos, Nigeria" {...field} data-testid="input-project-location" />
+                <Input placeholder="e.g., Nairobi, Kenya" {...field} data-testid="input-project-location" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -1765,7 +1765,7 @@ function ProjectSection({ form }: { form: ReturnType<typeof useForm<ApplicationF
             <FormDescription>Who are the primary beneficiaries of your work and how many does it reach?</FormDescription>
             <FormControl>
               <Textarea 
-                placeholder="e.g., Rural households in Northern Nigeria — approx. 5,000 people..."
+                placeholder="e.g., Rural households in Northern Kenya — approx. 5,000 people..."
                 className="min-h-[100px]"
                 {...field} 
                 data-testid="input-primary-beneficiaries"
@@ -2087,7 +2087,7 @@ function CommitmentSection({ form }: { form: ReturnType<typeof useForm<Applicati
             </FormControl>
             <div className="space-y-1 leading-none">
               <FormLabel>
-                Are you able to commit to our 2-day immersive, in-person event in Lagos, Nigeria?
+                Are you able to commit to our 2-day immersive, in-person event in Nairobi, Kenya?
               </FormLabel>
             </div>
           </FormItem>
