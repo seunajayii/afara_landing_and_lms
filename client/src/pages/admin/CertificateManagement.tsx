@@ -440,7 +440,7 @@ export default function CertificateManagement() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleApprove}
-              className="bg-green-600 text-white hover:bg-green-700"
+              className="bg-primary text-primary-foreground"
               data-testid="button-confirm-approve-certificate"
             >
               {approveMutation.isPending ? "Approving..." : "Approve"}
