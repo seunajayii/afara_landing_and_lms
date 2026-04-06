@@ -72,12 +72,8 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
     const { client, fromEmail } = await getResendClient();
     const name = firstName || 'there';
     const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
-    const mastheadB64 = fs.existsSync(mastheadPath)
-      ? fs.readFileSync(mastheadPath).toString('base64')
-      : null;
-    const mastheadSrc = mastheadB64
-      ? `data:image/jpeg;base64,${mastheadB64}`
-      : `${process.env.APP_URL || 'https://afaraaccelerator.org'}/afara-masthead.png`;
+    const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
+    const mastheadSrc = 'cid:afara-masthead';
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -209,6 +205,13 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
       to: email,
       subject: "We\u2019ve received your application \u2013 AF\u00C1R\u00C1 Accelerator",
       html,
+      attachments: mastheadBuffer ? [
+        {
+          filename: 'afara-masthead.jpg',
+          content: mastheadBuffer.toString('base64'),
+          content_id: 'afara-masthead',
+        }
+      ] : [],
     });
 
     if (error) {
