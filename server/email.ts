@@ -1,4 +1,6 @@
 import { Resend } from 'resend';
+import fs from 'fs';
+import path from 'path';
 
 let connectionSettings: any;
 
@@ -68,9 +70,14 @@ export async function sendNewsletter(
 export async function sendApplicationConfirmationEmail(email: string, firstName?: string): Promise<{ success: boolean; error?: string }> {
   try {
     const { client, fromEmail } = await getResendClient();
-    const baseUrl = process.env.APP_URL || 'https://afaraaccelerator.org';
-    const mastheadUrl = `${baseUrl}/afara-masthead.png`;
     const name = firstName || 'there';
+    const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
+    const mastheadB64 = fs.existsSync(mastheadPath)
+      ? fs.readFileSync(mastheadPath).toString('base64')
+      : null;
+    const mastheadSrc = mastheadB64
+      ? `data:image/jpeg;base64,${mastheadB64}`
+      : `${process.env.APP_URL || 'https://afaraaccelerator.org'}/afara-masthead.png`;
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -89,7 +96,7 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
           <!-- Masthead Image -->
           <tr>
             <td style="padding:0;margin:0;">
-              <img src="${mastheadUrl}" alt="AFÁRÁ" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />
+              <img src="${mastheadSrc}" alt="AFÁRÁ" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />
             </td>
           </tr>
 
