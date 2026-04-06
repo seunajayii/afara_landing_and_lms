@@ -1322,6 +1322,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/admin/test-email", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const { type, email, firstName } = req.body;
+      const { sendApplicationConfirmationEmail, sendWelcomeEmail, sendAcceptanceEmail } = await import("./email");
+      let result;
+      if (type === "application") result = await sendApplicationConfirmationEmail(email, firstName);
+      else if (type === "welcome") result = await sendWelcomeEmail(email, firstName);
+      else if (type === "acceptance") result = await sendAcceptanceEmail(email, firstName);
+      else return res.status(400).json({ error: "Unknown type. Use: application | welcome | acceptance" });
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.get("/api/admin/stats", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const users = await storage.getAllUsers();

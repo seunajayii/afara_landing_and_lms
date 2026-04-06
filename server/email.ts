@@ -68,25 +68,140 @@ export async function sendNewsletter(
 export async function sendApplicationConfirmationEmail(email: string, firstName?: string): Promise<{ success: boolean; error?: string }> {
   try {
     const { client, fromEmail } = await getResendClient();
-    
+    const baseUrl = process.env.APP_URL || 'https://afaraaccelerator.org';
+    const mastheadUrl = `${baseUrl}/afara-masthead.png`;
+    const name = firstName || 'there';
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Application Received – AFÁRÁ</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&display=swap" rel="stylesheet" />
+</head>
+<body style="margin:0;padding:0;background-color:#f5f4f0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f4f0;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;">
+
+          <!-- Masthead Image -->
+          <tr>
+            <td style="padding:0;margin:0;">
+              <img src="${mastheadUrl}" alt="AFÁRÁ" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />
+            </td>
+          </tr>
+
+          <!-- Green accent line -->
+          <tr>
+            <td style="background-color:#173a3a;height:4px;font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+
+          <!-- Main content -->
+          <tr>
+            <td style="padding:48px 48px 32px 48px;">
+
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#173a3a;line-height:1.3;">
+                We've received your application
+              </h1>
+
+              <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
+                Dear ${name},
+              </p>
+
+              <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
+                Thank you for applying to the AFÁRÁ Accelerator Program. We're glad you took this step, and we want you to know your application is in good hands.
+              </p>
+
+              <p style="margin:0 0 32px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
+                Our team will review your submission carefully. You can expect to hear from us within <strong style="color:#173a3a;">2–4 weeks</strong> with an update on the next steps.
+              </p>
+
+              <!-- Divider -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="border-top:1px solid #e8e4dd;padding:0;font-size:0;line-height:0;">&nbsp;</td>
+                </tr>
+              </table>
+
+              <!-- What happens next -->
+              <h2 style="margin:32px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;color:#173a3a;">
+                What happens next
+              </h2>
+
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding:10px 0;vertical-align:top;width:24px;">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                  </td>
+                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">
+                    Our team reviews all applications against the program criteria
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 0;vertical-align:top;width:24px;">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                  </td>
+                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">
+                    Shortlisted applicants will be invited to a brief interview or pitch session
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 0;vertical-align:top;width:24px;">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                  </td>
+                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">
+                    Final decisions will be communicated to all applicants within the review window
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:32px 0 0 0;font-size:15px;line-height:1.7;color:#555555;">
+                If you have any questions in the meantime, please reach out to us at
+                <a href="mailto:hello@afaraaccelerator.org" style="color:#173a3a;text-decoration:underline;">hello@afaraaccelerator.org</a>.
+              </p>
+
+            </td>
+          </tr>
+
+          <!-- Signature -->
+          <tr>
+            <td style="padding:0 48px 48px 48px;">
+              <p style="margin:32px 0 4px 0;font-size:15px;line-height:1.6;color:#2d2d2d;">
+                Warm regards,
+              </p>
+              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#173a3a;">
+                The AFÁRÁ Team
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#173a3a;padding:24px 48px;">
+              <p style="margin:0 0 6px 0;font-size:13px;line-height:1.6;color:#a8c4c4;">
+                AFÁRÁ is an initiative of
+                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces & Bridges Advisory (OPSB)</a>
+              </p>
+              <p style="margin:0;font-size:12px;color:#6a9090;">
+                &copy; ${new Date().getFullYear()} AFÁRÁ. All rights reserved.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
     const { data, error } = await client.emails.send({
       from: fromEmail,
       to: email,
-      subject: 'Application Received – AFÁRÁ Accelerator Program',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h1 style="color: #166534;">Thank You for Applying to AFÁRÁ!</h1>
-          <p>Dear ${firstName || 'Applicant'},</p>
-          <p>We have received your application for the AFÁRÁ Accelerator Program. Our team will review your submission and get back to you within 2–4 weeks.</p>
-          <p>An account has been created for you on the AFÁRÁ platform. Once your application is reviewed and accepted, you will be granted full access to the program resources and community.</p>
-          <p>In the meantime, if you have any questions, please contact us at <a href="mailto:info@afaraaccelerator.org">info@afaraaccelerator.org</a>.</p>
-          <p>Best regards,<br/>The AFÁRÁ Team</p>
-          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
-          <p style="font-size: 12px; color: #6b7280;">
-            AFÁRÁ is an initiative of Open Spaces & Bridges Advisory (OPSB)
-          </p>
-        </div>
-      `
+      subject: "We\u2019ve received your application \u2013 AF\u00C1R\u00C1 Accelerator",
+      html,
     });
 
     if (error) {
