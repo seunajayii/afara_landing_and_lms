@@ -102,7 +102,7 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
           <tr>
             <td style="padding:48px 48px 32px 48px;">
 
-              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#173a3a;line-height:1.3;">
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;font-style:normal;color:#173a3a;line-height:1.3;">
                 We've received your application
               </h1>
 
@@ -126,7 +126,7 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
               </table>
 
               <!-- What happens next -->
-              <h2 style="margin:32px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;color:#173a3a;">
+              <h2 style="margin:32px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;font-style:normal;color:#173a3a;">
                 What happens next
               </h2>
 
@@ -171,7 +171,7 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
               <p style="margin:32px 0 4px 0;font-size:15px;line-height:1.6;color:#2d2d2d;">
                 Warm regards,
               </p>
-              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#173a3a;">
+              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;font-style:normal;color:#173a3a;">
                 The AFÁRÁ Team
               </p>
             </td>
