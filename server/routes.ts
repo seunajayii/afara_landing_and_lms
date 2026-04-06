@@ -1618,6 +1618,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           firstName,
           lastName
         });
+        try {
+          const { sendWelcomeEmail } = await import("./email");
+          await sendWelcomeEmail(email, firstName);
+        } catch (emailError) {
+          console.error("Failed to send welcome email on resubscribe:", emailError);
+        }
         return res.json({ message: "Successfully resubscribed", subscriber: resubscribed });
       }
       
