@@ -59,7 +59,7 @@ export default function AdminDashboard() {
   const participants = users?.filter(u => u.role === "participant").length || 0;
 
   return (
-    <div className="flex h-screen">
+    <div className="flex flex-col md:flex-row h-screen">
       <AdminSidebar />
       <main className="flex-1 overflow-auto">
         <div className="p-8">
