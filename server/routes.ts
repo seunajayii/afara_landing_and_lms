@@ -212,6 +212,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/users/:id/reset-password", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const { hashPassword } = await import("./auth");
+      const DEFAULT_PASSWORD = "Admin123!";
+      const passwordHash = await hashPassword(DEFAULT_PASSWORD);
+      const user = await storage.updateUser(req.params.id, { passwordHash, mustChangePassword: false });
+      if (!user) return res.status(404).json({ error: "User not found" });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to reset password" });
+    }
+  });
+
   app.delete("/api/users/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const user = await storage.getUser(req.params.id);

@@ -71,6 +71,7 @@ import {
   GraduationCap,
   UserCog,
   Trash2,
+  KeyRound,
 } from "lucide-react";
 import type { User } from "@shared/schema";
 
@@ -106,6 +107,7 @@ export default function UserManagement() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeactivateDialogOpen, setIsDeactivateDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   const createForm = useForm<UserFormData>({
@@ -235,6 +237,28 @@ export default function UserManagement() {
     },
   });
 
+  const resetPasswordMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/users/${id}/reset-password`);
+      return res.json();
+    },
+    onSuccess: () => {
+      setIsResetPasswordDialogOpen(false);
+      setSelectedUser(null);
+      toast({
+        title: "Password Reset",
+        description: "User password has been reset to the default (Admin123!).",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to reset password. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const filteredUsers = users?.filter(user => {
     const matchesSearch = 
       user.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -286,6 +310,17 @@ export default function UserManagement() {
   const handleDelete = () => {
     if (selectedUser) {
       deleteMutation.mutate(selectedUser.id);
+    }
+  };
+
+  const openResetPasswordDialog = (user: User) => {
+    setSelectedUser(user);
+    setIsResetPasswordDialogOpen(true);
+  };
+
+  const handleResetPassword = () => {
+    if (selectedUser) {
+      resetPasswordMutation.mutate(selectedUser.id);
     }
   };
 
@@ -447,14 +482,25 @@ export default function UserManagement() {
                                   size="sm"
                                   onClick={() => openEditDialog(user)}
                                   data-testid={`button-edit-user-${user.id}`}
+                                  title="Edit user"
                                 >
                                   <Pencil className="w-4 h-4" />
                                 </Button>
                                 <Button
                                   variant="outline"
                                   size="sm"
+                                  onClick={() => openResetPasswordDialog(user)}
+                                  data-testid={`button-reset-password-user-${user.id}`}
+                                  title="Reset to default password"
+                                >
+                                  <KeyRound className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
                                   onClick={() => openDeactivateDialog(user)}
                                   data-testid={`button-toggle-user-${user.id}`}
+                                  title={user.isActive ? "Deactivate user" : "Activate user"}
                                 >
                                   {user.isActive ? (
                                     <UserX className="w-4 h-4 text-destructive" />
@@ -468,6 +514,7 @@ export default function UserManagement() {
                                   onClick={() => openDeleteDialog(user)}
                                   data-testid={`button-delete-user-${user.id}`}
                                   disabled={deleteMutation.isPending}
+                                  title="Delete user"
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
@@ -769,6 +816,27 @@ export default function UserManagement() {
               data-testid="button-confirm-delete-user"
             >
               {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reset Password Confirmation Dialog */}
+      <AlertDialog open={isResetPasswordDialogOpen} onOpenChange={setIsResetPasswordDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset Password</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will reset <strong>{selectedUser?.firstName} {selectedUser?.lastName}</strong>'s password to the default (<strong>Admin123!</strong>). They will be able to log in with this password immediately.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleResetPassword}
+              data-testid="button-confirm-reset-password"
+            >
+              {resetPasswordMutation.isPending ? "Resetting..." : "Reset Password"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

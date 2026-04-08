@@ -47,7 +47,28 @@ export async function createUserWithPassword(
   });
 }
 
-const ADMIN_DEFAULT_PASSWORD = "Admin123!";
+export const ADMIN_DEFAULT_PASSWORD = "Admin123!";
+
+// Reset any admin-role accounts that can't log in with the default password
+// Runs on startup so production accounts are always recoverable
+export async function resetAdminPasswords(): Promise<void> {
+  const adminEmails = [
+    "admin@afaraaccelerator.org",
+    "dolapo@openspacesandbridges.com",
+  ];
+  for (const email of adminEmails) {
+    const user = await storage.getUserByEmail(email);
+    if (!user) continue;
+    const isOnDefault = user.passwordHash
+      ? await verifyPassword(ADMIN_DEFAULT_PASSWORD, user.passwordHash)
+      : false;
+    if (!isOnDefault) {
+      const passwordHash = await hashPassword(ADMIN_DEFAULT_PASSWORD);
+      await storage.updateUser(user.id, { passwordHash, mustChangePassword: false });
+      console.log(`Reset password to default for: ${email}`);
+    }
+  }
+}
 
 export async function seedSuperAdmin(): Promise<void> {
   const existingAdmin = await storage.getUserByEmail("admin@afaraaccelerator.org");
