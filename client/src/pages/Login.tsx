@@ -106,6 +106,13 @@ export default function Login() {
               {isLoginLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Sign In
             </Button>
+            <div className="text-center">
+              <Link href="/forgot-password">
+                <Button variant="ghost" size="sm" className="text-muted-foreground" data-testid="button-forgot-password">
+                  Forgot your password?
+                </Button>
+              </Link>
+            </div>
           </form>
           
           <div className="mt-6 pt-6 border-t text-center">

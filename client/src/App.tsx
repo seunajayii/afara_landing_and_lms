@@ -33,6 +33,8 @@ import NewsletterManagement from "@/pages/admin/NewsletterManagement";
 import Apply from "@/pages/Apply";
 import Profile from "@/pages/lms/Profile";
 import ChangePassword from "@/pages/ChangePassword";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -99,6 +101,8 @@ function Router() {
       <Route path="/apply" component={Apply} />
       <Route path="/login" component={Login} />
       <Route path="/change-password" component={ChangePassword} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password" component={ResetPassword} />
       
       <Route path="/lms/dashboard">{() => <ProtectedRoute component={Dashboard} />}</Route>
       <Route path="/lms/courses">{() => <ProtectedRoute component={Courses} />}</Route>

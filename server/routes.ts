@@ -88,6 +88,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/auth/forgot-password", async (req: Request, res: Response) => {
+    try {
+      const { email } = req.body;
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ error: "Email is required" });
+      }
+      const user = await storage.getUserByEmail(email.toLowerCase().trim());
+      // Always respond success to avoid user enumeration
+      if (!user || !user.isActive) {
+        return res.json({ success: true });
+      }
+      const { randomBytes } = await import("crypto");
+      const token = randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      await storage.updateUser(user.id, {
+        passwordResetToken: token,
+        passwordResetExpiresAt: expiresAt,
+      } as any);
+      const baseUrl = req.headers.origin || `${req.protocol}://${req.get("host")}`;
+      const resetUrl = `${baseUrl}/reset-password?token=${token}`;
+      const { sendPasswordResetEmail } = await import("./email");
+      await sendPasswordResetEmail(user.email, user.firstName, resetUrl);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Forgot password error:", error);
+      res.status(500).json({ error: "Failed to process request" });
+    }
+  });
+
+  app.post("/api/auth/reset-password", async (req: Request, res: Response) => {
+    try {
+      const { token, password } = req.body;
+      if (!token || !password || typeof token !== "string" || typeof password !== "string") {
+        return res.status(400).json({ error: "Token and password are required" });
+      }
+      if (password.length < 8) {
+        return res.status(400).json({ error: "Password must be at least 8 characters" });
+      }
+      const user = await storage.getUserByResetToken(token);
+      if (!user || !user.passwordResetExpiresAt) {
+        return res.status(400).json({ error: "Invalid or expired reset link" });
+      }
+      if (new Date() > new Date(user.passwordResetExpiresAt)) {
+        return res.status(400).json({ error: "This reset link has expired. Please request a new one." });
+      }
+      const { hashPassword } = await import("./auth");
+      const passwordHash = await hashPassword(password);
+      await storage.updateUser(user.id, {
+        passwordHash,
+        mustChangePassword: false,
+        passwordResetToken: null,
+        passwordResetExpiresAt: null,
+      } as any);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Reset password error:", error);
+      res.status(500).json({ error: "Failed to reset password" });
+    }
+  });
+
   app.post("/api/auth/logout", (req: Request, res: Response) => {
     req.session.destroy((err) => {
       if (err) {
