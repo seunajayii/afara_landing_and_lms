@@ -56,13 +56,12 @@ export async function seedSuperAdmin(): Promise<void> {
     if (existingAdmin.role !== "superadmin") {
       updates.role = "superadmin";
     }
-    // If admin is still on the old default password, migrate to the new one and prompt change
-    const OLD_DEFAULT = "Admin123!";
-    if (existingAdmin.passwordHash) {
-      const isOnOldDefault = await verifyPassword(OLD_DEFAULT, existingAdmin.passwordHash);
-      if (isOnOldDefault) {
-        updates.passwordHash = await hashPassword(ADMIN_DEFAULT_PASSWORD);
-        updates.mustChangePassword = true;
+    // If mustChangePassword is set but they've already changed away from the default,
+    // clear the flag so they can log in normally without being blocked.
+    if (existingAdmin.mustChangePassword && existingAdmin.passwordHash) {
+      const isStillOnDefault = await verifyPassword(ADMIN_DEFAULT_PASSWORD, existingAdmin.passwordHash);
+      if (!isStillOnDefault) {
+        updates.mustChangePassword = false;
       }
     }
     if (Object.keys(updates).length > 0) {
