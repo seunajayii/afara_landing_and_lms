@@ -59,7 +59,7 @@ export default function Mentorship() {
   })) || [];
 
   return (
-    <div className="flex h-screen">
+    <div className="flex flex-col md:flex-row h-screen">
       <LMSSidebar />
       <main className="flex-1 overflow-auto">
         <div className="p-8">
