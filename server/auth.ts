@@ -56,13 +56,8 @@ export async function seedSuperAdmin(): Promise<void> {
     if (existingAdmin.role !== "superadmin") {
       updates.role = "superadmin";
     }
-    // If mustChangePassword is set but they've already changed away from the default,
-    // clear the flag so they can log in normally without being blocked.
-    if (existingAdmin.mustChangePassword && existingAdmin.passwordHash) {
-      const isStillOnDefault = await verifyPassword(ADMIN_DEFAULT_PASSWORD, existingAdmin.passwordHash);
-      if (!isStillOnDefault) {
-        updates.mustChangePassword = false;
-      }
+    if (existingAdmin.mustChangePassword) {
+      updates.mustChangePassword = false;
     }
     if (Object.keys(updates).length > 0) {
       await storage.updateUser(existingAdmin.id, updates);
@@ -81,7 +76,7 @@ export async function seedSuperAdmin(): Promise<void> {
     lastName: "Admin",
     role: "superadmin",
     isActive: true,
-    mustChangePassword: true,
+    mustChangePassword: false,
   });
   console.log("Super admin created: admin@afaraaccelerator.org");
 }

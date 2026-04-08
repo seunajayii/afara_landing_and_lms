@@ -41,13 +41,14 @@ export default function Login() {
     
     try {
       const result = await login(loginEmail, loginPassword);
-      if ((result as any)?.mustChangePassword) {
-        setLocation("/change-password");
+      toast({
+        title: "Welcome back!",
+        description: "You have successfully logged in.",
+      });
+      const role = (result as any)?.role;
+      if (role === "admin" || role === "superadmin") {
+        setLocation("/admin/dashboard");
       } else {
-        toast({
-          title: "Welcome back!",
-          description: "You have successfully logged in.",
-        });
         setLocation("/lms/dashboard");
       }
     } catch (error: any) {
