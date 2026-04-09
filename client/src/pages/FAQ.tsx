@@ -55,7 +55,7 @@ const faqs = [
           "Management accounts or audited financial statements covering at least the past two years. Your company should also be in good regulatory standing.",
       },
       {
-        question: "Do I need to be based in Nigeria to apply?",
+        question: "Does AFÁRÁ have a national or regional focus?",
         answer:
           "No. AFÁRÁ targets women across Africa, with a goal of reaching 15+ African countries through the programme.",
       },
