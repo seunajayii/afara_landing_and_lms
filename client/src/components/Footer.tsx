@@ -29,6 +29,11 @@ export function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/faq" className="text-muted-foreground hover:text-foreground transition-colors">
+                  FAQ
+                </Link>
+              </li>
+              <li>
                 <Link href="/lms/dashboard" className="text-muted-foreground hover:text-foreground transition-colors">
                   Access LMS
                 </Link>
