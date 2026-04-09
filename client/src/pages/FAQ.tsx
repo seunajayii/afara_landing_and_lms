@@ -12,27 +12,32 @@ import { ArrowRight } from "lucide-react";
 
 const faqs = [
   {
-    category: "About the Programme",
+    category: "About AFÁRÁ",
     items: [
       {
-        question: "What is the AFÁRÁ Accelerator?",
+        question: "Who is AFÁRÁ for?",
         answer:
-          "AFÁRÁ is a business accelerator designed to support female-owned and led companies working in Africa's energy and infrastructure sectors. The name comes from the Yoruba word meaning 'bridge' — symbolising connection, transition, and opportunity. AFÁRÁ is an initiative of Open Spaces & Bridges Advisory (OPSB).",
+          "AFÁRÁ is for women who own and operate energy or infrastructure businesses in Africa, with at least 2 years of operation, a minimum 60% ownership stake, and a project currently under development or ready to scale.",
       },
       {
-        question: "What does the programme offer?",
+        question: "What sectors does AFÁRÁ cover?",
         answer:
-          "Participants receive a comprehensive package of support including capacity-building courses, expert project support (transaction structuring, legal and financial advisory, ESG advisory, technical guidance, and more), access to investors and development finance institutions, mentorship from seasoned industry professionals, community with a peer network of women infrapreneurs, and a digital certificate upon completion.",
+          "Energy (gas, power, renewables, mini-grids, clean cooking) and infrastructure (roads, rail, ports, logistics, digital and communications infrastructure).",
       },
       {
-        question: "How long does the programme run?",
+        question: "How many businesses get selected per year?",
         answer:
-          "The AFÁRÁ Accelerator is a structured programme designed to take participants from concept to bankable project. Specific cohort timelines are shared during the application process and may vary by cohort.",
+          "10 female entrepreneurs are selected annually for each cohort.",
       },
       {
-        question: "Is AFÁRÁ an online programme?",
+        question: "How long is the programme?",
         answer:
-          "Yes. The programme is delivered primarily online through our Learning Management System (LMS), which includes self-paced courses, live workshops, mentorship sessions, and community forums. Select in-person events and networking opportunities may also be organised.",
+          "Six months, including workshops and mentoring sessions.",
+      },
+      {
+        question: "Is there a commitment required after the programme?",
+        answer:
+          "Yes. Every participant commits to mentoring two other female-owned businesses in energy and infrastructure over a three-year period post-cohort.",
       },
     ],
   },
@@ -40,69 +45,34 @@ const faqs = [
     category: "Eligibility & Application",
     items: [
       {
-        question: "Who can apply to AFÁRÁ?",
+        question: "What stage does my project need to be at to apply?",
         answer:
-          "AFÁRÁ is open to women who own or lead companies operating in Africa's energy and infrastructure sectors. This includes but is not limited to renewable energy, power generation and distribution, water and sanitation, transportation, telecommunications, and housing. Your business should be at a stage where you are actively developing or executing a project.",
+          "Beyond concept stage. You should have a feasibility study, business plan, financial model, and some evidence of project preparation work — such as offtake agreements, technical studies, or an implementation plan. The key thing is that you can clearly identify your milestones and path to financing.",
       },
       {
-        question: "Does my company have to be registered in Africa?",
+        question: "What financial documents do I need?",
         answer:
-          "Your company's operations and projects must be based in Africa. Companies registered elsewhere but with active African infrastructure or energy projects may still qualify. We currently target participants from across 15+ African countries.",
+          "Management accounts or audited financial statements covering at least the past two years. Your company should also be in good regulatory standing.",
       },
       {
-        question: "What stage does my business need to be at?",
+        question: "Do I need to be based in Nigeria to apply?",
         answer:
-          "We welcome applicants at various stages — from early-stage ventures with a viable concept through to companies with active projects seeking to scale or close financing. We assess each applicant on the strength of their vision, sector focus, and readiness to engage with the programme.",
+          "No. AFÁRÁ targets women across Africa, with a goal of reaching 15+ African countries through the programme.",
       },
       {
-        question: "Is there a cost to participate?",
+        question: "When can I apply?",
         answer:
-          "Please refer to the application details or contact us at hello@afaraaccelerator.org for information on fees, scholarships, or sponsored places. Our goal is to make the programme as accessible as possible to qualified women infrapreneurs.",
-      },
-      {
-        question: "How do I apply?",
-        answer:
-          "You can apply directly through our website by clicking the 'Apply Now' button. The application form asks about your background, your company, your project, and what you hope to gain from AFÁRÁ. Complete all sections as thoroughly as possible to give your application the best chance of success.",
+          "The Call for Applications opened at the end of March 2026, with prequalified candidates announced in June 2026.",
       },
     ],
   },
   {
-    category: "During the Programme",
+    category: "Programme Support",
     items: [
       {
-        question: "How does mentorship work?",
+        question: "What kind of support will I receive?",
         answer:
-          "Each participant is matched with a mentor from our network of experienced professionals in energy, infrastructure, finance, and related fields. Mentors provide guidance through scheduled one-on-one sessions, and the platform allows you to track session notes and progress.",
-      },
-      {
-        question: "What sectors does AFÁRÁ focus on?",
-        answer:
-          "Our core sectors are energy and infrastructure — including solar, wind, and clean cooking energy; power transmission and distribution; water and sanitation; transportation; telecommunications; and sustainable housing. If your project sits at the intersection of infrastructure and impact, AFÁRÁ may be a strong fit.",
-      },
-      {
-        question: "Will I have access to investors through the programme?",
-        answer:
-          "Yes. A key pillar of AFÁRÁ is funding access. We work to connect participants with relevant investors, development finance institutions (DFIs), grant bodies, and capital partners. The programme also includes pitch preparation and investor readiness support.",
-      },
-      {
-        question: "Can I access the LMS resources after the programme ends?",
-        answer:
-          "Participants retain access to their learning materials and community after completing the programme. We believe in building a lasting network of women infrapreneurs across Africa.",
-      },
-    ],
-  },
-  {
-    category: "Certificates & Recognition",
-    items: [
-      {
-        question: "Do I receive a certificate for completing the programme?",
-        answer:
-          "Yes. Participants who meet the programme completion requirements receive a verifiable digital certificate from AFÁRÁ. Certificates are accessible through your LMS profile and can be shared on LinkedIn and other professional platforms.",
-      },
-      {
-        question: "What are the requirements to receive a certificate?",
-        answer:
-          "Completion requirements include finishing the required course modules, attending key workshops or events, and completing your mentorship sessions. Full details are provided to participants at the start of their cohort.",
+          "A combination of personal development, project development support, funding readiness coaching, access to legal, financial, technical and ESG advisory, and connections to investors and DFIs.",
       },
     ],
   },
