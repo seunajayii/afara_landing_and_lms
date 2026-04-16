@@ -300,6 +300,7 @@ export default function Apply() {
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [alreadySubmitted, setAlreadySubmitted] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showResumeDialog, setShowResumeDialog] = useState(false);
@@ -463,7 +464,12 @@ export default function Apply() {
         description: "Thank you for applying to AFARA! We will review your application and get back to you soon.",
       });
     },
-    onError: () => {
+    onError: (error: unknown) => {
+      if (error instanceof Error && error.message.startsWith("409:")) {
+        setIsSubmitted(true);
+        setAlreadySubmitted(true);
+        return;
+      }
       toast({
         title: "Submission Failed",
         description: "There was an error submitting your application. Please try again.",
@@ -648,10 +654,21 @@ export default function Apply() {
                 <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
                   <CheckCircle className="w-10 h-10 text-primary" />
                 </div>
-                <h1 className="text-3xl font-bold mb-4">Application Submitted!</h1>
-                <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                  Thank you for applying to the AFARA Accelerator program. Our team will review your application and contact you within 2-3 weeks.
-                </p>
+                {alreadySubmitted ? (
+                  <>
+                    <h1 className="text-3xl font-bold mb-4">Application Already Submitted</h1>
+                    <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                      You have already submitted an application with this email address. Our team will review your application and contact you within 2-3 weeks.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <h1 className="text-3xl font-bold mb-4">Application Submitted!</h1>
+                    <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                      Thank you for applying to the AFARA Accelerator program. Our team will review your application and contact you within 2-3 weeks.
+                    </p>
+                  </>
+                )}
                 <Button asChild>
                   <a href="/">Return Home</a>
                 </Button>

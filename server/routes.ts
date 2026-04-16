@@ -1523,7 +1523,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/applications", async (req: Request, res: Response) => {
     try {
-      const data = insertApplicationSchema.parse(req.body);
+      const raw = insertApplicationSchema.parse(req.body);
+      const data = { ...raw, email: raw.email.toLowerCase().trim() };
+
+      if (data.status === "submitted") {
+        const existing = await storage.getSubmittedApplicationByEmail(data.email);
+        if (existing) {
+          return res.status(409).json({ error: "An application from this email address has already been submitted." });
+        }
+      }
+
       const application = await storage.createApplication(data);
 
       // When status is "submitted", auto-create a community_member account
@@ -1567,7 +1576,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Forbidden: email does not match application record" });
       }
 
-      const application = await storage.updateApplication(req.params.id, req.body);
+      // Duplicate submission guard: if transitioning to submitted, ensure no non-draft
+      // application already exists for this email (excluding the current record itself)
+      if (newStatus === "submitted") {
+        const duplicate = await storage.getSubmittedApplicationByEmail(storedEmail);
+        if (duplicate && duplicate.id !== req.params.id) {
+          return res.status(409).json({ error: "An application from this email address has already been submitted." });
+        }
+      }
+
+      const updatePayload = req.body.email
+        ? { ...req.body, email: (req.body.email as string).toLowerCase().trim() }
+        : req.body;
+      const application = await storage.updateApplication(req.params.id, updatePayload);
       if (!application) return res.status(404).json({ error: "Application not found" });
 
       // When transitioning to submitted, auto-create community_member account + confirmation email

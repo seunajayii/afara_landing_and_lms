@@ -31,7 +31,7 @@ import {
   applications
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, ne, desc, asc, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -149,6 +149,7 @@ export interface IStorage {
   
   getApplication(id: string): Promise<Application | undefined>;
   getApplicationDraftByEmail(email: string): Promise<Application | undefined>;
+  getSubmittedApplicationByEmail(email: string): Promise<Application | undefined>;
   getAllApplications(): Promise<Application[]>;
   getApplicationsByStatus(status: string): Promise<Application[]>;
   createApplication(application: InsertApplication): Promise<Application>;
@@ -652,9 +653,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getApplicationDraftByEmail(email: string): Promise<Application | undefined> {
+    const normalized = email.toLowerCase().trim();
     const [application] = await db.select().from(applications)
-      .where(and(eq(applications.email, email.toLowerCase().trim()), eq(applications.status, "draft")))
+      .where(and(sql`lower(${applications.email}) = ${normalized}`, eq(applications.status, "draft")))
       .orderBy(desc(applications.updatedAt))
+      .limit(1);
+    return application;
+  }
+
+  async getSubmittedApplicationByEmail(email: string): Promise<Application | undefined> {
+    const normalized = email.toLowerCase().trim();
+    const [application] = await db.select().from(applications)
+      .where(and(sql`lower(${applications.email}) = ${normalized}`, ne(applications.status, "draft")))
       .limit(1);
     return application;
   }
