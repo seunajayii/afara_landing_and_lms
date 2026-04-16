@@ -1613,14 +1613,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!application) return res.status(404).json({ error: "Application not found" });
 
       // When saving a draft, send a progress notification email (fire-and-forget)
+      // Throttled to once per 24 hours per application to avoid spamming applicants.
       if (!newStatus || newStatus === "draft") {
-        const stepNumber = typeof req.body.currentStep === "number" ? req.body.currentStep : 0;
-        const firstName = application.firstName || existing.firstName || undefined;
-        import("./email").then(({ sendDraftSaveNotificationEmail }) => {
-          sendDraftSaveNotificationEmail(application.email, firstName, stepNumber, 8).catch(err => {
-            console.error("Draft save notification email failed:", err);
-          });
-        }).catch(err => console.error("Failed to import email module:", err));
+        const lastSent = existing.lastDraftEmailSentAt
+          ? new Date(existing.lastDraftEmailSentAt).getTime()
+          : 0;
+        const twentyFourHours = 24 * 60 * 60 * 1000;
+        const cooldownExpired = Date.now() - lastSent > twentyFourHours;
+        if (cooldownExpired) {
+          const stepNumber = typeof req.body.currentStep === "number" ? req.body.currentStep : 0;
+          const firstName = application.firstName || existing.firstName || undefined;
+          import("./email").then(({ sendDraftSaveNotificationEmail }) => {
+            sendDraftSaveNotificationEmail(application.email, firstName, stepNumber, 8)
+              .then(() => {
+                storage.updateApplication(req.params.id, { lastDraftEmailSentAt: new Date() } as any)
+                  .catch(err => console.error("Failed to stamp lastDraftEmailSentAt:", err));
+              })
+              .catch(err => console.error("Draft save notification email failed:", err));
+          }).catch(err => console.error("Failed to import email module:", err));
+        }
       }
 
       // When transitioning to submitted, auto-create community_member account + confirmation email
