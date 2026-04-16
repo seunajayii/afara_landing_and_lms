@@ -982,10 +982,6 @@ function PersonalSection({ form }: { form: ReturnType<typeof useForm<Application
                   type="email"
                   placeholder="your@email.com"
                   {...field}
-                  onBlur={(e) => {
-                    field.onBlur();
-                    checkForDraft(e.target.value);
-                  }}
                   data-testid="input-email"
                 />
               </FormControl>
