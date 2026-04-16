@@ -148,6 +148,7 @@ export interface IStorage {
   markAllNotificationsRead(userId: string): Promise<void>;
   
   getApplication(id: string): Promise<Application | undefined>;
+  getApplicationDraftByEmail(email: string): Promise<Application | undefined>;
   getAllApplications(): Promise<Application[]>;
   getApplicationsByStatus(status: string): Promise<Application[]>;
   createApplication(application: InsertApplication): Promise<Application>;
@@ -647,6 +648,14 @@ export class DatabaseStorage implements IStorage {
 
   async getApplication(id: string): Promise<Application | undefined> {
     const [application] = await db.select().from(applications).where(eq(applications.id, id));
+    return application;
+  }
+
+  async getApplicationDraftByEmail(email: string): Promise<Application | undefined> {
+    const [application] = await db.select().from(applications)
+      .where(and(eq(applications.email, email.toLowerCase().trim()), eq(applications.status, "draft")))
+      .orderBy(desc(applications.updatedAt))
+      .limit(1);
     return application;
   }
 

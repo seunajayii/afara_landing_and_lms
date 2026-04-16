@@ -56,6 +56,7 @@ import {
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 const COUNTRIES = [
@@ -299,6 +300,8 @@ export default function Apply() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [showResumeDialog, setShowResumeDialog] = useState(false);
+  const [pendingDraft, setPendingDraft] = useState<any>(null);
 
   const form = useForm<ApplicationFormData>({
     resolver: zodResolver(applicationSchema),
@@ -466,6 +469,115 @@ export default function Apply() {
   const handleSaveDraft = () => {
     const data = form.getValues();
     saveDraftMutation.mutate({ ...data, currentStep });
+  };
+
+  const checkForDraft = async (email: string) => {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+    if (draftId) return;
+    try {
+      const response = await fetch(`/api/applications/draft?email=${encodeURIComponent(email)}`);
+      if (response.ok) {
+        const draft = await response.json();
+        if (draft?.id) {
+          setPendingDraft(draft);
+          setShowResumeDialog(true);
+        }
+      }
+    } catch {
+      // No draft found — that's fine, continue normally
+    }
+  };
+
+  const handleResumeDraft = () => {
+    if (!pendingDraft) return;
+    const d = pendingDraft;
+    form.reset({
+      firstName: d.firstName || "",
+      lastName: d.lastName || "",
+      email: d.email || "",
+      phone: d.phone || "",
+      countryOfOperation: d.countryOfOperation || "",
+      companyName: d.companyName || "",
+      roleInCompany: d.roleInCompany || "",
+      personalStatement: d.personalStatement || "",
+      videoEssayUrl: d.videoEssayUrl || "",
+      professionalBackground: d.professionalBackground || "",
+      yearsOfExperience: d.yearsOfExperience ?? undefined,
+      keyResponsibilities: d.keyResponsibilities || "",
+      majorAchievements: d.majorAchievements || "",
+      hasLedTeams: d.hasLedTeams ?? false,
+      teamLeadershipExperience: d.teamLeadershipExperience || "",
+      hasProjectExperience: d.hasProjectExperience ?? false,
+      projectExperience: d.projectExperience || "",
+      primarySector: d.primarySector || "",
+      sectorSpecification: d.sectorSpecification || "",
+      subSectors: d.subSectors || [],
+      otherSubSector: d.otherSubSector || "",
+      businessDescription: d.businessDescription || "",
+      problemBeingSolved: d.problemBeingSolved || "",
+      businessStage: d.businessStage || "",
+      tractionEvidence: d.tractionEvidence || "",
+      targetMarket: d.targetMarket || "",
+      scalabilityExplanation: d.scalabilityExplanation || "",
+      growthPlans: d.growthPlans || "",
+      isRaisingFunding: d.isRaisingFunding ?? false,
+      companyLegalName: d.companyLegalName || "",
+      companyCountry: d.companyCountry || "",
+      companyHeadquarters: d.companyHeadquarters || "",
+      incorporationYear: d.incorporationYear ?? undefined,
+      ownershipPercentage: d.ownershipPercentage ?? undefined,
+      numberOfShareholders: d.numberOfShareholders ?? undefined,
+      shareholdersOver25Percent: d.shareholdersOver25Percent ?? false,
+      registrationProofUrl: d.registrationProofUrl || "",
+      isIncorporated: d.isIncorporated ?? false,
+      incorporationCertificateUrl: d.incorporationCertificateUrl || "",
+      revenueStreams: d.revenueStreams || "",
+      keepsFinancialRecords: d.keepsFinancialRecords ?? false,
+      pitchDeckUrl: d.pitchDeckUrl || "",
+      businessPlanUrl: d.businessPlanUrl || "",
+      canProvideFinancials: d.canProvideFinancials === true ? "yes" : d.canProvideFinancials === false ? "no" : undefined,
+      financialStatementsUrl: d.financialStatementsUrl || "",
+      isTaxRegistered: d.isTaxRegistered === true ? "yes" : d.isTaxRegistered === false ? "no" : undefined,
+      projectDescription: d.projectDescription || "",
+      projectLocation: d.projectLocation || "",
+      projectSector: d.projectSector || "",
+      projectCurrentStatus: d.projectCurrentStatus || "",
+      projectStage: d.projectStage || "",
+      projectDocuments: d.projectDocuments || [],
+      otherProjectDocuments: d.otherProjectDocuments || "",
+      projectedImpact: d.projectedImpact || "",
+      businessImpact: d.businessImpact || "",
+      primaryBeneficiaries: d.primaryBeneficiaries || "",
+      infrastructureGapContribution: d.infrastructureGapContribution || "",
+      createsWomenOpportunities: d.createsWomenOpportunities ?? false,
+      womenOpportunitiesDescription: d.womenOpportunitiesDescription || "",
+      mainChallenges: d.mainChallenges || "",
+      supportAreasNeeded: d.supportAreasNeeded || [],
+      otherSupportArea: d.otherSupportArea || "",
+      keyActivitiesForNextStage: d.keyActivitiesForNextStage || "",
+      fundingRequired: d.fundingRequired || "",
+      expectedTimeline: d.expectedTimeline || "",
+      specificProgramOutcomes: d.specificProgramOutcomes || "",
+      hoursPerWeek: d.hoursPerWeek ?? undefined,
+      openToMentorship: d.openToMentorship ?? false,
+      canCommitToProgram: d.canCommitToProgram ?? false,
+      canAttendLagosEvent: d.canAttendLagosEvent ?? false,
+      commitmentManagementPlan: d.commitmentManagementPlan || "",
+      willingToMentor: d.willingToMentor ?? false,
+      peerMentorshipImportance: d.peerMentorshipImportance || "",
+      whyAfaraIsRight: d.whyAfaraIsRight || "",
+      linkedinUrl: d.linkedinUrl || "",
+    });
+    setDraftId(d.id);
+    if (typeof d.currentStep === "number" && d.currentStep > 0 && d.currentStep < 7) {
+      setCurrentStep(d.currentStep);
+    }
+    setShowResumeDialog(false);
+    setPendingDraft(null);
+    toast({
+      title: "Application Resumed",
+      description: "Your saved progress has been loaded. Continue from where you left off.",
+    });
   };
 
   const handleNext = async () => {
@@ -667,6 +779,29 @@ export default function Apply() {
         </div>
       </main>
       <Footer />
+
+      <Dialog open={showResumeDialog} onOpenChange={setShowResumeDialog}>
+        <DialogContent data-testid="dialog-resume-application">
+          <DialogHeader>
+            <DialogTitle>Resume Saved Application</DialogTitle>
+            <DialogDescription>
+              We found a saved draft for this email address. Would you like to continue from where you left off, or start a fresh application?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 flex-col sm:flex-row">
+            <Button
+              variant="outline"
+              onClick={() => { setShowResumeDialog(false); setPendingDraft(null); }}
+              data-testid="button-start-fresh"
+            >
+              Start Fresh
+            </Button>
+            <Button onClick={handleResumeDraft} data-testid="button-resume-draft">
+              Resume Application
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -711,7 +846,16 @@ function PersonalSection({ form }: { form: ReturnType<typeof useForm<Application
             <FormItem>
               <FormLabel>Email Address *</FormLabel>
               <FormControl>
-                <Input type="email" placeholder="your@email.com" {...field} data-testid="input-email" />
+                <Input
+                  type="email"
+                  placeholder="your@email.com"
+                  {...field}
+                  onBlur={(e) => {
+                    field.onBlur();
+                    checkForDraft(e.target.value);
+                  }}
+                  data-testid="input-email"
+                />
               </FormControl>
               <FormMessage />
             </FormItem>

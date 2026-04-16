@@ -1498,6 +1498,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Public: look up a saved draft by email so applicants can resume
+  app.get("/api/applications/draft", async (req: Request, res: Response) => {
+    try {
+      const email = ((req.query.email as string) || "").trim().toLowerCase();
+      if (!email) return res.status(400).json({ error: "Email is required" });
+      const application = await storage.getApplicationDraftByEmail(email);
+      if (!application) return res.status(404).json({ error: "No draft found" });
+      res.json(application);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch draft" });
+    }
+  });
+
   app.get("/api/applications/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const application = await storage.getApplication(req.params.id);
