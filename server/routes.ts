@@ -1618,8 +1618,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const lastSent = existing.lastDraftEmailSentAt
           ? new Date(existing.lastDraftEmailSentAt).getTime()
           : 0;
-        const twentyFourHours = 24 * 60 * 60 * 1000;
-        const cooldownExpired = Date.now() - lastSent > twentyFourHours;
+        const threeDays = 3 * 24 * 60 * 60 * 1000;
+        const cooldownExpired = Date.now() - lastSent > threeDays;
         if (cooldownExpired) {
           const stepNumber = typeof req.body.currentStep === "number" ? req.body.currentStep : 0;
           const firstName = application.firstName || existing.firstName || undefined;
