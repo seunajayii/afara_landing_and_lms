@@ -1593,9 +1593,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Forbidden: email does not match application record" });
       }
 
-      // Duplicate submission guard: if transitioning to submitted, ensure no non-draft
-      // application already exists for this email (excluding the current record itself)
+      // Duplicate submission guard: if transitioning to submitted, block if:
+      // (a) the application being patched is already in a non-draft state, or
+      // (b) another non-draft application exists for the same email
       if (newStatus === "submitted") {
+        if (existing.status !== "draft") {
+          return res.status(409).json({ error: "An application from this email address has already been submitted." });
+        }
         const duplicate = await storage.getSubmittedApplicationByEmail(storedEmail);
         if (duplicate && duplicate.id !== req.params.id) {
           return res.status(409).json({ error: "An application from this email address has already been submitted." });
