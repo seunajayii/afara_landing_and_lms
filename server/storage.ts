@@ -150,6 +150,7 @@ export interface IStorage {
   getApplication(id: string): Promise<Application | undefined>;
   getApplicationDraftByEmail(email: string): Promise<Application | undefined>;
   getSubmittedApplicationByEmail(email: string): Promise<Application | undefined>;
+  getMostRecentApplicationByEmail(email: string): Promise<Application | undefined>;
   getAllApplications(): Promise<Application[]>;
   getApplicationsByStatus(status: string): Promise<Application[]>;
   createApplication(application: InsertApplication): Promise<Application>;
@@ -665,6 +666,15 @@ export class DatabaseStorage implements IStorage {
     const normalized = email.toLowerCase().trim();
     const [application] = await db.select().from(applications)
       .where(and(sql`lower(${applications.email}) = ${normalized}`, ne(applications.status, "draft")))
+      .limit(1);
+    return application;
+  }
+
+  async getMostRecentApplicationByEmail(email: string): Promise<Application | undefined> {
+    const normalized = email.toLowerCase().trim();
+    const [application] = await db.select().from(applications)
+      .where(sql`lower(${applications.email}) = ${normalized}`)
+      .orderBy(desc(applications.updatedAt))
       .limit(1);
     return application;
   }

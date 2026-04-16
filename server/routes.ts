@@ -1511,6 +1511,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Public: look up application status by email
+  app.get("/api/applications/status", async (req: Request, res: Response) => {
+    try {
+      const email = ((req.query.email as string) || "").trim().toLowerCase();
+      if (!email) return res.status(400).json({ error: "Email is required" });
+      const application = await storage.getMostRecentApplicationByEmail(email);
+      if (!application) return res.status(404).json({ error: "No application found" });
+      res.json({
+        status: application.status,
+        submittedAt: application.submittedAt,
+        updatedAt: application.updatedAt,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch application status" });
+    }
+  });
+
   app.get("/api/applications/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const application = await storage.getApplication(req.params.id);

@@ -54,7 +54,9 @@ import {
   ChevronsUpDown,
   Check,
   Mail,
-  RotateCcw
+  RotateCcw,
+  Search,
+  ClipboardList
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -309,6 +311,10 @@ export default function Apply() {
   const [resumeEmail, setResumeEmail] = useState("");
   const [isCheckingDraft, setIsCheckingDraft] = useState(false);
   const [draftLookupError, setDraftLookupError] = useState("");
+  const [statusEmail, setStatusEmail] = useState("");
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  const [statusResult, setStatusResult] = useState<{ status: string; submittedAt: string | null; updatedAt: string | null } | null>(null);
+  const [statusError, setStatusError] = useState("");
 
   const form = useForm<ApplicationFormData>({
     resolver: zodResolver(applicationSchema),
@@ -622,6 +628,30 @@ export default function Apply() {
     }
   };
 
+  const handleCheckStatus = async () => {
+    const email = statusEmail.trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setStatusError("Please enter a valid email address.");
+      return;
+    }
+    setIsCheckingStatus(true);
+    setStatusError("");
+    setStatusResult(null);
+    try {
+      const response = await fetch(`/api/applications/status?email=${encodeURIComponent(email)}`);
+      if (response.ok) {
+        const data = await response.json();
+        setStatusResult(data);
+      } else {
+        setStatusError("No application found for this email address.");
+      }
+    } catch {
+      setStatusError("Unable to check your status. Please try again.");
+    } finally {
+      setIsCheckingStatus(false);
+    }
+  };
+
   const handleNext = async () => {
     if (currentStep < 7) {
       setCurrentStep(currentStep + 1);
@@ -769,6 +799,99 @@ export default function Apply() {
                   </Button>
                 </CardContent>
               </Card>
+            </div>
+
+            {/* Status Check */}
+            <div className="mt-8">
+              <Separator className="mb-8" />
+              <div className="max-w-xl mx-auto">
+                <div className="flex items-center gap-2 mb-4">
+                  <ClipboardList className="w-5 h-5 text-muted-foreground" />
+                  <h2 className="font-semibold text-base">Check your application status</h2>
+                </div>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      type="email"
+                      placeholder="Enter your email address"
+                      value={statusEmail}
+                      onChange={(e) => { setStatusEmail(e.target.value); setStatusError(""); setStatusResult(null); }}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleCheckStatus(); }}
+                      className="pl-9"
+                      data-testid="input-status-email"
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={handleCheckStatus}
+                    disabled={isCheckingStatus}
+                    data-testid="button-check-status"
+                  >
+                    {isCheckingStatus ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Search className="w-4 h-4" />
+                    )}
+                    <span className="ml-2">Check Status</span>
+                  </Button>
+                </div>
+
+                {statusError && (
+                  <p className="mt-3 text-sm text-destructive" data-testid="text-status-error">{statusError}</p>
+                )}
+
+                {statusResult && (() => {
+                  const statusConfig: Record<string, { label: string; description: string; color: string }> = {
+                    draft: {
+                      label: "Draft in Progress",
+                      description: "You have an unfinished application. Use 'Complete a Saved Draft' above to pick up where you left off.",
+                      color: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-950/30 dark:border-amber-800",
+                    },
+                    submitted: {
+                      label: "Submitted — Awaiting Review",
+                      description: "Your application has been received. Our team will be in touch within 2–3 weeks.",
+                      color: "text-blue-700 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-950/30 dark:border-blue-800",
+                    },
+                    under_review: {
+                      label: "Under Review",
+                      description: "Your application is currently being reviewed by the AFÁRA selection committee.",
+                      color: "text-indigo-700 bg-indigo-50 border-indigo-200 dark:text-indigo-400 dark:bg-indigo-950/30 dark:border-indigo-800",
+                    },
+                    accepted: {
+                      label: "Accepted",
+                      description: "Congratulations! Your application has been accepted to the AFÁRA programme. Check your email for next steps.",
+                      color: "text-green-700 bg-green-50 border-green-200 dark:text-green-400 dark:bg-green-950/30 dark:border-green-800",
+                    },
+                    rejected: {
+                      label: "Application Unsuccessful",
+                      description: "Thank you for applying. Unfortunately your application was not successful at this time. We encourage you to apply in future cycles.",
+                      color: "text-muted-foreground bg-muted/40 border-border",
+                    },
+                    waitlisted: {
+                      label: "Waitlisted",
+                      description: "Your application is on the waitlist. We will contact you if a place becomes available.",
+                      color: "text-orange-700 bg-orange-50 border-orange-200 dark:text-orange-400 dark:bg-orange-950/30 dark:border-orange-800",
+                    },
+                  };
+                  const cfg = statusConfig[statusResult.status] ?? {
+                    label: statusResult.status,
+                    description: "Please contact us if you have questions about your application.",
+                    color: "text-muted-foreground bg-muted/40 border-border",
+                  };
+                  return (
+                    <div className={`mt-4 p-4 rounded-md border ${cfg.color}`} data-testid="panel-status-result">
+                      <p className="font-semibold text-sm mb-1" data-testid="text-status-label">{cfg.label}</p>
+                      <p className="text-sm opacity-90">{cfg.description}</p>
+                      {statusResult.submittedAt && (
+                        <p className="text-xs mt-2 opacity-70">
+                          Submitted: {new Date(statusResult.submittedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           </div>
         </main>
