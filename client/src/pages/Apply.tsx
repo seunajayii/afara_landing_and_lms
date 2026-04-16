@@ -52,7 +52,9 @@ import {
   Upload,
   Paperclip,
   ChevronsUpDown,
-  Check
+  Check,
+  Mail,
+  RotateCcw
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -302,6 +304,10 @@ export default function Apply() {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showResumeDialog, setShowResumeDialog] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<any>(null);
+  const [appMode, setAppMode] = useState<"select" | "form">("select");
+  const [resumeEmail, setResumeEmail] = useState("");
+  const [isCheckingDraft, setIsCheckingDraft] = useState(false);
+  const [draftLookupError, setDraftLookupError] = useState("");
 
   const form = useForm<ApplicationFormData>({
     resolver: zodResolver(applicationSchema),
@@ -488,9 +494,7 @@ export default function Apply() {
     }
   };
 
-  const handleResumeDraft = () => {
-    if (!pendingDraft) return;
-    const d = pendingDraft;
+  const handleResumeDraftFrom = (d: any) => {
     form.reset({
       firstName: d.firstName || "",
       lastName: d.lastName || "",
@@ -580,6 +584,38 @@ export default function Apply() {
     });
   };
 
+  const handleResumeDraft = () => {
+    if (!pendingDraft) return;
+    handleResumeDraftFrom(pendingDraft);
+  };
+
+  const handleCheckDraft = async () => {
+    const email = resumeEmail.trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setDraftLookupError("Please enter a valid email address.");
+      return;
+    }
+    setIsCheckingDraft(true);
+    setDraftLookupError("");
+    try {
+      const response = await fetch(`/api/applications/draft?email=${encodeURIComponent(email)}`);
+      if (response.ok) {
+        const draft = await response.json();
+        if (draft?.id) {
+          setPendingDraft(draft);
+          handleResumeDraftFrom(draft);
+          setAppMode("form");
+          return;
+        }
+      }
+      setDraftLookupError("No saved draft found for this email. You can start a new application instead.");
+    } catch {
+      setDraftLookupError("Unable to look up your draft. Please try again.");
+    } finally {
+      setIsCheckingDraft(false);
+    }
+  };
+
   const handleNext = async () => {
     if (currentStep < 7) {
       setCurrentStep(currentStep + 1);
@@ -621,6 +657,102 @@ export default function Apply() {
                 </Button>
               </CardContent>
             </Card>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (appMode === "select") {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Navbar />
+        <main className="flex-1 py-16 bg-muted/30">
+          <div className="container max-w-3xl mx-auto px-4">
+            <div className="text-center mb-10">
+              <h1 className="text-4xl font-bold mb-3" data-testid="text-apply-gateway-title">
+                AFÁRA Accelerator Application
+              </h1>
+              <p className="text-muted-foreground text-lg max-w-xl mx-auto">
+                Apply to join Africa's leading accelerator for women-led businesses in energy and infrastructure.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Start New Application */}
+              <Card
+                className="hover-elevate cursor-pointer flex flex-col"
+                data-testid="card-start-new"
+                onClick={() => setAppMode("form")}
+              >
+                <CardHeader className="flex flex-col items-center text-center gap-3 pb-4">
+                  <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+                    <FileText className="w-7 h-7 text-primary" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl">Start a New Application</CardTitle>
+                    <CardDescription className="mt-1">
+                      Begin a fresh application for the AFÁRA programme. You can save your progress at any time and return later.
+                    </CardDescription>
+                  </div>
+                </CardHeader>
+                <CardContent className="mt-auto pt-0 flex justify-center pb-6">
+                  <Button
+                    onClick={(e) => { e.stopPropagation(); setAppMode("form"); }}
+                    data-testid="button-start-new-application"
+                  >
+                    Start Application
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Resume a Draft */}
+              <Card className="flex flex-col" data-testid="card-resume-draft">
+                <CardHeader className="flex flex-col items-center text-center gap-3 pb-4">
+                  <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+                    <RotateCcw className="w-7 h-7 text-primary" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl">Complete a Saved Draft</CardTitle>
+                    <CardDescription className="mt-1">
+                      Already started an application? Enter the email address you used to retrieve your saved progress.
+                    </CardDescription>
+                  </div>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-3 mt-auto pb-6">
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      type="email"
+                      placeholder="your@email.com"
+                      value={resumeEmail}
+                      onChange={(e) => { setResumeEmail(e.target.value); setDraftLookupError(""); }}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleCheckDraft(); }}
+                      className="pl-9"
+                      data-testid="input-resume-email"
+                    />
+                  </div>
+                  {draftLookupError && (
+                    <p className="text-sm text-destructive" data-testid="text-draft-lookup-error">{draftLookupError}</p>
+                  )}
+                  <Button
+                    variant="outline"
+                    onClick={handleCheckDraft}
+                    disabled={isCheckingDraft}
+                    data-testid="button-find-draft"
+                  >
+                    {isCheckingDraft ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <RotateCcw className="w-4 h-4 mr-2" />
+                    )}
+                    Find My Draft
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </main>
         <Footer />
