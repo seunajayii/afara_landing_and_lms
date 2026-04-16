@@ -1612,6 +1612,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const application = await storage.updateApplication(req.params.id, updatePayload);
       if (!application) return res.status(404).json({ error: "Application not found" });
 
+      // When saving a draft, send a progress notification email (fire-and-forget)
+      if (!newStatus || newStatus === "draft") {
+        const stepNumber = typeof req.body.currentStep === "number" ? req.body.currentStep : 0;
+        const firstName = application.firstName || existing.firstName || undefined;
+        import("./email").then(({ sendDraftSaveNotificationEmail }) => {
+          sendDraftSaveNotificationEmail(application.email, firstName, stepNumber, 8).catch(err => {
+            console.error("Draft save notification email failed:", err);
+          });
+        }).catch(err => console.error("Failed to import email module:", err));
+      }
+
       // When transitioning to submitted, auto-create community_member account + confirmation email
       if (newStatus === "submitted") {
         try {

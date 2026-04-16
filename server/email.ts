@@ -401,6 +401,203 @@ export async function sendWelcomeEmail(email: string, firstName?: string): Promi
   }
 }
 
+const APPLICATION_STEPS = [
+  { id: 0, title: "Personal",    description: "About yourself" },
+  { id: 1, title: "Background",  description: "Sector experience" },
+  { id: 2, title: "Business",    description: "Ownership & operations" },
+  { id: 3, title: "Financial",   description: "Documentation" },
+  { id: 4, title: "Project",     description: "Readiness & status" },
+  { id: 5, title: "Support",     description: "Needs & advancement" },
+  { id: 6, title: "Commitment",  description: "Programme & mentorship" },
+  { id: 7, title: "Preview",     description: "Review & submit" },
+];
+
+export async function sendDraftSaveNotificationEmail(
+  email: string,
+  firstName: string | undefined,
+  currentStep: number,
+  totalSteps: number
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const name = firstName && firstName.trim() ? firstName.trim() : 'there';
+    const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
+    const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
+    const mastheadSrc = 'cid:afara-masthead';
+
+    const safeStep = Math.max(0, Math.min(currentStep, APPLICATION_STEPS.length - 1));
+    const currentStepInfo = APPLICATION_STEPS[safeStep];
+    const remainingSteps = APPLICATION_STEPS.slice(safeStep + 1);
+    const applyUrl = 'https://afaraaccelerator.org/apply';
+
+    const remainingRowsHtml = remainingSteps.length > 0
+      ? remainingSteps.map(s => `
+          <tr>
+            <td style="padding:8px 0;vertical-align:top;width:24px;">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#c8d8d8;margin-top:6px;">&nbsp;</span>
+            </td>
+            <td style="padding:8px 0 8px 8px;font-size:14px;line-height:1.5;color:#555555;">
+              <strong style="color:#2d2d2d;">${s.title}</strong> &mdash; ${s.description}
+            </td>
+          </tr>`).join('')
+      : `<tr><td colspan="2" style="padding:8px 0;font-size:14px;color:#555555;">You&rsquo;re on the final step &mdash; just review and submit!</td></tr>`;
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Application Progress Saved – AFÁRÁ</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&display=swap" rel="stylesheet" />
+</head>
+<body style="margin:0;padding:0;background-color:#f5f4f0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f4f0;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;">
+
+          <!-- Masthead Image -->
+          <tr>
+            <td style="padding:0;margin:0;">
+              <img src="${mastheadSrc}" alt="AFÁRÁ" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />
+            </td>
+          </tr>
+
+          <!-- Green accent line -->
+          <tr>
+            <td style="background-color:#173a3a;height:4px;font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+
+          <!-- Main content -->
+          <tr>
+            <td style="padding:48px 48px 32px 48px;">
+
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#173a3a;line-height:1.3;">
+                Your progress has been saved
+              </h1>
+
+              <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
+                Dear ${name},
+              </p>
+
+              <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
+                Good news — your AFÁRÁ Accelerator application has been saved. You can return at any time to pick up exactly where you left off.
+              </p>
+
+              <!-- Current step highlight -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;background-color:#f0f5f5;border-radius:4px;">
+                <tr>
+                  <td style="padding:20px 24px;">
+                    <p style="margin:0 0 4px 0;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#173a3a;">Last saved at</p>
+                    <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:20px;font-weight:600;color:#173a3a;">
+                      Step ${safeStep + 1} of ${totalSteps} &mdash; ${currentStepInfo.title}
+                    </p>
+                    <p style="margin:4px 0 0 0;font-size:14px;color:#555555;">${currentStepInfo.description}</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Divider -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="border-top:1px solid #e8e4dd;padding:0;font-size:0;line-height:0;">&nbsp;</td>
+                </tr>
+              </table>
+
+              ${remainingSteps.length > 0 ? `
+              <!-- Remaining sections -->
+              <h2 style="margin:28px 0 12px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;color:#173a3a;">
+                Still to complete
+              </h2>
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 28px 0;">
+                ${remainingRowsHtml}
+              </table>` : `
+              <p style="margin:28px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
+                You&rsquo;re on the final step &mdash; just review your answers and hit <strong>Submit Application</strong>.
+              </p>`}
+
+              <!-- CTA Button -->
+              <table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;">
+                <tr>
+                  <td style="border-radius:4px;background-color:#173a3a;">
+                    <a href="${applyUrl}" style="display:inline-block;padding:14px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:4px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+                      Continue My Application
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Divider -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="border-top:1px solid #e8e4dd;padding:0;font-size:0;line-height:0;">&nbsp;</td>
+                </tr>
+              </table>
+
+              <p style="margin:24px 0 0 0;font-size:15px;line-height:1.7;color:#555555;">
+                If you have any questions, reach out to us at
+                <a href="mailto:hello@afaraaccelerator.org" style="color:#173a3a;text-decoration:underline;">hello@afaraaccelerator.org</a>.
+              </p>
+
+            </td>
+          </tr>
+
+          <!-- Signature -->
+          <tr>
+            <td style="padding:0 48px 48px 48px;">
+              <p style="margin:32px 0 4px 0;font-size:15px;line-height:1.6;color:#2d2d2d;">Warm regards,</p>
+              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#173a3a;">
+                The AFÁRÁ Team
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#173a3a;padding:24px 48px;">
+              <p style="margin:0 0 6px 0;font-size:13px;line-height:1.6;color:#a8c4c4;">
+                AFÁRÁ is an initiative of
+                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>
+              </p>
+              <p style="margin:0;font-size:12px;color:#6a9090;">
+                &copy; ${new Date().getFullYear()} AFÁRÁ. All rights reserved.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+    const { error } = await client.emails.send({
+      from: fromEmail,
+      to: email,
+      subject: 'Your AFÁRÁ application progress has been saved',
+      html,
+      attachments: mastheadBuffer ? [
+        {
+          filename: 'afara-masthead-email.jpg',
+          content: mastheadBuffer.toString('base64'),
+          content_id: 'afara-masthead',
+        }
+      ] : [],
+    });
+
+    if (error) {
+      console.error('Draft save notification email error:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Draft save notification email failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 export async function sendPasswordResetEmail(
   email: string,
   firstName: string,
