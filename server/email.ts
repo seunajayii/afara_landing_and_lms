@@ -226,36 +226,181 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
   }
 }
 
-export async function sendAcceptanceEmail(email: string, firstName?: string): Promise<{ success: boolean; error?: string }> {
+export async function sendAcceptanceEmail(email: string, firstName?: string, reviewNotes?: string): Promise<{ success: boolean; error?: string }> {
   try {
     const { client, fromEmail } = await getResendClient();
-    
+    const name = firstName || 'there';
+    const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
+    const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
+    const mastheadSrc = 'cid:afara-masthead';
+    const loginUrl = 'https://afaraaccelerator.org/lms/dashboard';
+
+    const personalNoteBlock = reviewNotes ? `
+              <!-- Personal note from team -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;background-color:#f0f5f5;border-radius:4px;">
+                <tr>
+                  <td style="padding:24px 28px;">
+                    <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#173a3a;">A personal note</p>
+                    <p style="margin:0;font-size:15px;line-height:1.7;color:#2d2d2d;font-style:italic;">"${reviewNotes}"</p>
+                    <p style="margin:8px 0 0 0;font-size:13px;color:#555555;">— The AFÁRÁ Team</p>
+                  </td>
+                </tr>
+              </table>` : '';
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>You've been accepted – AFÁRÁ</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&display=swap" rel="stylesheet" />
+</head>
+<body style="margin:0;padding:0;background-color:#f5f4f0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f4f0;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;">
+
+          <!-- Masthead Image -->
+          <tr>
+            <td style="padding:0;margin:0;">
+              <img src="${mastheadSrc}" alt="AFÁRÁ" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />
+            </td>
+          </tr>
+
+          <!-- Green accent line -->
+          <tr>
+            <td style="background-color:#173a3a;height:4px;font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+
+          <!-- Main content -->
+          <tr>
+            <td style="padding:48px 48px 32px 48px;">
+
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#173a3a;line-height:1.3;">
+                Congratulations — you've been accepted
+              </h1>
+
+              <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
+                Dear ${name},
+              </p>
+
+              <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
+                We are delighted to let you know that your application to the <strong style="color:#173a3a;">AFÁRÁ Accelerator Program</strong> has been <strong style="color:#173a3a;">accepted</strong>. Welcome to the cohort.
+              </p>
+
+              <p style="margin:0 0 32px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
+                Your account has been upgraded to full participant access. You can log in now and begin exploring everything the platform has to offer.
+              </p>
+
+              ${personalNoteBlock}
+
+              <!-- What you now have access to -->
+              <h2 style="margin:0 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;color:#173a3a;">
+                What's waiting for you
+              </h2>
+
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;">
+                <tr>
+                  <td style="padding:10px 0;vertical-align:top;width:24px;">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                  </td>
+                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">Training modules and courses</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 0;vertical-align:top;width:24px;">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                  </td>
+                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">Mentorship matching and one-on-one sessions</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 0;vertical-align:top;width:24px;">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                  </td>
+                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">Program resources, toolkits, and guides</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 0;vertical-align:top;width:24px;">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                  </td>
+                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">Events, webinars, and live sessions</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 0;vertical-align:top;width:24px;">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                  </td>
+                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">Community discussion boards</td>
+                </tr>
+              </table>
+
+              <!-- CTA Button -->
+              <table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;">
+                <tr>
+                  <td style="border-radius:4px;background-color:#173a3a;">
+                    <a href="${loginUrl}" style="display:inline-block;padding:14px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:4px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+                      Go to your dashboard
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Divider -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="border-top:1px solid #e8e4dd;padding:0;font-size:0;line-height:0;">&nbsp;</td>
+                </tr>
+              </table>
+
+              <p style="margin:24px 0 0 0;font-size:15px;line-height:1.7;color:#555555;">
+                If you have any questions, please reach out at
+                <a href="mailto:hello@afaraaccelerator.org" style="color:#173a3a;text-decoration:underline;">hello@afaraaccelerator.org</a>.
+              </p>
+
+            </td>
+          </tr>
+
+          <!-- Signature -->
+          <tr>
+            <td style="padding:0 48px 48px 48px;">
+              <p style="margin:32px 0 4px 0;font-size:15px;line-height:1.6;color:#2d2d2d;">Warm regards,</p>
+              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#173a3a;">
+                The AFÁRÁ Team
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#173a3a;padding:24px 48px;">
+              <p style="margin:0 0 6px 0;font-size:13px;line-height:1.6;color:#a8c4c4;">
+                AFÁRÁ is an initiative of
+                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>
+              </p>
+              <p style="margin:0;font-size:12px;color:#6a9090;">
+                &copy; ${new Date().getFullYear()} AFÁRÁ. All rights reserved.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
     const { data, error } = await client.emails.send({
       from: fromEmail,
       to: email,
-      subject: 'Congratulations! Your AFÁRÁ Application Has Been Accepted',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h1 style="color: #166534;">Welcome to the AFÁRÁ Accelerator!</h1>
-          <p>Dear ${firstName || 'Applicant'},</p>
-          <p>Congratulations! We are delighted to inform you that your application to the AFÁRÁ Accelerator Program has been <strong>accepted</strong>.</p>
-          <p>Your account has been upgraded to full participant access. You can now log in to the AFÁRÁ platform to access:</p>
-          <ul>
-            <li>Training modules and courses</li>
-            <li>Mentorship matching and sessions</li>
-            <li>Program resources and toolkits</li>
-            <li>Events and live sessions</li>
-            <li>Community discussion boards</li>
-          </ul>
-          <p>Please log in using your registered email address. If you have not yet set a password, please contact us at <a href="mailto:info@afaraaccelerator.org">info@afaraaccelerator.org</a>.</p>
-          <p>We look forward to supporting your journey!</p>
-          <p>Best regards,<br/>The AFÁRÁ Team</p>
-          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
-          <p style="font-size: 12px; color: #6b7280;">
-            AFÁRÁ is an initiative of Open Spaces & Bridges Advisory (OPSB)
-          </p>
-        </div>
-      `
+      subject: "Congratulations \u2014 You\u2019ve been accepted to AF\u00C1R\u00C1",
+      html,
+      attachments: mastheadBuffer ? [
+        {
+          filename: 'afara-masthead.jpg',
+          content: mastheadBuffer.toString('base64'),
+          content_id: 'afara-masthead',
+        }
+      ] : [],
     });
 
     if (error) {
@@ -266,6 +411,170 @@ export async function sendAcceptanceEmail(email: string, firstName?: string): Pr
     return { success: true };
   } catch (error: any) {
     console.error('Acceptance email failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function sendRejectionEmail(email: string, firstName?: string, reviewNotes?: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const name = firstName || 'there';
+    const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
+    const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
+    const mastheadSrc = 'cid:afara-masthead';
+
+    const personalNoteBlock = reviewNotes ? `
+              <!-- Personal note from team -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;background-color:#f9f5f0;border-radius:4px;">
+                <tr>
+                  <td style="padding:24px 28px;">
+                    <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#173a3a;">Feedback from the team</p>
+                    <p style="margin:0;font-size:15px;line-height:1.7;color:#2d2d2d;font-style:italic;">"${reviewNotes}"</p>
+                    <p style="margin:8px 0 0 0;font-size:13px;color:#555555;">— The AFÁRÁ Team</p>
+                  </td>
+                </tr>
+              </table>` : '';
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your AFÁRÁ application – an update</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&display=swap" rel="stylesheet" />
+</head>
+<body style="margin:0;padding:0;background-color:#f5f4f0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f4f0;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;">
+
+          <!-- Masthead Image -->
+          <tr>
+            <td style="padding:0;margin:0;">
+              <img src="${mastheadSrc}" alt="AFÁRÁ" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />
+            </td>
+          </tr>
+
+          <!-- Green accent line -->
+          <tr>
+            <td style="background-color:#173a3a;height:4px;font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+
+          <!-- Main content -->
+          <tr>
+            <td style="padding:48px 48px 32px 48px;">
+
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#173a3a;line-height:1.3;">
+                An update on your application
+              </h1>
+
+              <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
+                Dear ${name},
+              </p>
+
+              <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
+                Thank you for taking the time to apply to the <strong style="color:#173a3a;">AFÁRÁ Accelerator Program</strong>. After careful review of all applications, we regret to inform you that we are unable to offer you a place in the current cohort.
+              </p>
+
+              <p style="margin:0 0 32px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
+                This was a competitive process, and the decision was not easy. We are genuinely grateful for your interest and the effort you put into your application.
+              </p>
+
+              ${personalNoteBlock}
+
+              <!-- Divider -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="border-top:1px solid #e8e4dd;padding:0;font-size:0;line-height:0;">&nbsp;</td>
+                </tr>
+              </table>
+
+              <!-- Stay connected -->
+              <h2 style="margin:32px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;color:#173a3a;">
+                Stay connected with AFÁRÁ
+              </h2>
+
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;">
+                <tr>
+                  <td style="padding:10px 0;vertical-align:top;width:24px;">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                  </td>
+                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">We run new cohorts regularly — we encourage you to apply again in a future cycle</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 0;vertical-align:top;width:24px;">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                  </td>
+                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">Follow our updates and events at <a href="https://afaraaccelerator.org" style="color:#173a3a;text-decoration:underline;">afaraaccelerator.org</a></td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 0;vertical-align:top;width:24px;">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                  </td>
+                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">For any questions, reach us at <a href="mailto:hello@afaraaccelerator.org" style="color:#173a3a;text-decoration:underline;">hello@afaraaccelerator.org</a></td>
+                </tr>
+              </table>
+
+              <p style="margin:0;font-size:15px;line-height:1.7;color:#555555;">
+                We wish you all the best in your endeavours and hope our paths will cross again.
+              </p>
+
+            </td>
+          </tr>
+
+          <!-- Signature -->
+          <tr>
+            <td style="padding:0 48px 48px 48px;">
+              <p style="margin:32px 0 4px 0;font-size:15px;line-height:1.6;color:#2d2d2d;">Warm regards,</p>
+              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#173a3a;">
+                The AFÁRÁ Team
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#173a3a;padding:24px 48px;">
+              <p style="margin:0 0 6px 0;font-size:13px;line-height:1.6;color:#a8c4c4;">
+                AFÁRÁ is an initiative of
+                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>
+              </p>
+              <p style="margin:0;font-size:12px;color:#6a9090;">
+                &copy; ${new Date().getFullYear()} AFÁRÁ. All rights reserved.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+    const { data, error } = await client.emails.send({
+      from: fromEmail,
+      to: email,
+      subject: "An update on your AF\u00C1R\u00C1 application",
+      html,
+      attachments: mastheadBuffer ? [
+        {
+          filename: 'afara-masthead.jpg',
+          content: mastheadBuffer.toString('base64'),
+          content_id: 'afara-masthead',
+        }
+      ] : [],
+    });
+
+    if (error) {
+      console.error('Rejection email error:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Rejection email failed:', error);
     return { success: false, error: error.message };
   }
 }

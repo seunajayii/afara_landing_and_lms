@@ -1780,25 +1780,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin-only: full application status management (accept, reject, waitlist, etc.)
+  async function handleApplicationStatusChange(application: any, newStatus: string, reviewNotes?: string) {
+    const { sendAcceptanceEmail, sendRejectionEmail } = await import("./email");
+    if (newStatus === "accepted") {
+      try {
+        const user = await storage.getUserByEmail(application.email);
+        if (user) await storage.updateUser(user.id, { role: "participant" });
+        await sendAcceptanceEmail(application.email, application.firstName, reviewNotes);
+      } catch (err) {
+        console.error("Failed to promote user or send acceptance email:", err);
+      }
+    } else if (newStatus === "rejected") {
+      try {
+        await sendRejectionEmail(application.email, application.firstName, reviewNotes);
+      } catch (err) {
+        console.error("Failed to send rejection email:", err);
+      }
+    }
+  }
+
   app.patch("/api/applications/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const newStatus = req.body.status;
+      const reviewNotes = req.body.reviewNotes;
       const application = await storage.updateApplication(req.params.id, req.body);
       if (!application) return res.status(404).json({ error: "Application not found" });
-
-      if (newStatus === "accepted") {
-        try {
-          const user = await storage.getUserByEmail(application.email);
-          if (user) {
-            await storage.updateUser(user.id, { role: "participant" });
-          }
-          const { sendAcceptanceEmail } = await import("./email");
-          await sendAcceptanceEmail(application.email, application.firstName);
-        } catch (innerError) {
-          console.error("Failed to promote user or send acceptance email:", innerError);
-        }
-      }
-
+      if (newStatus) await handleApplicationStatusChange(application, newStatus, reviewNotes);
       res.json(application);
     } catch (error) {
       res.status(500).json({ error: "Failed to update application" });
@@ -1809,22 +1816,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/admin/applications/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const newStatus = req.body.status;
+      const reviewNotes = req.body.reviewNotes;
       const application = await storage.updateApplication(req.params.id, req.body);
       if (!application) return res.status(404).json({ error: "Application not found" });
-
-      if (newStatus === "accepted") {
-        try {
-          const user = await storage.getUserByEmail(application.email);
-          if (user) {
-            await storage.updateUser(user.id, { role: "participant" });
-          }
-          const { sendAcceptanceEmail } = await import("./email");
-          await sendAcceptanceEmail(application.email, application.firstName);
-        } catch (innerError) {
-          console.error("Failed to promote user or send acceptance email:", innerError);
-        }
-      }
-
+      if (newStatus) await handleApplicationStatusChange(application, newStatus, reviewNotes);
       res.json(application);
     } catch (error) {
       console.error("PATCH /api/admin/applications/:id error:", error instanceof Error ? error.message : error);
