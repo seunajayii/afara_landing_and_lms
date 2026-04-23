@@ -17,8 +17,78 @@ import {
   Shield,
   UserCircle,
   Menu,
+  X,
+  Info,
 } from "lucide-react";
 import afaraLogo from "@assets/AFARA Image 1_1759521116826.png";
+
+const TEAM_ROLES = ["mentor", "facilitator", "admin", "superadmin"] as const;
+type TeamRole = typeof TEAM_ROLES[number];
+
+const ROLE_LABELS: Record<TeamRole, string> = {
+  mentor: "Mentor",
+  facilitator: "Facilitator",
+  admin: "Admin",
+  superadmin: "Super Admin",
+};
+
+const SESSION_KEY = "lms-view-notice-dismissed";
+
+function LMSViewNotice({ onNavigate }: { onNavigate?: () => void }) {
+  const { user, isAdmin } = useAuth();
+  const [dismissed, setDismissed] = useState(() => {
+    try { return sessionStorage.getItem(SESSION_KEY) === "true"; } catch { return false; }
+  });
+
+  if (!user || !TEAM_ROLES.includes(user.role as TeamRole)) return null;
+  if (dismissed) return null;
+
+  const roleLabel = ROLE_LABELS[user.role as TeamRole] ?? user.role;
+
+  const handleDismiss = () => {
+    try { sessionStorage.setItem(SESSION_KEY, "true"); } catch {}
+    setDismissed(true);
+  };
+
+  return (
+    <div className="mx-3 mt-3 rounded-md border border-[hsl(var(--primary)/0.25)] bg-[hsl(var(--primary)/0.07)] p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2 min-w-0">
+          <Info className="w-4 h-4 mt-0.5 shrink-0 text-[hsl(var(--primary))]" />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-foreground leading-snug">
+              Viewing as {roleLabel}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
+              You are currently in LMS mode.
+            </p>
+            {isAdmin && (
+              <Link href="/admin/dashboard" onClick={() => { handleDismiss(); onNavigate?.(); }}>
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="mt-2 h-7 text-xs gap-1.5 w-full"
+                  data-testid="button-switch-admin-view"
+                >
+                  <Shield className="w-3 h-3" />
+                  Switch to Admin View
+                </Button>
+              </Link>
+            )}
+          </div>
+        </div>
+        <button
+          onClick={handleDismiss}
+          className="shrink-0 text-muted-foreground hover:text-foreground transition-colors mt-0.5"
+          data-testid="button-dismiss-lms-notice"
+          aria-label="Dismiss"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const navItems = [
   { path: "/lms/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -66,6 +136,8 @@ function SidebarNav({ location, onNavigate }: { location: string; onNavigate?: (
           Initiative
         </p>
       </div>
+
+      <LMSViewNotice onNavigate={onNavigate} />
 
       <nav className="flex-1 p-4 overflow-y-auto">
         <div className="space-y-1">
