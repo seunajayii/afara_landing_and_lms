@@ -72,6 +72,7 @@ import {
   UserCog,
   Trash2,
   KeyRound,
+  AlertTriangle,
 } from "lucide-react";
 import type { User } from "@shared/schema";
 
@@ -100,7 +101,7 @@ function UserTableSkeleton() {
 
 export default function UserManagement() {
   const { toast } = useToast();
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, user: currentUser } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -109,6 +110,7 @@ export default function UserManagement() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const createForm = useForm<UserFormData>({
     resolver: zodResolver(userFormSchema),
@@ -223,10 +225,11 @@ export default function UserManagement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       setIsDeleteDialogOpen(false);
+      setDeleteConfirmText("");
       setSelectedUser(null);
       toast({
         title: "User Deleted",
-        description: "The user has been deleted successfully.",
+        description: "The user account has been permanently deleted.",
       });
     },
     onError: () => {
@@ -299,6 +302,7 @@ export default function UserManagement() {
 
   const openDeleteDialog = (user: User) => {
     setSelectedUser(user);
+    setDeleteConfirmText("");
     setIsDeleteDialogOpen(true);
   };
 
@@ -509,16 +513,18 @@ export default function UserManagement() {
                                     <UserCheck className="w-4 h-4 text-green-600" />
                                   )}
                                 </Button>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => openDeleteDialog(user)}
-                                  data-testid={`button-delete-user-${user.id}`}
-                                  disabled={deleteMutation.isPending}
-                                  title="Delete user"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
+                                {isSuperAdmin && user.id !== currentUser?.id && (
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => openDeleteDialog(user)}
+                                    data-testid={`button-delete-user-${user.id}`}
+                                    disabled={deleteMutation.isPending}
+                                    title="Delete user (Super Admin only)"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
                               </div>
                             </TableCell>
                           </TableRow>
@@ -801,26 +807,57 @@ export default function UserManagement() {
       </AlertDialog>
 
       {/* Delete User Confirmation Dialog */}
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete User</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete "{selectedUser?.firstName} {selectedUser?.lastName}"? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
+      <Dialog open={isDeleteDialogOpen} onOpenChange={(open) => {
+        setIsDeleteDialogOpen(open);
+        if (!open) setDeleteConfirmText("");
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-destructive" />
+              </div>
+              <DialogTitle className="text-destructive">Delete User Account</DialogTitle>
+            </div>
+            <DialogDescription className="pt-1">
+              This will <strong>permanently delete</strong> {selectedUser?.firstName} {selectedUser?.lastName}'s account and all associated data. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              To confirm, type <strong className="text-foreground">{selectedUser?.firstName} {selectedUser?.lastName}</strong> below:
+            </p>
+            <Input
+              placeholder="Type full name to confirm"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              data-testid="input-delete-confirm"
+              autoComplete="off"
+            />
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => { setIsDeleteDialogOpen(false); setDeleteConfirmText(""); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
               onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={
+                deleteMutation.isPending ||
+                deleteConfirmText !== `${selectedUser?.firstName} ${selectedUser?.lastName}`
+              }
               data-testid="button-confirm-delete-user"
             >
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              {deleteMutation.isPending ? "Deleting..." : "Permanently Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Reset Password Confirmation Dialog */}
       <AlertDialog open={isResetPasswordDialogOpen} onOpenChange={setIsResetPasswordDialogOpen}>

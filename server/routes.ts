@@ -212,6 +212,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   };
 
+  const requireSuperAdminRole = (req: Request, res: Response, next: NextFunction) => {
+    const role = req.session?.userRole;
+    if (role !== "superadmin") {
+      return res.status(403).json({ error: "Super admin access required" });
+    }
+    next();
+  };
+
   // Visibility filter helper
   const canAccessVisibility = (visibility: string | null, userRole: string | null): boolean => {
     const v = visibility || "community";
@@ -332,11 +340,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/users/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+  app.delete("/api/users/:id", requireAuth, requireSuperAdminRole, async (req: Request, res: Response) => {
     try {
+      if (req.params.id === req.session.userId) {
+        return res.status(400).json({ error: "You cannot delete your own account" });
+      }
       const user = await storage.getUser(req.params.id);
       if (!user) return res.status(404).json({ error: "User not found" });
-      
+
       await storage.deleteUser(req.params.id);
       res.json({ success: true, id: req.params.id });
     } catch (error) {
