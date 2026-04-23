@@ -478,9 +478,18 @@ export default function Apply() {
         setAlreadySubmitted(true);
         return;
       }
+      const msg = error instanceof Error ? error.message : String(error);
+      const isSizeError =
+        msg.includes("413") ||
+        msg.toLowerCase().includes("payload too large") ||
+        msg.toLowerCase().includes("request entity too large") ||
+        msg.toLowerCase().includes("size limit") ||
+        msg.toLowerCase().includes("too large");
       toast({
         title: "Submission Failed",
-        description: "There was an error submitting your application. Please try again.",
+        description: isSizeError
+          ? "Your submission is too large. This is usually caused by very long text answers or invalid links. Please shorten your longest responses and try again."
+          : "There was an error submitting your application. Please check your internet connection and try again. If the problem persists, save your draft and contact support.",
         variant: "destructive",
       });
     },
