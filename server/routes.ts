@@ -1835,6 +1835,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin-only: translate application text fields
+  app.post("/api/admin/translate", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const { texts, targetLang = "en" } = req.body;
+      if (!Array.isArray(texts)) return res.status(400).json({ error: "texts must be an array" });
+
+      const translateOne = async (text: string) => {
+        if (!text || text.trim().length < 3) return { translated: text, detectedLang: "en" };
+        try {
+          const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text.substring(0, 4800))}`;
+          const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+          if (!r.ok) return { translated: text, detectedLang: "unknown" };
+          const data = await r.json();
+          const translated = Array.isArray(data[0])
+            ? data[0].map((chunk: any[]) => chunk[0] ?? "").join("")
+            : text;
+          const detectedLang = data[2] || "unknown";
+          return { translated, detectedLang };
+        } catch {
+          return { translated: text, detectedLang: "unknown" };
+        }
+      };
+
+      const results = await Promise.all(texts.map(translateOne));
+      res.json({ results });
+    } catch (error) {
+      console.error("Translate error:", error);
+      res.status(500).json({ error: "Translation failed" });
+    }
+  });
+
   // Admin-only: delete application
   app.delete("/api/applications/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { AdminSidebar } from "@/components/AdminSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -68,6 +68,8 @@ import {
   Lightbulb,
   Calendar,
   Shield,
+  Languages,
+  Loader2,
 } from "lucide-react";
 import type { Application } from "@shared/schema";
 import { format } from "date-fns";
@@ -90,6 +92,41 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
   rejected: { label: "Rejected", variant: "destructive" },
   waitlisted: { label: "Waitlisted", variant: "secondary" },
 };
+
+// ─── Language detection ──────────────────────────────────────────────────────
+
+const LANG_LABELS: Record<string, string> = {
+  en: "English", fr: "French", es: "Spanish",
+  pt: "Portuguese", ar: "Arabic", sw: "Swahili",
+};
+
+function detectLanguage(text: string): string {
+  if (!text || text.trim().length < 15) return "en";
+  const t = text.toLowerCase();
+  // Arabic script
+  if (/[\u0600-\u06FF]/.test(text)) return "ar";
+  // French: accent chars + common function words
+  const frenchScore =
+    ((/[àâäéèêëîïôùûüçœæ]/i.test(text)) ? 3 : 0) +
+    (t.match(/\b(est|sont|avec|pour|dans|nous|vous|mais|donc|une|des|les|du|au|je|tu|il|elle|en|très|aussi|faire|aller|avoir|être|nous|notre|votre|tout|bien|même|plus|sans|sous|sur|par|qui|que|quoi|où|quand|comment)\b/g) || []).length;
+  const esScore = (t.match(/\b(es|está|son|con|para|pero|porque|que|como|donde|yo|tú|muy|también|no|una|las|los|del|esto|ese|ese|aquí)\b/g) || []).length;
+  const ptScore = (t.match(/\b(é|está|são|com|para|mas|porque|que|como|onde|eu|você|muito|também|não|uma|das|dos|isso|este)\b/g) || []).length;
+  const maxScore = Math.max(frenchScore, esScore, ptScore);
+  if (maxScore < 2) return "en";
+  if (frenchScore >= esScore && frenchScore >= ptScore) return "fr";
+  if (esScore >= ptScore) return "es";
+  return "pt";
+}
+
+const TEXT_FIELDS: (keyof Application)[] = [
+  "personalStatement","professionalBackground","keyResponsibilities","majorAchievements",
+  "teamLeadershipExperience","projectExperience","businessDescription","problemBeingSolved",
+  "tractionEvidence","targetMarket","scalabilityExplanation","growthPlans","revenueStreams",
+  "projectDescription","projectedImpact","businessImpact","primaryBeneficiaries",
+  "infrastructureGapContribution","womenOpportunitiesDescription","mainChallenges",
+  "keyActivitiesForNextStage","specificProgramOutcomes","commitmentManagementPlan",
+  "peerMentorshipImportance","whyAfaraIsRight","additionalInfo",
+];
 
 // ─── Helper components ──────────────────────────────────────────────────────
 
@@ -197,7 +234,52 @@ function ApplicationPreviewSheet({
   onClose: () => void;
   onUpdateStatus: (app: Application) => void;
 }) {
+  const [translatedApp, setTranslatedApp] = useState<Application | null>(null);
+  const [showTranslated, setShowTranslated] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [detectedLang, setDetectedLang] = useState<string>("en");
+  const lastTranslatedId = useRef<string | null>(null);
+
+  const appLang = app ? detectLanguage(
+    [app.personalStatement, app.businessDescription, app.problemBeingSolved]
+      .filter(Boolean).join(" ")
+  ) : "en";
+
+  const handleTranslate = async () => {
+    if (!app) return;
+    if (showTranslated) { setShowTranslated(false); return; }
+    if (translatedApp && lastTranslatedId.current === app.id) { setShowTranslated(true); return; }
+
+    setIsTranslating(true);
+    try {
+      const values = TEXT_FIELDS.map((f) => (app[f] as string) || "");
+      const res = await fetch("/api/admin/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ texts: values }),
+      });
+      if (!res.ok) throw new Error("Translation request failed");
+      const data = await res.json();
+      const results: { translated: string; detectedLang: string }[] = data.results;
+      const detected = results.find((r) => r.detectedLang && r.detectedLang !== "en" && r.detectedLang !== "unknown")?.detectedLang || "en";
+      setDetectedLang(detected);
+      const translated = { ...app };
+      TEXT_FIELDS.forEach((field, i) => {
+        if (results[i]?.translated) (translated as any)[field] = results[i].translated;
+      });
+      setTranslatedApp(translated as Application);
+      lastTranslatedId.current = app.id;
+      setShowTranslated(true);
+    } catch (e) {
+      console.error("Translation failed", e);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
   if (!app) return null;
+  const displayApp = showTranslated && translatedApp ? translatedApp : app;
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
@@ -233,11 +315,38 @@ function ApplicationPreviewSheet({
               </div>
             </div>
           </div>
-          <div className="pt-2">
+          <div className="pt-2 flex flex-wrap items-center gap-2">
             <Button size="sm" onClick={() => onUpdateStatus(app)} data-testid="button-sheet-update-status">
               Update Status / Add Notes
             </Button>
+            {appLang !== "en" && (
+              <Badge variant="outline" className="text-xs gap-1">
+                <Languages className="h-3 w-3" />
+                {LANG_LABELS[appLang] || appLang} detected
+              </Badge>
+            )}
+            <Button
+              size="sm"
+              variant={showTranslated ? "default" : "outline"}
+              onClick={handleTranslate}
+              disabled={isTranslating}
+              data-testid="button-translate"
+              className="gap-1.5"
+            >
+              {isTranslating ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Translating…</>
+              ) : showTranslated ? (
+                <><Languages className="h-3.5 w-3.5" /> Show original</>
+              ) : (
+                <><Languages className="h-3.5 w-3.5" /> Translate to English</>
+              )}
+            </Button>
           </div>
+          {showTranslated && detectedLang !== "en" && (
+            <div className="text-xs text-muted-foreground mt-1 italic">
+              Translated from {LANG_LABELS[detectedLang] || detectedLang} · Text fields only
+            </div>
+          )}
         </SheetHeader>
 
         {/* Body */}
@@ -277,7 +386,7 @@ function ApplicationPreviewSheet({
                 </Field>
               )}
             </Grid2>
-            <Field label="Personal Statement"><LongText value={app.personalStatement} /></Field>
+            <Field label="Personal Statement"><LongText value={displayApp.personalStatement} /></Field>
             {app.videoEssayUrl && (
               <Field label="Video Essay">
                 <a
@@ -308,14 +417,14 @@ function ApplicationPreviewSheet({
             {app.otherSubSector && (
               <Field label="Other Sub-Sector"><FieldValue>{app.otherSubSector}</FieldValue></Field>
             )}
-            <Field label="Professional Background"><LongText value={app.professionalBackground} /></Field>
-            <Field label="Key Responsibilities"><LongText value={app.keyResponsibilities} /></Field>
-            <Field label="Major Achievements"><LongText value={app.majorAchievements} /></Field>
+            <Field label="Professional Background"><LongText value={displayApp.professionalBackground} /></Field>
+            <Field label="Key Responsibilities"><LongText value={displayApp.keyResponsibilities} /></Field>
+            <Field label="Major Achievements"><LongText value={displayApp.majorAchievements} /></Field>
             {app.hasLedTeams && (
-              <Field label="Team Leadership Experience"><LongText value={app.teamLeadershipExperience} /></Field>
+              <Field label="Team Leadership Experience"><LongText value={displayApp.teamLeadershipExperience} /></Field>
             )}
             {app.hasProjectExperience && (
-              <Field label="Project Experience"><LongText value={app.projectExperience} /></Field>
+              <Field label="Project Experience"><LongText value={displayApp.projectExperience} /></Field>
             )}
           </SectionCard>
 
@@ -341,12 +450,12 @@ function ApplicationPreviewSheet({
             <Field label="Registration Proof">
               <FileLink url={app.registrationProofUrl} label="View Registration Document" />
             </Field>
-            <Field label="Business Description"><LongText value={app.businessDescription} /></Field>
-            <Field label="Problem Being Solved"><LongText value={app.problemBeingSolved} /></Field>
-            <Field label="Traction Evidence"><LongText value={app.tractionEvidence} /></Field>
-            <Field label="Target Market"><LongText value={app.targetMarket} /></Field>
-            <Field label="Scalability Explanation"><LongText value={app.scalabilityExplanation} /></Field>
-            <Field label="Growth Plans"><LongText value={app.growthPlans} /></Field>
+            <Field label="Business Description"><LongText value={displayApp.businessDescription} /></Field>
+            <Field label="Problem Being Solved"><LongText value={displayApp.problemBeingSolved} /></Field>
+            <Field label="Traction Evidence"><LongText value={displayApp.tractionEvidence} /></Field>
+            <Field label="Target Market"><LongText value={displayApp.targetMarket} /></Field>
+            <Field label="Scalability Explanation"><LongText value={displayApp.scalabilityExplanation} /></Field>
+            <Field label="Growth Plans"><LongText value={displayApp.growthPlans} /></Field>
           </SectionCard>
 
           {/* ── Section 4: Financial Documentation ── */}
@@ -357,7 +466,7 @@ function ApplicationPreviewSheet({
               <Field label="Keeps Financial Records"><YesNoBadge value={app.keepsFinancialRecords} /></Field>
               <Field label="Can Provide Financials"><YesNoBadge value={app.canProvideFinancials} /></Field>
             </Grid2>
-            <Field label="Revenue Streams"><LongText value={app.revenueStreams} /></Field>
+            <Field label="Revenue Streams"><LongText value={displayApp.revenueStreams} /></Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Incorporation Certificate">
                 <FileLink url={app.incorporationCertificateUrl} label="View Certificate" />
@@ -389,16 +498,16 @@ function ApplicationPreviewSheet({
             {app.otherProjectDocuments && (
               <Field label="Other Project Documents"><FieldValue>{app.otherProjectDocuments}</FieldValue></Field>
             )}
-            <Field label="Project Description"><LongText value={app.projectDescription} /></Field>
-            <Field label="Projected Impact"><LongText value={app.projectedImpact} /></Field>
-            <Field label="Business Impact"><LongText value={app.businessImpact} /></Field>
-            <Field label="Primary Beneficiaries"><LongText value={app.primaryBeneficiaries} /></Field>
+            <Field label="Project Description"><LongText value={displayApp.projectDescription} /></Field>
+            <Field label="Projected Impact"><LongText value={displayApp.projectedImpact} /></Field>
+            <Field label="Business Impact"><LongText value={displayApp.businessImpact} /></Field>
+            <Field label="Primary Beneficiaries"><LongText value={displayApp.primaryBeneficiaries} /></Field>
             <Field label="Infrastructure Gap Contribution">
-              <LongText value={app.infrastructureGapContribution} />
+              <LongText value={displayApp.infrastructureGapContribution} />
             </Field>
             {app.createsWomenOpportunities && (
               <Field label="Women Opportunities Description">
-                <LongText value={app.womenOpportunitiesDescription} />
+                <LongText value={displayApp.womenOpportunitiesDescription} />
               </Field>
             )}
           </SectionCard>
@@ -413,12 +522,12 @@ function ApplicationPreviewSheet({
             {app.otherSupportArea && (
               <Field label="Other Support Area"><FieldValue>{app.otherSupportArea}</FieldValue></Field>
             )}
-            <Field label="Main Challenges"><LongText value={app.mainChallenges} /></Field>
+            <Field label="Main Challenges"><LongText value={displayApp.mainChallenges} /></Field>
             <Field label="Key Activities for Next Stage">
-              <LongText value={app.keyActivitiesForNextStage} />
+              <LongText value={displayApp.keyActivitiesForNextStage} />
             </Field>
             <Field label="Specific Program Outcomes">
-              <LongText value={app.specificProgramOutcomes} />
+              <LongText value={displayApp.specificProgramOutcomes} />
             </Field>
           </SectionCard>
 
@@ -436,20 +545,20 @@ function ApplicationPreviewSheet({
               <Field label="Willing to Mentor Others"><YesNoBadge value={app.willingToMentor} /></Field>
             </Grid2>
             <Field label="Commitment Management Plan">
-              <LongText value={app.commitmentManagementPlan} />
+              <LongText value={displayApp.commitmentManagementPlan} />
             </Field>
             <Field label="Peer Mentorship Importance">
-              <LongText value={app.peerMentorshipImportance} />
+              <LongText value={displayApp.peerMentorshipImportance} />
             </Field>
             <Field label="Why AFÁRÁ is Right for Her">
-              <LongText value={app.whyAfaraIsRight} />
+              <LongText value={displayApp.whyAfaraIsRight} />
             </Field>
           </SectionCard>
 
           {/* Additional info if present */}
           {app.additionalInfo && (
             <SectionCard icon={FileText} title="Additional Information">
-              <LongText value={app.additionalInfo} />
+              <LongText value={displayApp.additionalInfo} />
             </SectionCard>
           )}
 
@@ -472,6 +581,7 @@ export default function ApplicationManagement() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
+  const [langFilter, setLangFilter] = useState("all");
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
@@ -531,9 +641,18 @@ export default function ApplicationManagement() {
       app.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       app.companyLegalName?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    if (activeTab === "all") return matchesSearch;
-    if (activeTab === "pending") return matchesSearch && (app.status === "submitted" || app.status === "under_review");
-    return matchesSearch && app.status === activeTab;
+    const appLang = detectLanguage(
+      [app.personalStatement, app.businessDescription, app.problemBeingSolved].filter(Boolean).join(" ")
+    );
+    const matchesLang =
+      langFilter === "all" ||
+      (langFilter === "en" && appLang === "en") ||
+      (langFilter === "non-en" && appLang !== "en") ||
+      langFilter === appLang;
+
+    if (activeTab === "all") return matchesSearch && matchesLang;
+    if (activeTab === "pending") return matchesSearch && matchesLang && (app.status === "submitted" || app.status === "under_review");
+    return matchesSearch && matchesLang && app.status === activeTab;
   });
 
   const stats = {
@@ -616,15 +735,32 @@ export default function ApplicationManagement() {
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <CardTitle>Applications</CardTitle>
-                <div className="relative w-full sm:w-64">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search applications..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9"
-                    data-testid="input-search-applications"
-                  />
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative w-full sm:w-56">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search applications..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-9"
+                      data-testid="input-search-applications"
+                    />
+                  </div>
+                  <Select value={langFilter} onValueChange={setLangFilter}>
+                    <SelectTrigger className="w-40 gap-1" data-testid="select-lang-filter">
+                      <Languages className="h-3.5 w-3.5 text-muted-foreground" />
+                      <SelectValue placeholder="Language" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All languages</SelectItem>
+                      <SelectItem value="en">English only</SelectItem>
+                      <SelectItem value="non-en">Non-English</SelectItem>
+                      <SelectItem value="fr">French</SelectItem>
+                      <SelectItem value="es">Spanish</SelectItem>
+                      <SelectItem value="pt">Portuguese</SelectItem>
+                      <SelectItem value="ar">Arabic</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </CardHeader>
@@ -661,7 +797,21 @@ export default function ApplicationManagement() {
                             <TableRow key={app.id} data-testid={`row-application-${app.id}`}>
                               <TableCell>
                                 <div>
-                                  <div className="font-medium">{app.firstName} {app.lastName}</div>
+                                  <div className="font-medium flex flex-wrap items-center gap-1.5">
+                                    {app.firstName} {app.lastName}
+                                    {(() => {
+                                      const lang = detectLanguage(
+                                        [app.personalStatement, app.businessDescription, app.problemBeingSolved].filter(Boolean).join(" ")
+                                      );
+                                      if (lang === "en") return null;
+                                      return (
+                                        <Badge variant="outline" className="text-xs font-normal gap-1 py-0">
+                                          <Languages className="h-2.5 w-2.5" />
+                                          {LANG_LABELS[lang] || lang}
+                                        </Badge>
+                                      );
+                                    })()}
+                                  </div>
                                   <div className="text-sm text-muted-foreground">{app.email}</div>
                                 </div>
                               </TableCell>
