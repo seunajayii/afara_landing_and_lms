@@ -216,15 +216,21 @@ function ApplicationPreviewSheet({
                 {app.companyName || app.companyLegalName || "No company name"} &middot; {app.email}
               </SheetDescription>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex flex-col items-end gap-1.5">
               <Badge variant={statusConfig[app.status]?.variant || "secondary"}>
                 {statusConfig[app.status]?.label || app.status}
               </Badge>
-              {app.submittedAt && (
-                <span className="text-xs text-muted-foreground">
-                  Submitted {format(new Date(app.submittedAt), "d MMM yyyy")}
-                </span>
-              )}
+              <div className="text-xs text-muted-foreground space-y-0.5 text-right">
+                {app.createdAt && (
+                  <div>Started: {format(new Date(app.createdAt), "d MMM yyyy, h:mm a")}</div>
+                )}
+                {app.submittedAt && (
+                  <div>Submitted: {format(new Date(app.submittedAt), "d MMM yyyy, h:mm a")}</div>
+                )}
+                {!app.submittedAt && (
+                  <div className="italic">Not yet submitted</div>
+                )}
+              </div>
             </div>
           </div>
           <div className="pt-2">
@@ -449,12 +455,9 @@ function ApplicationPreviewSheet({
 
           {/* Metadata footer */}
           <div className="pt-2 border-t text-xs text-muted-foreground flex flex-wrap gap-4">
-            <span>Application ID: <span className="font-mono">{app.id}</span></span>
-            {app.createdAt && (
-              <span>Created: {format(new Date(app.createdAt), "d MMM yyyy, HH:mm")}</span>
-            )}
+            <span>ID: <span className="font-mono">{app.id}</span></span>
             {app.updatedAt && (
-              <span>Last updated: {format(new Date(app.updatedAt), "d MMM yyyy, HH:mm")}</span>
+              <span>Last saved: {format(new Date(app.updatedAt), "d MMM yyyy, h:mm a")}</span>
             )}
           </div>
         </div>
@@ -647,6 +650,7 @@ export default function ApplicationManagement() {
                             <TableHead>Applicant</TableHead>
                             <TableHead>Company</TableHead>
                             <TableHead>Sector</TableHead>
+                            <TableHead>Started</TableHead>
                             <TableHead>Submitted</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
@@ -666,6 +670,14 @@ export default function ApplicationManagement() {
                                 <div className="text-sm text-muted-foreground">{app.companyCountry || ""}</div>
                               </TableCell>
                               <TableCell>{app.primarySector || "N/A"}</TableCell>
+                              <TableCell>
+                                <div className="text-sm">
+                                  {app.createdAt ? format(new Date(app.createdAt), "MMM d, yyyy") : "—"}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {app.createdAt ? format(new Date(app.createdAt), "h:mm a") : ""}
+                                </div>
+                              </TableCell>
                               <TableCell>
                                 {app.submittedAt ? format(new Date(app.submittedAt), "MMM d, yyyy") : "—"}
                               </TableCell>
