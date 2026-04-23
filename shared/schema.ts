@@ -351,10 +351,12 @@ export const applications = pgTable("applications", {
   // Section 3: Financial Documentation & Compliance
   isIncorporated: boolean("is_incorporated"),
   incorporationCertificateUrl: text("incorporation_certificate_url"),
+  registrationProofUrl: text("registration_proof_url"),
   revenueStreams: text("revenue_streams"),
   keepsFinancialRecords: boolean("keeps_financial_records"),
   pitchDeckUrl: text("pitch_deck_url"),
   businessPlanUrl: text("business_plan_url"),
+  financialStatementsUrl: text("financial_statements_url"),
   canProvideFinancials: boolean("can_provide_financials"),
   isTaxRegistered: boolean("is_tax_registered"),
   

@@ -1607,7 +1607,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/applications", async (req: Request, res: Response) => {
     try {
-      const raw = insertApplicationSchema.parse(req.body);
+      const normalized = normalizeApplicationBody(req.body);
+      const raw = insertApplicationSchema.parse(normalized);
       const data = { ...raw, email: raw.email.toLowerCase().trim() };
 
       if (data.status === "submitted") {
@@ -1642,6 +1643,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Normalize raw application body before DB writes:
+  // - converts "yes"/"no" strings to booleans for boolean columns
+  // - strips any keys not present in the applications table (avoids Drizzle unknown-column errors)
+  const KNOWN_APPLICATION_FIELDS = new Set([
+    "email","firstName","lastName","phone","countryOfOperation","companyName",
+    "roleInCompany","personalStatement","videoEssayUrl",
+    "professionalBackground","yearsOfExperience","keyResponsibilities",
+    "majorAchievements","hasLedTeams","teamLeadershipExperience",
+    "hasProjectExperience","projectExperience","primarySector",
+    "sectorSpecification","subSectors","otherSubSector",
+    "businessDescription","problemBeingSolved","businessStage",
+    "tractionEvidence","targetMarket","scalabilityExplanation",
+    "growthPlans","isRaisingFunding",
+    "companyLegalName","companyCountry","companyHeadquarters",
+    "incorporationYear","ownershipPercentage","numberOfShareholders",
+    "shareholdersOver25Percent",
+    "isIncorporated","incorporationCertificateUrl","registrationProofUrl",
+    "revenueStreams","keepsFinancialRecords","pitchDeckUrl","businessPlanUrl",
+    "financialStatementsUrl","canProvideFinancials","isTaxRegistered",
+    "projectDescription","projectLocation","projectSector",
+    "projectCurrentStatus","projectStage","projectDocuments",
+    "otherProjectDocuments","projectedImpact",
+    "businessImpact","primaryBeneficiaries","infrastructureGapContribution",
+    "createsWomenOpportunities","womenOpportunitiesDescription",
+    "mainChallenges","supportAreasNeeded","otherSupportArea",
+    "keyActivitiesForNextStage","fundingRequired","expectedTimeline",
+    "specificProgramOutcomes","hoursPerWeek","openToMentorship",
+    "canCommitToProgram","canAttendLagosEvent","commitmentManagementPlan",
+    "willingToMentor","peerMentorshipImportance",
+    "whyAfaraIsRight","linkedinUrl","additionalInfo",
+    "currentStep","status","reviewNotes","reviewedById",
+    "reviewedAt","updatedAt","submittedAt","lastDraftEmailSentAt",
+  ]);
+  const YES_NO_BOOLEAN_FIELDS = new Set(["canProvideFinancials","isTaxRegistered"]);
+
+  function normalizeApplicationBody(body: Record<string, unknown>): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(body)) {
+      if (!KNOWN_APPLICATION_FIELDS.has(key)) continue; // drop unknown fields
+      if (YES_NO_BOOLEAN_FIELDS.has(key)) {
+        if (value === "yes") { out[key] = true; continue; }
+        if (value === "no")  { out[key] = false; continue; }
+      }
+      out[key] = value;
+    }
+    return out;
+  }
+
   // Public: applicants save/submit their own draft (requires email ownership proof)
   app.patch("/api/applications/:id/save", async (req: Request, res: Response) => {
     try {
@@ -1673,9 +1722,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const updatePayload = req.body.email
+      const rawPayload = req.body.email
         ? { ...req.body, email: (req.body.email as string).toLowerCase().trim() }
         : req.body;
+      const updatePayload = normalizeApplicationBody(rawPayload);
       const application = await storage.updateApplication(req.params.id, updatePayload);
       if (!application) return res.status(404).json({ error: "Application not found" });
 
@@ -1717,6 +1767,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(application);
     } catch (error) {
+      console.error("Error in PATCH /api/applications/:id/save:", error);
       res.status(500).json({ error: "Failed to update application" });
     }
   });
