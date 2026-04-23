@@ -579,6 +579,206 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
   }
 }
 
+export async function sendWaitlistEmail(email: string, firstName?: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const name = firstName || 'there';
+    const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
+    const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
+    const mastheadSrc = 'cid:afara-masthead';
+    const communityUrl = 'https://afaraaccelerator.org/lms/community';
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>You're invited – AFÁRÁ Immersive Launch</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&display=swap" rel="stylesheet" />
+</head>
+<body style="margin:0;padding:0;background-color:#f5f4f0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f4f0;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;">
+
+          <!-- Masthead Image -->
+          <tr>
+            <td style="padding:0;margin:0;">
+              <img src="${mastheadSrc}" alt="AFÁRÁ" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />
+            </td>
+          </tr>
+
+          <!-- Green accent line -->
+          <tr>
+            <td style="background-color:#173a3a;height:4px;font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+
+          <!-- Main content -->
+          <tr>
+            <td style="padding:48px 48px 32px 48px;">
+
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#173a3a;line-height:1.3;">
+                You're invited to something special
+              </h1>
+
+              <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
+                Dear ${name},
+              </p>
+
+              <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
+                Thank you for your application to the <strong style="color:#173a3a;">AFÁRÁ Accelerator Program</strong>. Your application is on our waitlist as we complete the final selection process — and in the meantime, we have something we would love for you to be part of.
+              </p>
+
+              <p style="margin:0 0 32px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
+                We are hosting the <strong style="color:#173a3a;">Immersive Launch of AFÁRÁ's Inaugural Cohort</strong>, and we are extending a personal invitation to you.
+              </p>
+
+              <!-- Event highlight box -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;background-color:#173a3a;border-radius:4px;">
+                <tr>
+                  <td style="padding:32px 28px;">
+                    <p style="margin:0 0 4px 0;font-size:12px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#a8c4c4;">Save the dates</p>
+                    <p style="margin:8px 0 0 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:26px;font-weight:600;color:#ffffff;line-height:1.2;">19th &amp; 20th May 2026</p>
+                    <p style="margin:8px 0 0 0;font-size:14px;color:#c8dada;line-height:1.5;">AFÁRÁ Immersive Launch &mdash; Inaugural Cohort</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- What to expect -->
+              <h2 style="margin:0 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;color:#173a3a;">
+                What to expect over the two days
+              </h2>
+
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;">
+                <tr>
+                  <td style="padding:12px 0;vertical-align:top;width:24px;">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                  </td>
+                  <td style="padding:12px 0 12px 8px;vertical-align:top;">
+                    <p style="margin:0;font-size:15px;font-weight:600;color:#2d2d2d;line-height:1.5;">Keynote Addresses</p>
+                    <p style="margin:4px 0 0 0;font-size:14px;color:#555555;line-height:1.6;">Thought leaders and pioneers in Africa's energy and infrastructure sector share their vision for the future.</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 0;vertical-align:top;width:24px;">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                  </td>
+                  <td style="padding:12px 0 12px 8px;vertical-align:top;">
+                    <p style="margin:0;font-size:15px;font-weight:600;color:#2d2d2d;line-height:1.5;">Panel Sessions</p>
+                    <p style="margin:4px 0 0 0;font-size:14px;color:#555555;line-height:1.6;">Candid conversations on female-led entrepreneurship, funding, and building in Africa's most critical sectors.</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 0;vertical-align:top;width:24px;">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                  </td>
+                  <td style="padding:12px 0 12px 8px;vertical-align:top;">
+                    <p style="margin:0;font-size:15px;font-weight:600;color:#2d2d2d;line-height:1.5;">Final Project Pitches</p>
+                    <p style="margin:4px 0 0 0;font-size:14px;color:#555555;line-height:1.6;">Selected applicants from this pool will present their ventures to a panel of funders. Projects deemed viable will be funded on the day.</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Divider -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="border-top:1px solid #e8e4dd;padding:0;font-size:0;line-height:0;">&nbsp;</td>
+                </tr>
+              </table>
+
+              <!-- Cohort selection note -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:32px 0 32px 0;background-color:#f9f5f0;border-radius:4px;">
+                <tr>
+                  <td style="padding:24px 28px;">
+                    <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#173a3a;">What happens next</p>
+                    <p style="margin:0;font-size:15px;line-height:1.7;color:#2d2d2d;">
+                      Following this event, the final <strong style="color:#173a3a;">AFÁRÁ 2026 Cohort</strong> will be selected. Being on the waitlist keeps you firmly in the running — and attending the Immersive Launch is a wonderful opportunity to connect with the community and showcase who you are.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Community access note -->
+              <p style="margin:0 0 32px 0;font-size:15px;line-height:1.7;color:#2d2d2d;">
+                We have also added you to the <strong style="color:#173a3a;">AFÁRÁ Community</strong> so you can begin connecting with others in our network right away.
+              </p>
+
+              <!-- CTA Button -->
+              <table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;">
+                <tr>
+                  <td style="border-radius:4px;background-color:#173a3a;">
+                    <a href="${communityUrl}" style="display:inline-block;padding:14px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:4px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+                      Join the community
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:0;font-size:15px;line-height:1.7;color:#555555;">
+                For any questions about the event or your application, please reach out at
+                <a href="mailto:hello@afaraaccelerator.org" style="color:#173a3a;text-decoration:underline;">hello@afaraaccelerator.org</a>.
+              </p>
+
+            </td>
+          </tr>
+
+          <!-- Signature -->
+          <tr>
+            <td style="padding:0 48px 48px 48px;">
+              <p style="margin:32px 0 4px 0;font-size:15px;line-height:1.6;color:#2d2d2d;">Warm regards,</p>
+              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#173a3a;">
+                The AFÁRÁ Team
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#173a3a;padding:24px 48px;">
+              <p style="margin:0 0 6px 0;font-size:13px;line-height:1.6;color:#a8c4c4;">
+                AFÁRÁ is an initiative of
+                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>
+              </p>
+              <p style="margin:0;font-size:12px;color:#6a9090;">
+                &copy; ${new Date().getFullYear()} AFÁRÁ. All rights reserved.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+    const { data, error } = await client.emails.send({
+      from: fromEmail,
+      to: email,
+      subject: "You\u2019re invited \u2014 AF\u00C1R\u00C1 Immersive Launch, 19\u201320 May 2026",
+      html,
+      attachments: mastheadBuffer ? [
+        {
+          filename: 'afara-masthead.jpg',
+          content: mastheadBuffer.toString('base64'),
+          content_id: 'afara-masthead',
+        }
+      ] : [],
+    });
+
+    if (error) {
+      console.error('Waitlist email error:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Waitlist email failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 export async function sendContactNotificationEmail(data: {
   name: string;
   email: string;
