@@ -39,14 +39,18 @@ import FAQ from "@/pages/FAQ";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const [, navigate] = useLocation();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      navigate("/login", { replace: true });
+    if (!isLoading) {
+      if (!isAuthenticated) {
+        navigate("/login", { replace: true });
+      } else if (user?.mustChangePassword) {
+        navigate("/change-password", { replace: true });
+      }
     }
-  }, [isLoading, isAuthenticated, navigate]);
+  }, [isLoading, isAuthenticated, user, navigate]);
 
   if (isLoading) {
     return (
@@ -56,7 +60,7 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || user?.mustChangePassword) {
     return null;
   }
 
@@ -64,18 +68,20 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 }
 
 function AdminProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  const { isAuthenticated, isLoading, isAdmin } = useAuth();
+  const { isAuthenticated, isLoading, isAdmin, user } = useAuth();
   const [, navigate] = useLocation();
 
   useEffect(() => {
     if (!isLoading) {
       if (!isAuthenticated) {
         navigate("/login", { replace: true });
+      } else if (user?.mustChangePassword) {
+        navigate("/change-password", { replace: true });
       } else if (!isAdmin) {
         navigate("/lms/dashboard", { replace: true });
       }
     }
-  }, [isLoading, isAuthenticated, isAdmin, navigate]);
+  }, [isLoading, isAuthenticated, isAdmin, user, navigate]);
 
   if (isLoading) {
     return (
@@ -85,7 +91,7 @@ function AdminProtectedRoute({ component: Component }: { component: React.Compon
     );
   }
 
-  if (!isAuthenticated || !isAdmin) {
+  if (!isAuthenticated || !isAdmin || user?.mustChangePassword) {
     return null;
   }
 

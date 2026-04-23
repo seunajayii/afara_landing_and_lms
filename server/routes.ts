@@ -280,16 +280,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Email already registered" });
       }
 
+      const teamRoles = ["mentor", "facilitator", "admin", "superadmin"];
       const user = await createUserWithPassword(
         email.toLowerCase().trim(),
         password,
         firstName,
         lastName,
-        role
+        role,
+        teamRoles.includes(role) // mustChangePassword = true for team members
       );
 
       // Send welcome email with credentials for team roles (fire-and-forget)
-      const teamRoles = ["mentor", "facilitator", "admin", "superadmin"];
       if (teamRoles.includes(role)) {
         import("./email").then(({ sendTeamWelcomeEmail }) => {
           sendTeamWelcomeEmail(user.email, firstName, role, password).catch(err => {
