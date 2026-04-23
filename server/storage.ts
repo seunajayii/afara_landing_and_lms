@@ -31,7 +31,7 @@ import {
   applications
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, ne, desc, asc, sql } from "drizzle-orm";
+import { eq, and, ne, desc, asc, sql, or, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -198,6 +198,58 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteUser(id: string): Promise<void> {
+    // Step 1: Nullify optional FK references so records remain but lose the user link
+    await db.update(courses).set({ instructorId: null }).where(eq(courses.instructorId, id));
+    await db.update(events).set({ hostId: null }).where(eq(events.hostId, id));
+    await db.update(resources).set({ uploadedById: null }).where(eq(resources.uploadedById, id));
+    await db.update(certificates).set({ approvedById: null }).where(eq(certificates.approvedById, id));
+    await db.update(newsletterCampaigns).set({ sentById: null }).where(eq(newsletterCampaigns.sentById, id));
+    await db.update(applications).set({ reviewedById: null }).where(eq(applications.reviewedById, id));
+
+    // Step 2: Delete post likes by this user
+    await db.delete(postLikes).where(eq(postLikes.userId, id));
+
+    // Step 3: Clean up threads authored by this user (delete their posts + likes first, then threads)
+    const userThreads = await db.select({ id: discussionThreads.id }).from(discussionThreads).where(eq(discussionThreads.authorId, id));
+    if (userThreads.length > 0) {
+      const threadIds = userThreads.map(t => t.id);
+      const threadPosts = await db.select({ id: discussionPosts.id }).from(discussionPosts).where(inArray(discussionPosts.threadId, threadIds));
+      if (threadPosts.length > 0) {
+        await db.delete(postLikes).where(inArray(postLikes.postId, threadPosts.map(p => p.id)));
+      }
+      await db.delete(discussionPosts).where(inArray(discussionPosts.threadId, threadIds));
+      await db.delete(discussionThreads).where(eq(discussionThreads.authorId, id));
+    }
+
+    // Step 4: Delete posts authored by this user in other threads (and their likes)
+    const userPosts = await db.select({ id: discussionPosts.id }).from(discussionPosts).where(eq(discussionPosts.authorId, id));
+    if (userPosts.length > 0) {
+      await db.delete(postLikes).where(inArray(postLikes.postId, userPosts.map(p => p.id)));
+      await db.delete(discussionPosts).where(eq(discussionPosts.authorId, id));
+    }
+
+    // Step 5: Delete event registrations
+    await db.delete(eventRegistrations).where(eq(eventRegistrations.userId, id));
+
+    // Step 6: Delete mentorship records
+    await db.delete(mentorshipSessions).where(or(eq(mentorshipSessions.mentorId, id), eq(mentorshipSessions.menteeId, id)));
+    await db.delete(mentorshipRequests).where(or(eq(mentorshipRequests.menteeId, id), eq(mentorshipRequests.mentorId, id)));
+
+    // Step 7: Delete learning progress records
+    await db.delete(lessonProgress).where(eq(lessonProgress.userId, id));
+    await db.delete(enrollments).where(eq(enrollments.userId, id));
+
+    // Step 8: Delete achievements, notifications, and certificates
+    await db.delete(userAchievements).where(eq(userAchievements.userId, id));
+    await db.delete(notifications).where(eq(notifications.userId, id));
+    await db.delete(certificates).where(eq(certificates.userId, id));
+
+    // Step 9: Delete profile records
+    await db.delete(profiles).where(eq(profiles.userId, id));
+    await db.delete(mentorProfiles).where(eq(mentorProfiles.userId, id));
+    await db.delete(facilitatorProfiles).where(eq(facilitatorProfiles.userId, id));
+
+    // Step 10: Finally delete the user
     await db.delete(users).where(eq(users.id, id));
   }
 
