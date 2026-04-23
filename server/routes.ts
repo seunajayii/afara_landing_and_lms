@@ -1677,6 +1677,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "reviewedAt","updatedAt","submittedAt","lastDraftEmailSentAt",
   ]);
   const YES_NO_BOOLEAN_FIELDS = new Set(["canProvideFinancials","isTaxRegistered"]);
+  // Drizzle's PgTimestamp.mapToDriverValue calls .toISOString(), so these must be Date objects, not strings
+  const TIMESTAMP_FIELDS = new Set(["submittedAt","reviewedAt","lastDraftEmailSentAt"]);
 
   function normalizeApplicationBody(body: Record<string, unknown>): Record<string, unknown> {
     const out: Record<string, unknown> = {};
@@ -1685,6 +1687,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (YES_NO_BOOLEAN_FIELDS.has(key)) {
         if (value === "yes") { out[key] = true; continue; }
         if (value === "no")  { out[key] = false; continue; }
+      }
+      // Convert ISO timestamp strings to Date objects for Drizzle
+      if (TIMESTAMP_FIELDS.has(key) && typeof value === "string" && value) {
+        out[key] = new Date(value);
+        continue;
       }
       out[key] = value;
     }
