@@ -60,7 +60,7 @@ function LMSViewNotice({ onNavigate }: { onNavigate?: () => void }) {
               Viewing as {roleLabel}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
-              You are currently in LMS mode.
+              You are currently in Participant mode
             </p>
             {isAdmin && (
               <Link href="/admin/dashboard" onClick={() => { handleDismiss(); onNavigate?.(); }}>
