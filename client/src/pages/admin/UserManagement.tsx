@@ -270,7 +270,8 @@ export default function UserManagement() {
       user.email.toLowerCase().includes(searchQuery.toLowerCase());
     
     if (activeTab === "all") return matchesSearch;
-    if (activeTab === "admin") return matchesSearch && (user.role === "admin" || user.role === "superadmin");
+    if (activeTab === "admin") return matchesSearch && user.role === "admin";
+    if (activeTab === "superadmin") return matchesSearch && user.role === "superadmin";
     return matchesSearch && user.role === activeTab;
   }) || [];
 
@@ -370,7 +371,8 @@ export default function UserManagement() {
     participant: users?.filter(u => u.role === "participant").length || 0,
     mentor: users?.filter(u => u.role === "mentor").length || 0,
     facilitator: users?.filter(u => u.role === "facilitator").length || 0,
-    admin: users?.filter(u => u.role === "admin" || u.role === "superadmin").length || 0,
+    admin: users?.filter(u => u.role === "admin").length || 0,
+    superadmin: users?.filter(u => u.role === "superadmin").length || 0,
   };
 
   return (
@@ -425,6 +427,9 @@ export default function UserManagement() {
               </TabsTrigger>
               <TabsTrigger value="admin" data-testid="tab-admins">
                 Admins ({userCounts.admin})
+              </TabsTrigger>
+              <TabsTrigger value="superadmin" data-testid="tab-superadmins">
+                Super Admins ({userCounts.superadmin})
               </TabsTrigger>
             </TabsList>
 
