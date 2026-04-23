@@ -137,25 +137,26 @@ export default function UserManagement() {
 
   const createMutation = useMutation({
     mutationFn: async (data: UserFormData) => {
-      const res = await apiRequest("POST", "/api/auth/register", {
+      const res = await apiRequest("POST", "/api/admin/users", {
         email: data.email,
         password: data.password,
         firstName: data.firstName,
         lastName: data.lastName,
+        role: data.role,
       });
-      const result = await res.json();
-      if (data.role !== "participant") {
-        await apiRequest("PATCH", `/api/users/${result.user.id}`, { role: data.role });
-      }
-      return result;
+      return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       setIsCreateDialogOpen(false);
       createForm.reset();
+      const teamRoles = ["mentor", "facilitator", "admin", "superadmin"];
+      const sentEmail = teamRoles.includes(variables.role);
       toast({
         title: "User Created",
-        description: "The user has been created successfully.",
+        description: sentEmail
+          ? `Account created and login credentials emailed to ${variables.email}.`
+          : "The user account has been created successfully.",
       });
     },
     onError: (error: Error) => {

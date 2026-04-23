@@ -262,6 +262,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin-only endpoint: create a team member (mentor/facilitator/admin) with role set immediately
+  // and send a welcome email containing login credentials.
+  app.post("/api/admin/users", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const schema = z.object({
+        email: z.string().email(),
+        password: z.string().min(6),
+        firstName: z.string().min(1),
+        lastName: z.string().min(1),
+        role: z.enum(["community_member", "participant", "mentor", "facilitator", "admin", "superadmin"]),
+      });
+      const { email, password, firstName, lastName, role } = schema.parse(req.body);
+
+      const existing = await storage.getUserByEmail(email.toLowerCase().trim());
+      if (existing) {
+        return res.status(400).json({ error: "Email already registered" });
+      }
+
+      const user = await createUserWithPassword(
+        email.toLowerCase().trim(),
+        password,
+        firstName,
+        lastName,
+        role
+      );
+
+      // Send welcome email with credentials for team roles (fire-and-forget)
+      const teamRoles = ["mentor", "facilitator", "admin", "superadmin"];
+      if (teamRoles.includes(role)) {
+        import("./email").then(({ sendTeamWelcomeEmail }) => {
+          sendTeamWelcomeEmail(user.email, firstName, role, password).catch(err => {
+            console.error("Team welcome email failed:", err);
+          });
+        }).catch(err => console.error("Failed to import email module:", err));
+      }
+
+      const { passwordHash, ...safeUser } = user;
+      res.status(201).json({ user: safeUser });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create user" });
+    }
+  });
+
   app.patch("/api/users/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const user = await storage.updateUser(req.params.id, req.body);
