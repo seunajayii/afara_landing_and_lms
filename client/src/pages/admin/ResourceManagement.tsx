@@ -83,6 +83,8 @@ interface ResourceFileUploaderProps {
   onCleared: () => void;
 }
 
+const MAX_RESOURCE_SIZE = 4 * 1024 * 1024; // 4 MB
+
 function ResourceFileUploader({ current, onUploaded, onCleared }: ResourceFileUploaderProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -91,6 +93,17 @@ function ResourceFileUploader({ current, onUploaded, onCleared }: ResourceFileUp
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (file.size > MAX_RESOURCE_SIZE) {
+      toast({
+        title: "File too large",
+        description: "Files must be 4 MB or smaller. Please compress or reduce the file size before uploading.",
+        variant: "destructive",
+      });
+      e.target.value = "";
+      return;
+    }
+
     setUploading(true);
     try {
       const formData = new FormData();
@@ -158,7 +171,7 @@ function ResourceFileUploader({ current, onUploaded, onCleared }: ResourceFileUp
           <span className="text-sm font-medium">
             {uploading ? "Uploading…" : "Click to upload a file"}
           </span>
-          <span className="text-xs text-muted-foreground">PDF, DOCX, XLSX, PPTX, or any format — max 50 MB</span>
+          <span className="text-xs text-muted-foreground">PDF, DOCX, XLSX, PPTX, or any format — max 4 MB</span>
         </button>
       )}
     </div>

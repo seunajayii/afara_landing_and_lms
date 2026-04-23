@@ -952,7 +952,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Resource file upload
   const resourceUpload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
+    limits: { fileSize: 4 * 1024 * 1024 }, // 4 MB
   });
 
   app.post(
@@ -962,7 +962,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     (req: Request, res: Response, next: NextFunction) => {
       resourceUpload.single("file")(req, res, (err) => {
         if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
-          return res.status(400).json({ error: "File exceeds 50 MB limit" });
+          return res.status(400).json({ error: "File exceeds 4 MB limit. Please upload a smaller file." });
         }
         if (err) {
           return res.status(400).json({ error: err.message || "Upload error" });
@@ -1509,7 +1509,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Application file upload (public – no auth required, anyone filling the form can upload)
   const applicationFileUpload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+    limits: { fileSize: 4 * 1024 * 1024 }, // 4 MB
   });
 
   app.post(
@@ -1517,7 +1517,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     (req: Request, res: Response, next: NextFunction) => {
       applicationFileUpload.single("file")(req, res, (err) => {
         if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
-          return res.status(400).json({ error: "File exceeds 20 MB limit" });
+          return res.status(400).json({ error: "File exceeds 4 MB limit. Please upload a smaller file." });
         }
         if (err) {
           return res.status(400).json({ error: err.message || "Upload error" });
@@ -2028,7 +2028,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Avatar upload endpoint
   const avatarUpload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 500 * 1024 },
+    limits: { fileSize: 4 * 1024 * 1024 }, // 4 MB
     fileFilter: (_req, file, cb) => {
       const allowed = ["image/jpeg", "image/png", "image/webp"];
       if (allowed.includes(file.mimetype)) {
@@ -2045,7 +2045,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     (req: Request, res: Response, next: NextFunction) => {
       avatarUpload.single("avatar")(req, res, (err) => {
         if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
-          return res.status(400).json({ error: "File exceeds 500 KB limit" });
+          return res.status(400).json({ error: "File exceeds 4 MB limit. Please upload a smaller file." });
         }
         if (err) {
           return res.status(400).json({ error: err.message || "Upload error" });

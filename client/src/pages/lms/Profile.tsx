@@ -9,7 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Camera, Loader2, User } from "lucide-react";
 
-const MAX_FILE_SIZE = 500 * 1024;
+const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4 MB
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ROLE_LABELS: Record<string, string> = {
   superadmin: "Super Admin",
@@ -55,7 +55,7 @@ export default function Profile() {
     if (file.size > MAX_FILE_SIZE) {
       toast({
         title: "File too large",
-        description: "Profile photos must be 500 KB or smaller.",
+        description: "Profile photos must be 4 MB or smaller.",
         variant: "destructive",
       });
       e.target.value = "";
@@ -117,7 +117,7 @@ export default function Profile() {
           <Card>
             <CardHeader>
               <CardTitle>Profile Photo</CardTitle>
-              <CardDescription>JPEG, PNG, or WebP — max 500 KB</CardDescription>
+              <CardDescription>JPEG, PNG, or WebP — max 4 MB</CardDescription>
             </CardHeader>
             <CardContent className="flex items-center gap-6">
               <input
