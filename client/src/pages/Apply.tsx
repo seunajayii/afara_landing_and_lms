@@ -56,7 +56,9 @@ import {
   Mail,
   RotateCcw,
   Search,
-  ClipboardList
+  ClipboardList,
+  Pencil,
+  ExternalLink,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -917,7 +919,7 @@ export default function Apply() {
       case 6:
         return <CommitmentSection form={form} />;
       case 7:
-        return <PreviewSection form={form} />;
+        return <PreviewSection form={form} onEditSection={setCurrentStep} />;
       default:
         return null;
     }
@@ -2721,240 +2723,315 @@ function CommitmentSection({ form }: { form: ReturnType<typeof useForm<Applicati
   );
 }
 
-function PreviewSection({ form }: { form: ReturnType<typeof useForm<ApplicationFormData>> }) {
+function PreviewSection({
+  form,
+  onEditSection,
+}: {
+  form: ReturnType<typeof useForm<ApplicationFormData>>;
+  onEditSection: (step: number) => void;
+}) {
   const values = form.getValues();
 
-  const renderValue = (value: unknown) => {
-    if (value === undefined || value === null || value === "") {
-      return <span className="text-muted-foreground italic">Not provided</span>;
-    }
-    if (typeof value === "boolean") {
-      return value ? "Yes" : "No";
-    }
-    if (Array.isArray(value)) {
-      return value.length > 0 ? value.join(", ") : <span className="text-muted-foreground italic">None selected</span>;
-    }
-    return String(value);
+  // ── Display primitives ───────────────────────────────────────────────────
+  const BooleanBadge = ({ value }: { value: boolean | undefined | null }) => {
+    if (value === undefined || value === null)
+      return <span className="text-muted-foreground italic text-sm">Not answered</span>;
+    return (
+      <Badge variant={value ? "default" : "secondary"} className="text-xs font-medium">
+        {value ? "Yes" : "No"}
+      </Badge>
+    );
   };
 
+  const ArrayBadges = ({ value }: { value: string[] | undefined }) => {
+    if (!value || value.length === 0)
+      return <span className="text-muted-foreground italic text-sm">None selected</span>;
+    return (
+      <div className="flex flex-wrap gap-1">
+        {value.map((v, i) => (
+          <Badge key={i} variant="outline" className="text-xs">
+            {v}
+          </Badge>
+        ))}
+      </div>
+    );
+  };
+
+  const FieldVal = ({ value }: { value: unknown }) => {
+    if (value === undefined || value === null || value === "")
+      return <span className="text-muted-foreground italic text-sm">Not provided</span>;
+    if (typeof value === "boolean") return <BooleanBadge value={value} />;
+    if (Array.isArray(value)) return <ArrayBadges value={value as string[]} />;
+    return <span className="text-sm">{String(value)}</span>;
+  };
+
+  // A standard label + value pair
+  const F = ({
+    label,
+    value,
+    wide = false,
+  }: {
+    label: string;
+    value: unknown;
+    wide?: boolean;
+  }) => (
+    <div className={wide ? "col-span-full" : ""}>
+      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
+      <FieldVal value={value} />
+    </div>
+  );
+
+  // Long narrative text block — only renders if non-empty
+  const TextBlock = ({ label, value }: { label: string; value: string | undefined | null }) => {
+    if (!value) return null;
+    return (
+      <div className="col-span-full">
+        <p className="text-xs text-muted-foreground mb-1">{label}</p>
+        <p className="text-sm leading-relaxed bg-muted/40 rounded-md px-3 py-2 whitespace-pre-wrap">
+          {value}
+        </p>
+      </div>
+    );
+  };
+
+  // File upload indicator
+  const FileF = ({ label, url }: { label: string; url: string | undefined | null }) => (
+    <div>
+      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
+      {url ? (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-primary flex items-center gap-1 hover:underline"
+        >
+          <Paperclip className="w-3 h-3" />
+          Document uploaded
+          <ExternalLink className="w-3 h-3 opacity-60" />
+        </a>
+      ) : (
+        <span className="text-muted-foreground italic text-sm">Not uploaded</span>
+      )}
+    </div>
+  );
+
+  // Reusable section card wrapper
+  const SectionCard = ({
+    step,
+    icon: Icon,
+    title,
+    children,
+  }: {
+    step: number;
+    icon: React.ElementType;
+    title: string;
+    children: React.ReactNode;
+  }) => (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <Icon className="w-4 h-4 text-primary" />
+          </div>
+          <CardTitle className="text-base">{title}</CardTitle>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onEditSection(step)}
+          data-testid={`button-edit-section-${step}`}
+        >
+          <Pencil className="w-3 h-3 mr-1.5" />
+          Edit section
+        </Button>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">{children}</div>
+      </CardContent>
+    </Card>
+  );
+
+  // Sub-section divider inside a card
+  const SubHeading = ({ label }: { label: string }) => (
+    <div className="col-span-full border-t pt-4 mt-1">
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+        {label}
+      </p>
+    </div>
+  );
+
   return (
-    <div className="space-y-6">
-      <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
-        <p className="text-sm">
-          Please review your application before submitting. You can go back to any section to make changes.
+    <div className="space-y-4">
+      {/* Banner */}
+      <div className="p-4 bg-primary/5 rounded-md border border-primary/20">
+        <p className="text-sm font-medium text-primary mb-0.5">Review your application</p>
+        <p className="text-sm text-muted-foreground">
+          Check every section carefully. Use the Edit buttons to go back and make changes before
+          you submit.
         </p>
       </div>
 
-      <div className="space-y-6">
-        {/* Personal Info */}
-        <div>
-          <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-            <User className="w-4 h-4" /> Personal Information
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <div><span className="font-medium">Name:</span> {values.firstName} {values.lastName}</div>
-            <div><span className="font-medium">Email:</span> {values.email}</div>
-            <div><span className="font-medium">Phone:</span> {renderValue(values.phone)}</div>
-            <div><span className="font-medium">LinkedIn:</span> {renderValue(values.linkedinUrl)}</div>
-            <div><span className="font-medium">Country of Operation:</span> {renderValue(values.countryOfOperation)}</div>
-            <div><span className="font-medium">Company / Project:</span> {renderValue(values.companyName)}</div>
-            <div><span className="font-medium">Role:</span> {renderValue(values.roleInCompany)}</div>
-          </div>
-          {values.personalStatement && (
-            <div className="mt-2 text-sm">
-              <span className="font-medium">Personal Statement:</span>
-              <p className="mt-1 text-muted-foreground">{values.personalStatement}</p>
-            </div>
-          )}
-          {values.videoEssayUrl && (
-            <div className="mt-2 text-sm">
-              <span className="font-medium">Video Essay:</span> {values.videoEssayUrl}
-            </div>
-          )}
-        </div>
+      {/* ── Section 1: Personal Information ─────────────────────────────── */}
+      <SectionCard step={0} icon={User} title="Personal Information">
+        <F label="First Name" value={values.firstName} />
+        <F label="Last Name" value={values.lastName} />
+        <F label="Email Address" value={values.email} />
+        <F label="Phone Number" value={values.phone} />
+        <F label="LinkedIn Profile URL" value={values.linkedinUrl} />
+        <F label="Country of Operation" value={values.countryOfOperation} />
+        <F label="Company / Project Name" value={values.companyName} />
+        <F label="Role in Company" value={values.roleInCompany} />
+        <TextBlock label="Personal Statement" value={values.personalStatement} />
+        <TextBlock label="Video Essay URL" value={values.videoEssayUrl} />
+      </SectionCard>
 
-        <Separator />
+      {/* ── Section 2: Background & Sector ──────────────────────────────── */}
+      <SectionCard step={1} icon={Briefcase} title="Background & Sector Experience">
+        <F
+          label="Years of Professional Experience"
+          value={
+            values.yearsOfExperience !== undefined ? `${values.yearsOfExperience} years` : undefined
+          }
+        />
+        <F label="Primary Sector" value={values.primarySector} />
+        <F label="Sector Specification" value={values.sectorSpecification} />
+        <F label="Sub-sectors" value={values.subSectors} wide />
+        <F label="Other Sub-sector" value={values.otherSubSector} />
+        <F label="Has Led Teams" value={values.hasLedTeams} />
+        <F label="Has Direct Project Experience" value={values.hasProjectExperience} />
+        <TextBlock label="Professional Background" value={values.professionalBackground} />
+        <TextBlock label="Key Responsibilities" value={values.keyResponsibilities} />
+        <TextBlock label="Major Achievements" value={values.majorAchievements} />
+        {values.hasLedTeams && (
+          <TextBlock label="Team Leadership Experience" value={values.teamLeadershipExperience} />
+        )}
+        {values.hasProjectExperience && (
+          <TextBlock label="Project Experience Details" value={values.projectExperience} />
+        )}
+      </SectionCard>
 
-        {/* Background */}
-        <div>
-          <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-            <Briefcase className="w-4 h-4" /> Background & Sector Experience
-          </h3>
-          <div className="space-y-2 text-sm">
-            <div><span className="font-medium">Years of Experience:</span> {renderValue(values.yearsOfExperience)}</div>
-            <div><span className="font-medium">Primary Sector:</span> {renderValue(values.primarySector)}</div>
-            <div><span className="font-medium">Sub-sectors:</span> {renderValue(values.subSectors)}</div>
-            <div><span className="font-medium">Led Teams:</span> {renderValue(values.hasLedTeams)}</div>
-            <div><span className="font-medium">Project Experience:</span> {renderValue(values.hasProjectExperience)}</div>
-          </div>
-          {values.majorAchievements && (
-            <div className="mt-2 text-sm">
-              <span className="font-medium">Major Achievements:</span>
-              <p className="mt-1 text-muted-foreground">{values.majorAchievements}</p>
-            </div>
-          )}
-          {values.professionalBackground && (
-            <div className="mt-2 text-sm">
-              <span className="font-medium">Professional Journey:</span>
-              <p className="mt-1 text-muted-foreground">{values.professionalBackground}</p>
-            </div>
-          )}
-        </div>
+      {/* ── Section 3: Business Overview & Ownership ────────────────────── */}
+      <SectionCard step={2} icon={Building2} title="Business Overview & Ownership">
+        <F label="Business Stage" value={values.businessStage} />
+        <F label="Target Market" value={values.targetMarket} />
+        <F label="Currently Raising Funding" value={values.isRaisingFunding} />
+        <TextBlock label="Business Description" value={values.businessDescription} />
+        <TextBlock label="Problem Being Solved" value={values.problemBeingSolved} />
+        <TextBlock label="Traction Evidence" value={values.tractionEvidence} />
+        <TextBlock label="Scalability Explanation" value={values.scalabilityExplanation} />
+        <TextBlock label="Growth Plans" value={values.growthPlans} />
 
-        <Separator />
+        <SubHeading label="Ownership & Legal Details" />
+        <F label="Company Legal Name" value={values.companyLegalName} />
+        <F label="Country of Registration" value={values.companyCountry} />
+        <F label="Headquarters Location" value={values.companyHeadquarters} />
+        <F label="Year of Incorporation" value={values.incorporationYear} />
+        <F
+          label="Founder Ownership %"
+          value={
+            values.ownershipPercentage !== undefined
+              ? `${values.ownershipPercentage}%`
+              : undefined
+          }
+        />
+        <F label="Number of Shareholders" value={values.numberOfShareholders} />
+        <F label="Shareholders Holding Over 25%" value={values.shareholdersOver25Percent} />
+        <FileF label="Proof of Registration / Ownership" url={values.registrationProofUrl} />
+      </SectionCard>
 
-        {/* Business Overview */}
-        <div>
-          <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-            <Building2 className="w-4 h-4" /> Business / Project Overview
-          </h3>
-          <div className="space-y-2 text-sm">
-            <div><span className="font-medium">Business Stage:</span> {renderValue(values.businessStage)}</div>
-            <div><span className="font-medium">Target Market:</span> {renderValue(values.targetMarket)}</div>
-            <div><span className="font-medium">Raising Funding:</span> {renderValue(values.isRaisingFunding)}</div>
-          </div>
-          {values.businessDescription && (
-            <div className="mt-2 text-sm">
-              <span className="font-medium">Business Description:</span>
-              <p className="mt-1 text-muted-foreground">{values.businessDescription}</p>
-            </div>
-          )}
-          {values.tractionEvidence && (
-            <div className="mt-2 text-sm">
-              <span className="font-medium">Traction Evidence:</span>
-              <p className="mt-1 text-muted-foreground">{values.tractionEvidence}</p>
-            </div>
-          )}
-          {values.growthPlans && (
-            <div className="mt-2 text-sm">
-              <span className="font-medium">Growth Plans:</span>
-              <p className="mt-1 text-muted-foreground">{values.growthPlans}</p>
-            </div>
-          )}
-        </div>
+      {/* ── Section 4: Financial Documentation ──────────────────────────── */}
+      <SectionCard step={3} icon={FileText} title="Financial Documentation">
+        <F label="Business Formally Incorporated" value={values.isIncorporated} />
+        <F label="Keeps Formal Financial Records" value={values.keepsFinancialRecords} />
+        <F
+          label="Can Provide Financial Statements"
+          value={
+            values.canProvideFinancials === "yes"
+              ? true
+              : values.canProvideFinancials === "no"
+              ? false
+              : undefined
+          }
+        />
+        <F
+          label="Registered for Tax"
+          value={
+            values.isTaxRegistered === "yes"
+              ? true
+              : values.isTaxRegistered === "no"
+              ? false
+              : undefined
+          }
+        />
+        <TextBlock label="Revenue Streams / Business Model" value={values.revenueStreams} />
 
-        <Separator />
+        <SubHeading label="Uploaded Documents" />
+        <FileF label="Incorporation Certificate" url={values.incorporationCertificateUrl} />
+        <FileF label="Pitch Deck" url={values.pitchDeckUrl} />
+        <FileF label="Business Plan" url={values.businessPlanUrl} />
+        <FileF label="Financial Statements" url={values.financialStatementsUrl} />
+      </SectionCard>
 
-        {/* Ownership */}
-        <div>
-          <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-            <Building2 className="w-4 h-4" /> Ownership & Operations
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <div><span className="font-medium">Legal Name:</span> {renderValue(values.companyLegalName)}</div>
-            <div><span className="font-medium">Country:</span> {renderValue(values.companyCountry)}</div>
-            <div><span className="font-medium">Headquarters:</span> {renderValue(values.companyHeadquarters)}</div>
-            <div><span className="font-medium">Incorporation Year:</span> {renderValue(values.incorporationYear)}</div>
-            <div><span className="font-medium">Ownership %:</span> {renderValue(values.ownershipPercentage)}</div>
-            <div><span className="font-medium">Proof of Registration:</span> {values.registrationProofUrl ? "Uploaded" : "Not provided"}</div>
-          </div>
-        </div>
+      {/* ── Section 5: Project Readiness & Impact ───────────────────────── */}
+      <SectionCard step={4} icon={Target} title="Project Readiness & Impact">
+        <F label="Project Location" value={values.projectLocation} />
+        <F label="Project Sector" value={values.projectSector} />
+        <F label="Project Stage" value={values.projectStage} />
+        <F label="Current Project Status" value={values.projectCurrentStatus} />
+        <F label="Creates Opportunities for Women" value={values.createsWomenOpportunities} />
+        <F label="Supporting Documents" value={values.projectDocuments} wide />
+        <TextBlock label="Project Description" value={values.projectDescription} />
+        <TextBlock label="Projected Impact" value={values.projectedImpact} />
+        <TextBlock label="Business / Social Impact" value={values.businessImpact} />
+        <TextBlock label="Primary Beneficiaries" value={values.primaryBeneficiaries} />
+        <TextBlock
+          label="Contribution to Infrastructure Gap"
+          value={values.infrastructureGapContribution}
+        />
+        {values.createsWomenOpportunities && (
+          <TextBlock
+            label="Women Opportunities — Details"
+            value={values.womenOpportunitiesDescription}
+          />
+        )}
+      </SectionCard>
 
-        <Separator />
+      {/* ── Section 6: Support Needs ─────────────────────────────────────── */}
+      <SectionCard step={5} icon={Handshake} title="Support Needs & Programme Fit">
+        <F label="Funding Required" value={values.fundingRequired} />
+        <F label="Expected Timeline" value={values.expectedTimeline} />
+        <F label="Support Areas Needed" value={values.supportAreasNeeded} wide />
+        <F label="Other Support Area" value={values.otherSupportArea} />
+        <TextBlock label="Main Challenges" value={values.mainChallenges} />
+        <TextBlock label="Key Activities for Next Stage" value={values.keyActivitiesForNextStage} />
+      </SectionCard>
 
-        {/* Financial */}
-        <div>
-          <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-            <FileText className="w-4 h-4" /> Financial Documentation
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <div><span className="font-medium">Keeps Financial Records:</span> {renderValue(values.keepsFinancialRecords)}</div>
-            <div><span className="font-medium">Can Provide Financials:</span> {values.canProvideFinancials === "yes" ? "Yes" : values.canProvideFinancials === "no" ? "No" : "Not answered"}</div>
-            {values.canProvideFinancials === "yes" && <div><span className="font-medium">Financial Statements:</span> {values.financialStatementsUrl ? "Uploaded" : "Not provided"}</div>}
-            <div><span className="font-medium">Tax Registered:</span> {values.isTaxRegistered === "yes" ? "Yes" : values.isTaxRegistered === "no" ? "No" : "Not answered"}</div>
-            <div><span className="font-medium">Pitch Deck:</span> {values.pitchDeckUrl ? "Uploaded" : "Not provided"}</div>
-            <div><span className="font-medium">Business Plan:</span> {values.businessPlanUrl ? "Uploaded" : "Not provided"}</div>
-            <div><span className="font-medium">Inc. Certificate:</span> {values.incorporationCertificateUrl ? "Uploaded" : "Not provided"}</div>
-          </div>
-          {values.revenueStreams && (
-            <div className="mt-2 text-sm">
-              <span className="font-medium">Business Model:</span>
-              <p className="mt-1 text-muted-foreground">{values.revenueStreams}</p>
-            </div>
-          )}
-        </div>
-
-        <Separator />
-
-        {/* Project Readiness */}
-        <div>
-          <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-            <Target className="w-4 h-4" /> Project Readiness & Impact
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <div><span className="font-medium">Location:</span> {renderValue(values.projectLocation)}</div>
-            <div><span className="font-medium">Sector:</span> {renderValue(values.projectSector)}</div>
-            <div><span className="font-medium">Stage:</span> {renderValue(values.projectStage)}</div>
-            <div><span className="font-medium">Documents:</span> {renderValue(values.projectDocuments)}</div>
-            <div><span className="font-medium">Creates Women Opportunities:</span> {renderValue(values.createsWomenOpportunities)}</div>
-          </div>
-          {values.projectDescription && (
-            <div className="mt-2 text-sm">
-              <span className="font-medium">Project Description:</span>
-              <p className="mt-1 text-muted-foreground">{values.projectDescription}</p>
-            </div>
-          )}
-          {values.businessImpact && (
-            <div className="mt-2 text-sm">
-              <span className="font-medium">Business Impact:</span>
-              <p className="mt-1 text-muted-foreground">{values.businessImpact}</p>
-            </div>
-          )}
-          {values.primaryBeneficiaries && (
-            <div className="mt-2 text-sm">
-              <span className="font-medium">Primary Beneficiaries:</span>
-              <p className="mt-1 text-muted-foreground">{values.primaryBeneficiaries}</p>
-            </div>
-          )}
-        </div>
-
-        <Separator />
-
-        {/* Support Needs */}
-        <div>
-          <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-            <Handshake className="w-4 h-4" /> Support Needs
-          </h3>
-          <div className="space-y-2 text-sm">
-            <div><span className="font-medium">Support Areas:</span> {renderValue(values.supportAreasNeeded)}</div>
-            <div><span className="font-medium">Funding Required:</span> {renderValue(values.fundingRequired)}</div>
-          </div>
-          {values.mainChallenges && (
-            <div className="mt-2 text-sm">
-              <span className="font-medium">Main Challenges:</span>
-              <p className="mt-1 text-muted-foreground">{values.mainChallenges}</p>
-            </div>
-          )}
-        </div>
-
-        <Separator />
-
-        {/* Commitment */}
-        <div>
-          <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-            <HelpCircle className="w-4 h-4" /> Founder Commitment
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <div><span className="font-medium">Hours per Week:</span> {renderValue(values.hoursPerWeek)}</div>
-            <div><span className="font-medium">Open to Mentorship:</span> {renderValue(values.openToMentorship)}</div>
-            <div><span className="font-medium">Commit to Program:</span> {renderValue(values.canCommitToProgram)}</div>
-            <div><span className="font-medium">Attend Lagos Event:</span> {renderValue(values.canAttendLagosEvent)}</div>
-            <div><span className="font-medium">Willing to Mentor Others:</span> {renderValue(values.willingToMentor)}</div>
-          </div>
-          {values.specificProgramOutcomes && (
-            <div className="mt-2 text-sm">
-              <span className="font-medium">Specific Outcomes Sought:</span>
-              <p className="mt-1 text-muted-foreground">{values.specificProgramOutcomes}</p>
-            </div>
-          )}
-          {values.whyAfaraIsRight && (
-            <div className="mt-2 text-sm">
-              <span className="font-medium">Why AFÁRA:</span>
-              <p className="mt-1 text-muted-foreground">{values.whyAfaraIsRight}</p>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* ── Section 7: Founder Commitment ───────────────────────────────── */}
+      <SectionCard step={6} icon={HelpCircle} title="Founder Commitment">
+        <F
+          label="Hours Available per Week"
+          value={
+            values.hoursPerWeek !== undefined ? `${values.hoursPerWeek} hours` : undefined
+          }
+        />
+        <F label="Open to Mentorship" value={values.openToMentorship} />
+        <F label="Can Commit to Full Programme" value={values.canCommitToProgram} />
+        <F label="Can Attend Lagos Event" value={values.canAttendLagosEvent} />
+        <F label="Willing to Mentor Other Founders" value={values.willingToMentor} />
+        <TextBlock
+          label="Specific Programme Outcomes Sought"
+          value={values.specificProgramOutcomes}
+        />
+        <TextBlock
+          label="Commitment Management Plan"
+          value={values.commitmentManagementPlan}
+        />
+        <TextBlock
+          label="Importance of Peer Mentorship"
+          value={values.peerMentorshipImportance}
+        />
+        <TextBlock label="Why AFÁRA is Right for You" value={values.whyAfaraIsRight} />
+      </SectionCard>
     </div>
   );
 }
