@@ -332,8 +332,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { hashPassword } = await import("./auth");
       const DEFAULT_PASSWORD = "Admin123!";
       const passwordHash = await hashPassword(DEFAULT_PASSWORD);
-      const user = await storage.updateUser(req.params.id, { passwordHash, mustChangePassword: false });
+      // Always enforce password change on next login when an admin resets a password
+      const user = await storage.updateUser(req.params.id, { passwordHash, mustChangePassword: true });
       if (!user) return res.status(404).json({ error: "User not found" });
+      // Send notification email so the user knows to expect the forced change
+      try {
+        const { sendAdminPasswordResetNotificationEmail } = await import("./email");
+        const baseUrl = req.headers.origin || `${req.protocol}://${req.get("host")}`;
+        await sendAdminPasswordResetNotificationEmail(user.email, user.firstName, `${baseUrl}/login`);
+      } catch (emailErr) {
+        console.error("Failed to send password reset notification email:", emailErr);
+      }
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to reset password" });

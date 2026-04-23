@@ -889,3 +889,138 @@ export async function sendPasswordResetEmail(
     return { success: false, error: error.message };
   }
 }
+
+export async function sendAdminPasswordResetNotificationEmail(
+  email: string,
+  firstName: string,
+  loginUrl: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
+    const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
+    const mastheadSrc = 'cid:afara-masthead';
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Password Has Been Reset – AFÁRÁ</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&display=swap" rel="stylesheet" />
+</head>
+<body style="margin:0;padding:0;background-color:#f5f4f0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f4f0;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;">
+
+          <!-- Masthead Image -->
+          <tr>
+            <td style="padding:0;margin:0;">
+              <img src="${mastheadSrc}" alt="AFÁRÁ" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />
+            </td>
+          </tr>
+
+          <!-- Green accent line -->
+          <tr>
+            <td style="background-color:#173a3a;height:4px;font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+
+          <!-- Main content -->
+          <tr>
+            <td style="padding:48px 48px 32px 48px;">
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#173a3a;line-height:1.3;">
+                Your password has been reset
+              </h1>
+
+              <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
+                Dear ${firstName},
+              </p>
+
+              <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
+                An administrator has reset your AFÁRÁ platform password. A temporary password has been assigned to your account.
+              </p>
+
+              <!-- Notice box -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 28px 0;">
+                <tr>
+                  <td style="background-color:#fef9ec;border:1px solid #f0d080;border-radius:4px;padding:16px 20px;">
+                    <p style="margin:0;font-size:15px;line-height:1.6;color:#7a5c00;">
+                      <strong style="color:#5a3e00;">Action required:</strong> When you sign in, you will be immediately prompted to set a new password. You will not be able to access the platform until you do so.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:0 0 32px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
+                If you did not expect this change or believe this was done in error, please contact your platform administrator immediately.
+              </p>
+
+              <!-- CTA Button -->
+              <table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;">
+                <tr>
+                  <td style="border-radius:4px;background-color:#173a3a;">
+                    <a href="${loginUrl}" style="display:inline-block;padding:14px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:4px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+                      Sign In &amp; Set New Password
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Divider -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="border-top:1px solid #e8e4dd;padding:0;font-size:0;line-height:0;">&nbsp;</td>
+                </tr>
+              </table>
+
+              <p style="margin:24px 0 0 0;font-size:13px;line-height:1.6;color:#888888;">
+                If the button above doesn't work, paste this link into your browser:<br />
+                <a href="${loginUrl}" style="color:#173a3a;word-break:break-all;">${loginUrl}</a>
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#f5f4f0;padding:24px 48px;text-align:center;">
+              <p style="margin:0 0 4px 0;font-size:12px;color:#888888;">
+                AFÁRÁ is an initiative of <strong>Open Spaces &amp; Bridges Advisory (OPSB)</strong>
+              </p>
+              <p style="margin:0;font-size:12px;color:#aaaaaa;">
+                &copy; 2026 AFÁRÁ. All rights reserved.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+    const attachments: any[] = mastheadBuffer
+      ? [{ filename: 'afara-masthead-email.jpg', content: mastheadBuffer, content_id: 'afara-masthead', content_type: 'image/jpeg' }]
+      : [];
+
+    const { error } = await client.emails.send({
+      from: fromEmail,
+      to: [email],
+      subject: 'Your AFÁRÁ password has been reset',
+      html,
+      attachments,
+    });
+
+    if (error) {
+      console.error('Admin password reset notification email error:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Admin password reset notification email failed:', error);
+    return { success: false, error: error.message };
+  }
+}
