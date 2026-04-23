@@ -641,6 +641,25 @@ export async function sendWaitlistEmail(email: string, firstName?: string): Prom
                     <p style="margin:0 0 4px 0;font-size:12px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#a8c4c4;">Save the dates</p>
                     <p style="margin:8px 0 0 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:26px;font-weight:600;color:#ffffff;line-height:1.2;">19th &amp; 20th May 2026</p>
                     <p style="margin:8px 0 0 0;font-size:14px;color:#c8dada;line-height:1.5;">AFÁRÁ Immersive Launch &mdash; Inaugural Cohort</p>
+                    <!-- Venue details -->
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.15);padding-top:20px;">
+                      <tr>
+                        <td style="padding:6px 0;vertical-align:top;width:20px;">
+                          <span style="font-size:14px;color:#a8c4c4;">&#9679;</span>
+                        </td>
+                        <td style="padding:6px 0 6px 8px;">
+                          <p style="margin:0;font-size:13px;font-weight:600;color:#ffffff;">In person &mdash; The JK Randle Museum, Lagos</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding:6px 0;vertical-align:top;width:20px;">
+                          <span style="font-size:14px;color:#a8c4c4;">&#9679;</span>
+                        </td>
+                        <td style="padding:6px 0 6px 8px;">
+                          <p style="margin:0;font-size:13px;font-weight:600;color:#ffffff;">Online &mdash; for those who cannot attend physically</p>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
               </table>
