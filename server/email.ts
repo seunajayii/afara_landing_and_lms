@@ -278,7 +278,7 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
             <td style="padding:48px 48px 32px 48px;">
 
               <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#173a3a;line-height:1.3;">
-                Congratulations — you've been accepted
+                Congratulations — you've been selected
               </h1>
 
               <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
@@ -286,52 +286,103 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
               </p>
 
               <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
-                We are delighted to let you know that your application to the <strong style="color:#173a3a;">AFÁRÁ Accelerator Program</strong> has been <strong style="color:#173a3a;">accepted</strong>. Welcome to the cohort.
-              </p>
-
-              <p style="margin:0 0 32px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
-                Your account has been upgraded to full participant access. You can log in now and begin exploring everything the platform has to offer.
+                We are delighted to let you know that your application to the <strong style="color:#173a3a;">AFÁRÁ Accelerator Program</strong> has been successful. You have been selected as one of <strong style="color:#173a3a;">50 Infrapreneurs</strong> joining the <strong style="color:#173a3a;">AFÁRÁ Inaugural Cohort</strong>.
               </p>
 
               ${personalNoteBlock}
 
-              <!-- What you now have access to -->
-              <h2 style="margin:0 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;color:#173a3a;">
-                What's waiting for you
-              </h2>
+              <!-- Programme structure intro -->
+              <p style="margin:0 0 24px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
+                Here is what your journey with AFÁRÁ looks like:
+              </p>
 
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;">
+              <!-- Track 1 box -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px 0;background-color:#f9f5f0;border-radius:4px;">
                 <tr>
-                  <td style="padding:10px 0;vertical-align:top;width:24px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                  <td style="padding:28px 28px 24px 28px;">
+                    <p style="margin:0 0 4px 0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#a07840;">All 50 Infrapreneurs</p>
+                    <p style="margin:4px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:19px;font-weight:600;color:#173a3a;line-height:1.2;">Track 1 &mdash; Venture Access Cohort</p>
+                    <p style="margin:0 0 16px 0;font-size:14px;line-height:1.7;color:#2d2d2d;">
+                      Upon your successful selection to participate, you will take part in the <strong style="color:#173a3a;">Venture Access Cohort</strong> — a two-day Immersive event after which you will pitch your business or project to a panel of jurors.
+                    </p>
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#173a3a;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:5px 0 5px 8px;font-size:14px;color:#2d2d2d;line-height:1.6;">Participate in the 2-day Immersive event</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#173a3a;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:5px 0 5px 8px;font-size:14px;color:#2d2d2d;line-height:1.6;">Access to curated expert-led webinars</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#173a3a;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:5px 0 5px 8px;font-size:14px;color:#2d2d2d;line-height:1.6;">Select ecosystem opportunities</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#173a3a;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:5px 0 5px 8px;font-size:14px;color:#2d2d2d;line-height:1.6;">Continued inclusion in the founder network</td>
+                      </tr>
+                    </table>
                   </td>
-                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">Training modules and courses</td>
-                </tr>
-                <tr>
-                  <td style="padding:10px 0;vertical-align:top;width:24px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
-                  </td>
-                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">Mentorship matching and one-on-one sessions</td>
-                </tr>
-                <tr>
-                  <td style="padding:10px 0;vertical-align:top;width:24px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
-                  </td>
-                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">Program resources, toolkits, and guides</td>
-                </tr>
-                <tr>
-                  <td style="padding:10px 0;vertical-align:top;width:24px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
-                  </td>
-                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">Events, webinars, and live sessions</td>
-                </tr>
-                <tr>
-                  <td style="padding:10px 0;vertical-align:top;width:24px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
-                  </td>
-                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">Community discussion boards</td>
                 </tr>
               </table>
+
+              <!-- Track 2 box -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;background-color:#173a3a;border-radius:4px;">
+                <tr>
+                  <td style="padding:28px 28px 24px 28px;">
+                    <p style="margin:0 0 4px 0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#a8c4c4;">10 selected after the Immersive event</p>
+                    <p style="margin:4px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:19px;font-weight:600;color:#ffffff;line-height:1.2;">Track 2 &mdash; Venture Advancement Cohort</p>
+                    <p style="margin:0 0 16px 0;font-size:14px;line-height:1.7;color:#c8dada;">
+                      Ten Infrapreneurs will move on to the <strong style="color:#ffffff;">Venture Advancement Cohort</strong> — a six-month project support phase where AFÁRÁ will provide specific, tailored support to your business or project based on your application and our assessment of your needs.
+                    </p>
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#a8c4c4;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:5px 0 5px 8px;font-size:14px;color:#c8dada;line-height:1.6;">Intensive 6-month acceleration</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#a8c4c4;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:5px 0 5px 8px;font-size:14px;color:#c8dada;line-height:1.6;">Dedicated mentorship</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#a8c4c4;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:5px 0 5px 8px;font-size:14px;color:#c8dada;line-height:1.6;">Hands-on project support</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#a8c4c4;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:5px 0 5px 8px;font-size:14px;color:#c8dada;line-height:1.6;">Investor and partner access</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Event box -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;border:1px solid #e8e4dd;border-radius:4px;">
+                <tr>
+                  <td style="padding:28px 28px;">
+                    <p style="margin:0 0 4px 0;font-size:12px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#173a3a;">Save the dates</p>
+                    <p style="margin:8px 0 0 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:24px;font-weight:600;color:#173a3a;line-height:1.2;">19th &amp; 20th May 2026</p>
+                    <p style="margin:8px 0 0 0;font-size:14px;color:#555555;line-height:1.5;">AFÁRÁ Immersive Launch &mdash; Inaugural Cohort</p>
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:20px;border-top:1px solid #e8e4dd;padding-top:20px;">
+                      <tr>
+                        <td style="padding:6px 0;vertical-align:top;width:20px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#173a3a;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:6px 0 6px 8px;font-size:13px;font-weight:600;color:#2d2d2d;">In person &mdash; J. Randle Center for Yoruba Culture &amp; History, Lagos</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:6px 0;vertical-align:top;width:20px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#173a3a;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:6px 0 6px 8px;font-size:13px;font-weight:600;color:#2d2d2d;">Online &mdash; for those who cannot attend in person</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Platform access note -->
+              <p style="margin:0 0 24px 0;font-size:15px;line-height:1.7;color:#2d2d2d;">
+                Your account has been upgraded to full participant access. Log in to your dashboard to connect with your fellow cohort members and explore everything the platform has to offer — more details about the programme and next steps will follow shortly.
+              </p>
 
               <!-- CTA Button -->
               <table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;">
