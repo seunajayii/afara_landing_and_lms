@@ -303,7 +303,7 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
                     <p style="margin:0 0 4px 0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#a07840;">All 50 Infrapreneurs</p>
                     <p style="margin:4px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:19px;font-weight:600;color:#173a3a;line-height:1.2;">Track 1 &mdash; Venture Access Cohort</p>
                     <p style="margin:0 0 16px 0;font-size:14px;line-height:1.7;color:#2d2d2d;">
-                      Upon your successful selection to participate, you will take part in the <strong style="color:#173a3a;">Venture Access Cohort</strong> — a two-day Immersive event after which you will pitch your business or project to a panel of jurors.
+                      Upon your successful selection to participate, you will take part in the <strong style="color:#173a3a;">Venture Access Cohort</strong> — a two-day Immersive event. During the event, a selection process will take place, and shortlisted finalists will pitch their business or project to a panel of jurors.
                     </p>
                     <table width="100%" cellpadding="0" cellspacing="0" border="0">
                       <tr>
