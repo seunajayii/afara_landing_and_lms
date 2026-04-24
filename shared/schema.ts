@@ -239,7 +239,7 @@ export const postLikes = pgTable("post_likes", {
 });
 
 export const certificateStatusEnum = pgEnum("certificate_status", ["pending", "approved", "rejected"]);
-export const applicationStatusEnum = pgEnum("application_status", ["draft", "submitted", "under_review", "accepted", "rejected", "waitlisted"]);
+export const applicationStatusEnum = pgEnum("application_status", ["draft", "submitted", "under_review", "accepted", "rejected", "waitlisted", "disqualified"]);
 
 export const certificates = pgTable("certificates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

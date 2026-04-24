@@ -884,6 +884,11 @@ export default function Apply() {
                       description: "Your application is on the waitlist. We will contact you if a place becomes available.",
                       color: "text-orange-700 bg-orange-50 border-orange-200 dark:text-orange-400 dark:bg-orange-950/30 dark:border-orange-800",
                     },
+                    disqualified: {
+                      label: "Application Ineligible",
+                      description: "Unfortunately your application does not meet the current eligibility criteria for the AFÁRÁ programme. Please check your email for more details.",
+                      color: "text-muted-foreground bg-muted/40 border-border",
+                    },
                   };
                   const cfg = statusConfig[statusResult.status] ?? {
                     label: statusResult.status,

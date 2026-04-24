@@ -1781,7 +1781,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Admin-only: full application status management (accept, reject, waitlist, etc.)
   async function handleApplicationStatusChange(application: any, newStatus: string, reviewNotes?: string) {
-    const { sendAcceptanceEmail, sendRejectionEmail, sendWaitlistEmail } = await import("./email");
+    const { sendAcceptanceEmail, sendRejectionEmail, sendWaitlistEmail, sendDisqualificationEmail } = await import("./email");
     if (newStatus === "accepted") {
       try {
         const user = await storage.getUserByEmail(application.email);
@@ -1803,6 +1803,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await sendWaitlistEmail(application.email, application.firstName);
       } catch (err) {
         console.error("Failed to add to community or send waitlist email:", err);
+      }
+    } else if (newStatus === "disqualified") {
+      try {
+        await sendDisqualificationEmail(application.email, application.firstName);
+      } catch (err) {
+        console.error("Failed to send disqualification email:", err);
       }
     }
   }

@@ -91,6 +91,7 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
   accepted: { label: "Accepted", variant: "default" },
   rejected: { label: "Rejected", variant: "destructive" },
   waitlisted: { label: "Waitlisted", variant: "secondary" },
+  disqualified: { label: "Disqualified", variant: "destructive" },
 };
 
 // ─── Language detection ──────────────────────────────────────────────────────
@@ -660,6 +661,7 @@ export default function ApplicationManagement() {
     pending: applications.filter((a) => a.status === "submitted" || a.status === "under_review").length,
     accepted: applications.filter((a) => a.status === "accepted").length,
     rejected: applications.filter((a) => a.status === "rejected").length,
+    disqualified: applications.filter((a) => a.status === "disqualified").length,
   };
 
   const openPreview = (app: Application) => {
@@ -771,6 +773,7 @@ export default function ApplicationManagement() {
                   <TabsTrigger value="pending" data-testid="tab-pending">Pending ({stats.pending})</TabsTrigger>
                   <TabsTrigger value="accepted" data-testid="tab-accepted">Accepted ({stats.accepted})</TabsTrigger>
                   <TabsTrigger value="rejected" data-testid="tab-rejected">Rejected ({stats.rejected})</TabsTrigger>
+                  <TabsTrigger value="disqualified" data-testid="tab-disqualified">Disqualified ({stats.disqualified})</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value={activeTab}>
@@ -916,6 +919,7 @@ export default function ApplicationManagement() {
                   <SelectItem value="accepted">Accepted</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
                   <SelectItem value="waitlisted">Waitlisted</SelectItem>
+                  <SelectItem value="disqualified">Disqualified</SelectItem>
                 </SelectContent>
               </Select>
             </div>
