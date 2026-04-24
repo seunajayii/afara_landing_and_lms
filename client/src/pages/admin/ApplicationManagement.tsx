@@ -48,6 +48,7 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  Ban,
   Users,
   FileText,
   Building2,
@@ -693,7 +694,7 @@ export default function ApplicationManagement() {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
                 <CardTitle className="text-sm font-medium">Total Applications</CardTitle>
@@ -728,6 +729,15 @@ export default function ApplicationManagement() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-red-600" data-testid="text-rejected-applications">{stats.rejected}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+                <CardTitle className="text-sm font-medium">Disqualified</CardTitle>
+                <Ban className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600" data-testid="text-disqualified-applications">{stats.disqualified}</div>
               </CardContent>
             </Card>
           </div>
