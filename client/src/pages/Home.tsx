@@ -90,21 +90,18 @@ export default function Home() {
             {[
               {
                 publication: 'BusinessDay',
-                logo: '/images/press/businessday.png',
                 headline: 'Africa accelerator targets $1bn to back women-led energy projects',
                 date: 'May 24, 2026',
                 url: 'https://businessday.ng/energy/article/africa-accelerator-targets-1bn-to-back-women-led-energy-projects/',
               },
               {
                 publication: 'Platforms Africa',
-                logo: '/images/press/platforms-africa.png',
                 headline: 'AFARA Launches an Africa wide Accelerator In Lagos To Build Bankable Women-Led Energy Projects',
                 date: 'May 24, 2026',
                 url: 'https://platformsafrica.com/2026/05/24/afara-launches-an-africa-wide-accelerator-in-lagos-to-build-bankable-women-led-energy-projects/',
               },
               {
                 publication: 'Daily Champion',
-                logo: '/images/press/daily-champion.svg',
                 headline: 'AFARA launches an Africa-wide accelerator in Lagos to build bankable Women-Led Energy Projects',
                 date: 'May 21, 2026',
                 url: 'https://championnews.com.ng/2026/05/21/afara-launches-an-africa-wide-accelerator-in-lagos-to-build-bankable-women-led-energy-projects/',
@@ -120,12 +117,6 @@ export default function Home() {
                   data-testid={`press-item-${i}`}
                 >
                   <div>
-                    <img
-                      src={item.logo}
-                      alt={item.publication}
-                      className="h-8 w-auto object-contain mb-3 opacity-80"
-                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                    />
                     <p className="font-bold mb-2 group-hover:underline transition-all" style={{ fontSize: '1.1rem', color: '#1a3a2a' }}>
                       {item.publication}
                     </p>
