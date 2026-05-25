@@ -17,6 +17,7 @@ export function Navbar() {
     { path: "/program", label: "Program" },
     { path: "/faq", label: "FAQ" },
     { path: "/contact", label: "Contact" },
+    { path: "/press", label: "Press" },
   ];
 
   return (

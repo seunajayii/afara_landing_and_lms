@@ -1,0 +1,43 @@
+I have a website for the AFÁRÁ Accelerator (afaraaccelerator.org). It is built with HTML/CSS/JS.
+
+Do two things:
+
+PART A — Add a "Press" link to the main navigation bar, placed between "Contact" and the "Access LMS" button. Style it identically to the other nav links.
+
+PART B — Create a new page (press.html or a new route /press) with the following:
+
+Page layout:
+- Use the same header, navigation, and footer as the rest of the site
+- Page hero: a simple header section with the heading "Press & Media" and a subheading: "AFÁRÁ in the news — coverage of our mission to empower women building Africa's energy future."
+- Below the hero, display three article cards in a responsive grid (3 columns on desktop, 1 column on mobile)
+
+Each card should contain:
+- Publication name (large, bold, in the site's dark green)
+- Article headline (medium weight, dark color, 2-line max with ellipsis)
+- Publication date (small, muted)
+- A horizontal rule
+- A "Read Full Article →" button/link styled as an outlined button using the site's dark green border and text color, hover fills with dark green and white text
+- The entire card should also be clickable (wrap in <a> or use JS click handler), opening in a new tab
+
+Article data (in this order):
+1. Publication: BusinessDay
+   Headline: Africa accelerator targets $1bn to back women-led energy projects
+   Date: May 24, 2026
+   URL: https://businessday.ng/energy/article/africa-accelerator-targets-1bn-to-back-women-led-energy-projects/
+
+2. Publication: Platforms Africa
+   Headline: AFARA Launches an Africa wide Accelerator In Lagos To Build Bankable Women-Led Energy Projects
+   Date: May 24, 2026
+   URL: https://platformsafrica.com/2026/05/24/afara-launches-an-africa-wide-accelerator-in-lagos-to-build-bankable-women-led-energy-projects/
+
+3. Publication: Daily Champion
+   Headline: AFARA launches an Africa-wide accelerator in Lagos to build bankable Women-Led Energy Projects
+   Date: May 21, 2026
+   URL: https://championnews.com.ng/2026/05/21/afara-launches-an-africa-wide-accelerator-in-lagos-to-build-bankable-women-led-energy-projects/
+
+Card styling:
+- White background card with subtle box-shadow, rounded corners (8px), padding 24px
+- Hover: card lifts slightly (transform: translateY(-4px), shadow deepens)
+- Match the site's font stack exactly
+
+All links must use target="_blank" and rel="noopener noreferrer". Do not change any other part of the site.
