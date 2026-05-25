@@ -12,9 +12,6 @@ export function Footer() {
           {/* Brand */}
           <div className="md:col-span-1">
             <img src={afaraLogo} alt="AFÁRÁ" className="h-16 w-auto mb-4 dark:brightness-0 dark:invert dark:opacity-90" />
-            <p className="text-sm text-muted-foreground mb-5">
-              Empowering female infrapreneurs to lead transformative energy and infrastructure projects across Africa.
-            </p>
             <ul className="space-y-2 text-sm text-muted-foreground mb-5">
               <li className="flex items-center gap-2">
                 <MapPin className="w-4 h-4 shrink-0" />
