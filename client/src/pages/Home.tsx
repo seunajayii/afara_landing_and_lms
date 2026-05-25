@@ -80,6 +80,69 @@ export default function Home() {
         </div>
       </section>
 
+      {/* As Seen In */}
+      <section className="py-14 px-4 sm:px-6 lg:px-8" style={{ backgroundColor: '#f5f0e8' }}>
+        <div className="max-w-5xl mx-auto">
+          <p className="text-center mb-10" style={{ fontSize: '0.75rem', letterSpacing: '0.2em', color: '#6b6b5a', fontWeight: 600 }}>
+            AS SEEN IN
+          </p>
+          <div className="flex flex-col md:flex-row items-stretch justify-center">
+            {[
+              {
+                publication: 'BusinessDay',
+                headline: 'Africa accelerator targets $1bn to back women-led energy projects',
+                date: 'May 24, 2026',
+                url: 'https://businessday.ng/energy/article/africa-accelerator-targets-1bn-to-back-women-led-energy-projects/',
+              },
+              {
+                publication: 'Platforms Africa',
+                headline: 'AFARA Launches an Africa wide Accelerator In Lagos To Build Bankable Women-Led Energy Projects',
+                date: 'May 24, 2026',
+                url: 'https://platformsafrica.com/2026/05/24/afara-launches-an-africa-wide-accelerator-in-lagos-to-build-bankable-women-led-energy-projects/',
+              },
+              {
+                publication: 'Daily Champion',
+                headline: 'AFARA launches an Africa-wide accelerator in Lagos to build bankable Women-Led Energy Projects',
+                date: 'May 21, 2026',
+                url: 'https://championnews.com.ng/2026/05/21/afara-launches-an-africa-wide-accelerator-in-lagos-to-build-bankable-women-led-energy-projects/',
+              },
+            ].map((item, i, arr) => (
+              <div key={i} className="flex flex-row md:flex-col items-stretch">
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`${item.publication}: ${item.headline}`}
+                  className="group flex flex-col justify-between px-8 py-2 md:py-0 text-left flex-1"
+                  data-testid={`press-item-${i}`}
+                >
+                  <div>
+                    <p className="font-bold mb-2 group-hover:underline transition-all" style={{ fontSize: '1.1rem', color: '#1a3a2a' }}>
+                      {item.publication}
+                    </p>
+                    <p className="mb-2 line-clamp-2" style={{ fontSize: '0.85rem', color: '#555' }}>
+                      {item.headline}
+                    </p>
+                    <p className="mb-3" style={{ fontSize: '0.75rem', color: '#888' }}>
+                      {item.date}
+                    </p>
+                  </div>
+                  <p className="text-xs font-medium" style={{ color: '#1a3a2a' }}>
+                    Read article &rarr;
+                  </p>
+                </a>
+                {i < arr.length - 1 && (
+                  <>
+                    <div className="hidden md:block self-stretch w-px my-2" style={{ backgroundColor: '#d6d0c4' }} />
+                    <hr className="block md:hidden my-6 w-full" style={{ borderColor: '#d6d0c4' }} />
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-12 items-center">

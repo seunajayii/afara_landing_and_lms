@@ -1,0 +1,39 @@
+I have a website for the AFÁRÁ Accelerator (afaraaccelerator.org). It is built with HTML/CSS/JS. 
+
+Add a new "As Seen In" press section to the homepage, positioned between the stats bar (50+ / 15+ / $1B+ / 200+) and the "Who We Support" section.
+
+Design requirements:
+- Section background: same warm cream/off-white as the "Why AFÁRÁ" section (#f5f0e8 or the site's equivalent)
+- Section heading: small ALL-CAPS label, center-aligned, styled like a muted sub-label (e.g., font-size: 0.75rem, letter-spacing: 0.2em, color: #6b6b5a). Text: "AS SEEN IN"
+- Display three press items in a horizontal row (flex, centered, with wrapping on mobile), each as a clickable link opening in a new tab
+- Each press item should be a styled text badge (not an image logo) in a typographic style consistent with the site's serif/editorial aesthetic. Use the publication's name in bold, optionally with the article date below in a smaller muted font.
+
+Press items (in this order, left to right):
+1. Publication: "BusinessDay"
+   Headline: "Africa accelerator targets $1bn to back women-led energy projects"
+   Date: May 24, 2026
+   URL: https://businessday.ng/energy/article/africa-accelerator-targets-1bn-to-back-women-led-energy-projects/
+
+2. Publication: "Platforms Africa"
+   Headline: "AFARA Launches an Africa wide Accelerator In Lagos To Build Bankable Women-Led Energy Projects"
+   Date: May 24, 2026
+   URL: https://platformsafrica.com/2026/05/24/afara-launches-an-africa-wide-accelerator-in-lagos-to-build-bankable-women-led-energy-projects/
+
+3. Publication: "Daily Champion"
+   Headline: "AFARA launches an Africa-wide accelerator in Lagos to build bankable Women-Led Energy Projects"
+   Date: May 21, 2026
+   URL: https://championnews.com.ng/2026/05/21/afara-launches-an-africa-wide-accelerator-in-lagos-to-build-bankable-women-led-energy-projects/
+
+Each press item should:
+- Show the publication name prominently (font-weight: 700, font-size: ~1.1rem, color: #1a3a2a or the site's dark green)
+- Show a short excerpt of the headline below (font-size: 0.85rem, color: #555, max 2 lines with ellipsis)
+- Show the date below that (font-size: 0.75rem, color: #888)
+- Have a subtle hover state (slight underline or opacity change on the publication name)
+- Have a thin divider line between items on desktop (or none on mobile)
+- Be accessible: use <a> tags with aria-label attributes, rel="noopener noreferrer", target="_blank"
+
+On mobile (max-width: 768px), stack the items vertically with a horizontal rule between them.
+
+Add a small "Read article →" text link at the bottom of each card.
+
+Do not change any other section of the page.
