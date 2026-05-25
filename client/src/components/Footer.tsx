@@ -7,7 +7,7 @@ export function Footer() {
   return (
     <footer className="bg-card border-t mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-8">
           <div>
             <img src={afaraLogo} alt="AFÁRÁ" className="h-16 w-auto mb-4 dark:brightness-0 dark:invert dark:opacity-90" />
             <p className="text-sm text-muted-foreground">
@@ -56,6 +56,45 @@ export function Footer() {
               <li className="flex items-center gap-2">
                 <Mail className="w-4 h-4" />
                 <span>hello@afaraaccelerator.org</span>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="font-semibold mb-4">In the Press</h4>
+            <ul className="space-y-2 text-sm">
+              <li>
+                <a
+                  href="https://businessday.ng/energy/article/africa-accelerator-targets-1bn-to-back-women-led-energy-projects/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  data-testid="press-link-businessday"
+                >
+                  BusinessDay — Africa accelerator targets $1bn
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://platformsafrica.com/2026/05/24/afara-launches-an-africa-wide-accelerator-in-lagos-to-build-bankable-women-led-energy-projects/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  data-testid="press-link-platforms"
+                >
+                  Platforms Africa — AFARA Launches Africa-wide Accelerator
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://championnews.com.ng/2026/05/21/afara-launches-an-africa-wide-accelerator-in-lagos-to-build-bankable-women-led-energy-projects/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  data-testid="press-link-champion"
+                >
+                  Daily Champion — AFARA Launches in Lagos
+                </a>
               </li>
             </ul>
           </div>
