@@ -7,14 +7,49 @@ export function Footer() {
   return (
     <footer className="bg-card border-t mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-8">
-          <div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
+
+          {/* Brand */}
+          <div className="md:col-span-1">
             <img src={afaraLogo} alt="AFÁRÁ" className="h-16 w-auto mb-4 dark:brightness-0 dark:invert dark:opacity-90" />
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground mb-5">
               Empowering female infrapreneurs to lead transformative energy and infrastructure projects across Africa.
             </p>
+            <ul className="space-y-2 text-sm text-muted-foreground mb-5">
+              <li className="flex items-center gap-2">
+                <MapPin className="w-4 h-4 shrink-0" />
+                <span>Lagos | London</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <Mail className="w-4 h-4 shrink-0" />
+                <span>hello@afaraaccelerator.org</span>
+              </li>
+            </ul>
+            <div className="flex gap-3">
+              <a
+                href="https://www.linkedin.com/company/af%C3%A1r%C3%A1/?viewAsMember=true"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-10 h-10 rounded-md bg-muted flex items-center justify-center hover-elevate"
+                aria-label="LinkedIn"
+                data-testid="icon-linkedin"
+              >
+                <Linkedin className="w-5 h-5 text-muted-foreground" />
+              </a>
+              <a
+                href="https://www.instagram.com/afara.accelerator/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-10 h-10 rounded-md bg-muted flex items-center justify-center hover-elevate"
+                aria-label="Instagram"
+                data-testid="icon-instagram"
+              >
+                <Instagram className="w-5 h-5 text-muted-foreground" />
+              </a>
+            </div>
           </div>
 
+          {/* Quick Links */}
           <div>
             <h4 className="font-semibold mb-4">Quick Links</h4>
             <ul className="space-y-2 text-sm">
@@ -34,8 +69,8 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/lms/dashboard" className="text-muted-foreground hover:text-foreground transition-colors">
-                  Access LMS
+                <Link href="/press" className="text-muted-foreground hover:text-foreground transition-colors">
+                  Press
                 </Link>
               </li>
               <li>
@@ -43,26 +78,18 @@ export function Footer() {
                   Contact
                 </Link>
               </li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-4">Contact</h4>
-            <ul className="space-y-3 text-sm text-muted-foreground">
-              <li className="flex items-center gap-2">
-                <MapPin className="w-4 h-4" />
-                <span>Lagos | London</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Mail className="w-4 h-4" />
-                <span>hello@afaraaccelerator.org</span>
+              <li>
+                <Link href="/lms/dashboard" className="text-muted-foreground hover:text-foreground transition-colors">
+                  Access LMS
+                </Link>
               </li>
             </ul>
           </div>
 
+          {/* In the Press */}
           <div>
             <h4 className="font-semibold mb-4">In the Press</h4>
-            <ul className="space-y-2 text-sm">
+            <ul className="space-y-3 text-sm">
               <li>
                 <a
                   href="https://businessday.ng/energy/article/africa-accelerator-targets-1bn-to-back-women-led-energy-projects/"
@@ -99,41 +126,24 @@ export function Footer() {
             </ul>
           </div>
 
+          {/* Newsletter */}
           <div>
-            <h4 className="font-semibold mb-4">Subscribe to Our Newsletter</h4>
-            <NewsletterSignup variant="inline" className="mb-4" />
-            <div className="flex gap-3 mt-4">
-              <a
-                href="https://www.linkedin.com/company/af%C3%A1r%C3%A1/?viewAsMember=true"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-10 h-10 rounded-md bg-muted flex items-center justify-center hover-elevate"
-                aria-label="LinkedIn"
-                data-testid="icon-linkedin"
-              >
-                <Linkedin className="w-5 h-5 text-muted-foreground" />
-              </a>
-              <a
-                href="https://www.instagram.com/afara.accelerator/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-10 h-10 rounded-md bg-muted flex items-center justify-center hover-elevate"
-                aria-label="Instagram"
-                data-testid="icon-instagram"
-              >
-                <Instagram className="w-5 h-5 text-muted-foreground" />
-              </a>
-            </div>
+            <h4 className="font-semibold mb-4">Newsletter</h4>
+            <p className="text-sm text-muted-foreground mb-4">
+              Stay updated on programme news, events, and opportunities.
+            </p>
+            <NewsletterSignup variant="inline" />
           </div>
+
         </div>
 
-        <div className="border-t mt-8 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-muted-foreground">
+        <div className="border-t mt-10 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-muted-foreground">
           <p>&copy; {new Date().getFullYear()} AFÁRÁ. All rights reserved.</p>
           <p>
             An{" "}
-            <a 
-              href="https://openspacesandbridges.com/" 
-              target="_blank" 
+            <a
+              href="https://openspacesandbridges.com/"
+              target="_blank"
               rel="noopener noreferrer"
               className="text-primary hover:underline"
               data-testid="link-opsb"
