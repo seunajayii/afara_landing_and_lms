@@ -83,9 +83,9 @@ export default function Home() {
       {/* As Seen In */}
       <section className="py-14 px-4 sm:px-6 lg:px-8" style={{ backgroundColor: '#f5f0e8' }}>
         <div className="max-w-5xl mx-auto">
-          <p className="text-center mb-10" style={{ fontSize: '0.75rem', letterSpacing: '0.2em', color: '#173a3a', fontWeight: 600 }}>
-            AFÁRA IN THE PRESS
-          </p>
+          <h2 className="text-4xl font-bold text-center mb-10">
+            AFÁRÁ in the Press
+          </h2>
           <div className="flex flex-col md:flex-row items-stretch justify-center">
             {[
               {
