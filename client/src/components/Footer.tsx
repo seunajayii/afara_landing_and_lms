@@ -120,6 +120,17 @@ export function Footer() {
                   Daily Champion — AFARA Launches in Lagos
                 </a>
               </li>
+              <li>
+                <a
+                  href="https://www.thisdaylive.com/2026/05/25/afara-unveils-africa-wide-accelerator-to-build-bankable-women-led-energy-projects/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  data-testid="press-link-thisday"
+                >
+                  ThisDay Live — AFARA Unveils Africa-wide Accelerator
+                </a>
+              </li>
             </ul>
           </div>
 

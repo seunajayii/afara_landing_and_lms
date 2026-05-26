@@ -106,6 +106,12 @@ export default function Home() {
                 date: 'May 21, 2026',
                 url: 'https://championnews.com.ng/2026/05/21/afara-launches-an-africa-wide-accelerator-in-lagos-to-build-bankable-women-led-energy-projects/',
               },
+              {
+                publication: 'ThisDay Live',
+                headline: 'AFARA Unveils Africa-wide Accelerator to Build Bankable Women-Led Energy Projects',
+                date: 'May 25, 2026',
+                url: 'https://www.thisdaylive.com/2026/05/25/afara-unveils-africa-wide-accelerator-to-build-bankable-women-led-energy-projects/',
+              },
             ].map((item, i, arr) => (
               <div key={i} className="flex flex-row md:flex-col items-stretch">
                 <a
