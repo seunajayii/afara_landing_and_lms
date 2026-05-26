@@ -81,7 +81,7 @@ export default function Home() {
       </section>
 
       {/* As Seen In */}
-      <section className="py-14 px-4 sm:px-6 lg:px-8" style={{ backgroundColor: '#f5f0e8' }}>
+      <section className="py-14 px-4 sm:px-6 lg:px-8 bg-muted/40">
         <div className="max-w-5xl mx-auto">
           <h2 className="text-4xl font-bold text-center mb-10">
             AFÁRÁ in the Press
@@ -139,8 +139,8 @@ export default function Home() {
                 </a>
                 {i < arr.length - 1 && (
                   <>
-                    <div className="hidden md:block self-stretch w-px my-2" style={{ backgroundColor: '#d6d0c4' }} />
-                    <hr className="block md:hidden my-6 w-full" style={{ borderColor: '#d6d0c4' }} />
+                    <div className="hidden md:block self-stretch w-px my-2 bg-border" />
+                    <hr className="block md:hidden my-6 w-full border-border" />
                   </>
                 )}
               </div>
