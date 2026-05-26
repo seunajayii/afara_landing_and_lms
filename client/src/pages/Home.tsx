@@ -123,17 +123,17 @@ export default function Home() {
                   data-testid={`press-item-${i}`}
                 >
                   <div>
-                    <p className="font-bold mb-2 group-hover:underline transition-all" style={{ fontSize: '1.1rem', color: '#1a3a2a' }}>
+                    <p className="font-bold mb-2 text-foreground group-hover:underline transition-all" style={{ fontSize: '1.1rem' }}>
                       {item.publication}
                     </p>
-                    <p className="mb-2 line-clamp-2" style={{ fontSize: '0.85rem', color: '#555' }}>
+                    <p className="mb-2 line-clamp-2 text-muted-foreground text-sm">
                       {item.headline}
                     </p>
-                    <p className="mb-3" style={{ fontSize: '0.75rem', color: '#888' }}>
+                    <p className="mb-3 text-muted-foreground text-xs">
                       {item.date}
                     </p>
                   </div>
-                  <p className="text-xs font-medium" style={{ color: '#1a3a2a' }}>
+                  <p className="text-xs font-medium text-foreground">
                     Read article &rarr;
                   </p>
                 </a>
