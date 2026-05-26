@@ -55,7 +55,7 @@ export default function Press() {
                 data-testid={`press-card-${i}`}
                 className="group block bg-card rounded-md p-6 border border-border transition-all duration-200 hover:-translate-y-1 hover:shadow-lg"
               >
-                <p className="text-2xl font-bold mb-3" style={{ color: '#1a3a2a' }}>
+                <p className="text-2xl font-bold mb-3 text-foreground">
                   {article.publication}
                 </p>
                 <p className="font-medium text-foreground mb-2 line-clamp-2 leading-snug">
@@ -66,8 +66,8 @@ export default function Press() {
                 <span
                   className="inline-block text-sm font-semibold px-4 py-2 rounded-md border transition-colors duration-200"
                   style={{
-                    borderColor: '#1a3a2a',
-                    color: '#1a3a2a',
+                    borderColor: '#034a21',
+                    color: '#034a21',
                   }}
                 >
                   Read Full Article &rarr;

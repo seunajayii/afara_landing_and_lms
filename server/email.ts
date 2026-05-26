@@ -98,14 +98,14 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
 
           <!-- Green accent line -->
           <tr>
-            <td style="background-color:#173a3a;height:4px;font-size:0;line-height:0;">&nbsp;</td>
+            <td style="background-color:#034a21;height:4px;font-size:0;line-height:0;">&nbsp;</td>
           </tr>
 
           <!-- Main content -->
           <tr>
             <td style="padding:48px 48px 32px 48px;">
 
-              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;font-style:normal;color:#173a3a;line-height:1.3;">
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;font-style:normal;color:#034a21;line-height:1.3;">
                 We've received your application
               </h1>
 
@@ -118,7 +118,7 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
               </p>
 
               <p style="margin:0 0 32px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
-                Our team will review your submission carefully. You can expect to hear from us within <strong style="color:#173a3a;">2–4 weeks</strong> with an update on the next steps.
+                Our team will review your submission carefully. You can expect to hear from us within <strong style="color:#034a21;">2–4 weeks</strong> with an update on the next steps.
               </p>
 
               <!-- Divider -->
@@ -129,14 +129,14 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
               </table>
 
               <!-- What happens next -->
-              <h2 style="margin:32px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;font-style:normal;color:#173a3a;">
+              <h2 style="margin:32px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;font-style:normal;color:#034a21;">
                 What happens next
               </h2>
 
               <table width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                   <td style="padding:10px 0;vertical-align:top;width:24px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#034a21;margin-top:6px;">&nbsp;</span>
                   </td>
                   <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">
                     Our team reviews all applications against the program criteria
@@ -144,7 +144,7 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
                 </tr>
                 <tr>
                   <td style="padding:10px 0;vertical-align:top;width:24px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#034a21;margin-top:6px;">&nbsp;</span>
                   </td>
                   <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">
                     Shortlisted applicants will be invited to a brief interview or pitch session
@@ -152,7 +152,7 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
                 </tr>
                 <tr>
                   <td style="padding:10px 0;vertical-align:top;width:24px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#034a21;margin-top:6px;">&nbsp;</span>
                   </td>
                   <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">
                     Final decisions will be communicated to all applicants within the review window
@@ -162,7 +162,7 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
 
               <p style="margin:32px 0 0 0;font-size:15px;line-height:1.7;color:#555555;">
                 If you have any questions in the meantime, please reach out to us at
-                <a href="mailto:hello@afaraaccelerator.org" style="color:#173a3a;text-decoration:underline;">hello@afaraaccelerator.org</a>.
+                <a href="mailto:hello@afaraaccelerator.org" style="color:#034a21;text-decoration:underline;">hello@afaraaccelerator.org</a>.
               </p>
 
             </td>
@@ -174,7 +174,7 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
               <p style="margin:32px 0 4px 0;font-size:15px;line-height:1.6;color:#2d2d2d;">
                 Warm regards,
               </p>
-              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;font-style:normal;color:#173a3a;">
+              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;font-style:normal;color:#034a21;">
                 The AFÁRÁ Team
               </p>
             </td>
@@ -182,7 +182,7 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
 
           <!-- Footer -->
           <tr>
-            <td style="background-color:#173a3a;padding:24px 48px;">
+            <td style="background-color:#034a21;padding:24px 48px;">
               <p style="margin:0 0 6px 0;font-size:13px;line-height:1.6;color:#a8c4c4;">
                 AFÁRÁ is an initiative of
                 <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces & Bridges Advisory (OPSB)</a>
@@ -240,7 +240,7 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;background-color:#f0f5f5;border-radius:4px;">
                 <tr>
                   <td style="padding:24px 28px;">
-                    <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#173a3a;">A personal note</p>
+                    <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#034a21;">A personal note</p>
                     <p style="margin:0;font-size:15px;line-height:1.7;color:#2d2d2d;font-style:italic;">"${reviewNotes}"</p>
                     <p style="margin:8px 0 0 0;font-size:13px;color:#555555;">— The AFÁRÁ Team</p>
                   </td>
@@ -270,14 +270,14 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
 
           <!-- Green accent line -->
           <tr>
-            <td style="background-color:#173a3a;height:4px;font-size:0;line-height:0;">&nbsp;</td>
+            <td style="background-color:#034a21;height:4px;font-size:0;line-height:0;">&nbsp;</td>
           </tr>
 
           <!-- Main content -->
           <tr>
             <td style="padding:48px 48px 32px 48px;">
 
-              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#173a3a;line-height:1.3;">
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#034a21;line-height:1.3;">
                 Congratulations — you've been selected
               </h1>
 
@@ -286,7 +286,7 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
               </p>
 
               <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
-                We are delighted to let you know that your application to the <strong style="color:#173a3a;">AFÁRÁ Accelerator Program</strong> has been successful. You have been selected as one of <strong style="color:#173a3a;">50 Infrapreneurs</strong> joining the <strong style="color:#173a3a;">AFÁRÁ Inaugural Cohort</strong>.
+                We are delighted to let you know that your application to the <strong style="color:#034a21;">AFÁRÁ Accelerator Program</strong> has been successful. You have been selected as one of <strong style="color:#034a21;">50 Infrapreneurs</strong> joining the <strong style="color:#034a21;">AFÁRÁ Inaugural Cohort</strong>.
               </p>
 
               ${personalNoteBlock}
@@ -301,25 +301,25 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
                 <tr>
                   <td style="padding:28px 28px 24px 28px;">
                     <p style="margin:0 0 4px 0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#a07840;">All 50 Infrapreneurs</p>
-                    <p style="margin:4px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:19px;font-weight:600;color:#173a3a;line-height:1.2;">Track 1 &mdash; Venture Access Cohort</p>
+                    <p style="margin:4px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:19px;font-weight:600;color:#034a21;line-height:1.2;">Track 1 &mdash; Venture Access Cohort</p>
                     <p style="margin:0 0 16px 0;font-size:14px;line-height:1.7;color:#2d2d2d;">
-                      Upon your successful selection to participate, you will take part in the <strong style="color:#173a3a;">Venture Access Cohort</strong> — a two-day Immersive event. During the event, a selection process will take place, and shortlisted finalists will pitch their business or project to a panel of jurors.
+                      Upon your successful selection to participate, you will take part in the <strong style="color:#034a21;">Venture Access Cohort</strong> — a two-day Immersive event. During the event, a selection process will take place, and shortlisted finalists will pitch their business or project to a panel of jurors.
                     </p>
                     <table width="100%" cellpadding="0" cellspacing="0" border="0">
                       <tr>
-                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#173a3a;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#034a21;margin-top:7px;">&nbsp;</span></td>
                         <td style="padding:5px 0 5px 8px;font-size:14px;color:#2d2d2d;line-height:1.6;">Participate in the 2-day Immersive event</td>
                       </tr>
                       <tr>
-                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#173a3a;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#034a21;margin-top:7px;">&nbsp;</span></td>
                         <td style="padding:5px 0 5px 8px;font-size:14px;color:#2d2d2d;line-height:1.6;">Access to curated expert-led webinars</td>
                       </tr>
                       <tr>
-                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#173a3a;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#034a21;margin-top:7px;">&nbsp;</span></td>
                         <td style="padding:5px 0 5px 8px;font-size:14px;color:#2d2d2d;line-height:1.6;">Select ecosystem opportunities</td>
                       </tr>
                       <tr>
-                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#173a3a;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#034a21;margin-top:7px;">&nbsp;</span></td>
                         <td style="padding:5px 0 5px 8px;font-size:14px;color:#2d2d2d;line-height:1.6;">Continued inclusion in the founder network</td>
                       </tr>
                     </table>
@@ -328,7 +328,7 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
               </table>
 
               <!-- Track 2 box -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;background-color:#173a3a;border-radius:4px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;background-color:#034a21;border-radius:4px;">
                 <tr>
                   <td style="padding:28px 28px 24px 28px;">
                     <p style="margin:0 0 4px 0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#a8c4c4;">10 selected after the Immersive event</p>
@@ -362,16 +362,16 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;border:1px solid #e8e4dd;border-radius:4px;">
                 <tr>
                   <td style="padding:28px 28px;">
-                    <p style="margin:0 0 4px 0;font-size:12px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#173a3a;">Save the dates</p>
-                    <p style="margin:8px 0 0 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:24px;font-weight:600;color:#173a3a;line-height:1.2;">19th &amp; 20th May 2026</p>
+                    <p style="margin:0 0 4px 0;font-size:12px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#034a21;">Save the dates</p>
+                    <p style="margin:8px 0 0 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:24px;font-weight:600;color:#034a21;line-height:1.2;">19th &amp; 20th May 2026</p>
                     <p style="margin:8px 0 0 0;font-size:14px;color:#555555;line-height:1.5;">AFÁRÁ Immersive Launch &mdash; Inaugural Cohort</p>
                     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:20px;border-top:1px solid #e8e4dd;padding-top:20px;">
                       <tr>
-                        <td style="padding:6px 0;vertical-align:top;width:20px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#173a3a;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:6px 0;vertical-align:top;width:20px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#034a21;margin-top:7px;">&nbsp;</span></td>
                         <td style="padding:6px 0 6px 8px;font-size:13px;font-weight:600;color:#2d2d2d;">In person &mdash; J. Randle Center for Yoruba Culture &amp; History, Lagos</td>
                       </tr>
                       <tr>
-                        <td style="padding:6px 0;vertical-align:top;width:20px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#173a3a;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:6px 0;vertical-align:top;width:20px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#034a21;margin-top:7px;">&nbsp;</span></td>
                         <td style="padding:6px 0 6px 8px;font-size:13px;font-weight:600;color:#2d2d2d;">Online &mdash; for those who cannot attend in person</td>
                       </tr>
                     </table>
@@ -387,7 +387,7 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
               <!-- CTA Button -->
               <table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;">
                 <tr>
-                  <td style="border-radius:4px;background-color:#173a3a;">
+                  <td style="border-radius:4px;background-color:#034a21;">
                     <a href="${loginUrl}" style="display:inline-block;padding:14px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:4px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
                       Go to your dashboard
                     </a>
@@ -404,7 +404,7 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
 
               <p style="margin:24px 0 0 0;font-size:15px;line-height:1.7;color:#555555;">
                 If you have any questions, please reach out at
-                <a href="mailto:hello@afaraaccelerator.org" style="color:#173a3a;text-decoration:underline;">hello@afaraaccelerator.org</a>.
+                <a href="mailto:hello@afaraaccelerator.org" style="color:#034a21;text-decoration:underline;">hello@afaraaccelerator.org</a>.
               </p>
 
             </td>
@@ -414,7 +414,7 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
           <tr>
             <td style="padding:0 48px 48px 48px;">
               <p style="margin:32px 0 4px 0;font-size:15px;line-height:1.6;color:#2d2d2d;">Warm regards,</p>
-              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#173a3a;">
+              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#034a21;">
                 The AFÁRÁ Team
               </p>
             </td>
@@ -422,7 +422,7 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
 
           <!-- Footer -->
           <tr>
-            <td style="background-color:#173a3a;padding:24px 48px;">
+            <td style="background-color:#034a21;padding:24px 48px;">
               <p style="margin:0 0 6px 0;font-size:13px;line-height:1.6;color:#a8c4c4;">
                 AFÁRÁ is an initiative of
                 <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>
@@ -479,7 +479,7 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;background-color:#f9f5f0;border-radius:4px;">
                 <tr>
                   <td style="padding:24px 28px;">
-                    <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#173a3a;">Feedback from the team</p>
+                    <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#034a21;">Feedback from the team</p>
                     <p style="margin:0;font-size:15px;line-height:1.7;color:#2d2d2d;font-style:italic;">"${reviewNotes}"</p>
                     <p style="margin:8px 0 0 0;font-size:13px;color:#555555;">— The AFÁRÁ Team</p>
                   </td>
@@ -509,14 +509,14 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
 
           <!-- Green accent line -->
           <tr>
-            <td style="background-color:#173a3a;height:4px;font-size:0;line-height:0;">&nbsp;</td>
+            <td style="background-color:#034a21;height:4px;font-size:0;line-height:0;">&nbsp;</td>
           </tr>
 
           <!-- Main content -->
           <tr>
             <td style="padding:48px 48px 32px 48px;">
 
-              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#173a3a;line-height:1.3;">
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#034a21;line-height:1.3;">
                 An update on your application
               </h1>
 
@@ -525,7 +525,7 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
               </p>
 
               <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
-                Thank you for taking the time to apply to the <strong style="color:#173a3a;">AFÁRÁ Accelerator Program</strong>. After careful review of all applications, we regret to inform you that we are unable to offer you a place in the current cohort.
+                Thank you for taking the time to apply to the <strong style="color:#034a21;">AFÁRÁ Accelerator Program</strong>. After careful review of all applications, we regret to inform you that we are unable to offer you a place in the current cohort.
               </p>
 
               <p style="margin:0 0 32px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
@@ -542,28 +542,28 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
               </table>
 
               <!-- Stay connected -->
-              <h2 style="margin:32px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;color:#173a3a;">
+              <h2 style="margin:32px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;color:#034a21;">
                 Stay connected with AFÁRÁ
               </h2>
 
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;">
                 <tr>
                   <td style="padding:10px 0;vertical-align:top;width:24px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#034a21;margin-top:6px;">&nbsp;</span>
                   </td>
                   <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">We run new cohorts regularly — we encourage you to apply again in a future cycle</td>
                 </tr>
                 <tr>
                   <td style="padding:10px 0;vertical-align:top;width:24px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#034a21;margin-top:6px;">&nbsp;</span>
                   </td>
-                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">Follow our updates and events at <a href="https://afaraaccelerator.org" style="color:#173a3a;text-decoration:underline;">afaraaccelerator.org</a></td>
+                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">Follow our updates and events at <a href="https://afaraaccelerator.org" style="color:#034a21;text-decoration:underline;">afaraaccelerator.org</a></td>
                 </tr>
                 <tr>
                   <td style="padding:10px 0;vertical-align:top;width:24px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#034a21;margin-top:6px;">&nbsp;</span>
                   </td>
-                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">For any questions, reach us at <a href="mailto:hello@afaraaccelerator.org" style="color:#173a3a;text-decoration:underline;">hello@afaraaccelerator.org</a></td>
+                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">For any questions, reach us at <a href="mailto:hello@afaraaccelerator.org" style="color:#034a21;text-decoration:underline;">hello@afaraaccelerator.org</a></td>
                 </tr>
               </table>
 
@@ -578,7 +578,7 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
           <tr>
             <td style="padding:0 48px 48px 48px;">
               <p style="margin:32px 0 4px 0;font-size:15px;line-height:1.6;color:#2d2d2d;">Warm regards,</p>
-              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#173a3a;">
+              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#034a21;">
                 The AFÁRÁ Team
               </p>
             </td>
@@ -586,7 +586,7 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
 
           <!-- Footer -->
           <tr>
-            <td style="background-color:#173a3a;padding:24px 48px;">
+            <td style="background-color:#034a21;padding:24px 48px;">
               <p style="margin:0 0 6px 0;font-size:13px;line-height:1.6;color:#a8c4c4;">
                 AFÁRÁ is an initiative of
                 <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>
@@ -661,14 +661,14 @@ export async function sendDisqualificationEmail(email: string, firstName?: strin
 
           <!-- Green accent line -->
           <tr>
-            <td style="background-color:#173a3a;height:4px;font-size:0;line-height:0;">&nbsp;</td>
+            <td style="background-color:#034a21;height:4px;font-size:0;line-height:0;">&nbsp;</td>
           </tr>
 
           <!-- Main content -->
           <tr>
             <td style="padding:48px 48px 32px 48px;">
 
-              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#173a3a;line-height:1.3;">
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#034a21;line-height:1.3;">
                 An update on your application
               </h1>
 
@@ -677,7 +677,7 @@ export async function sendDisqualificationEmail(email: string, firstName?: strin
               </p>
 
               <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
-                Thank you sincerely for your interest in the <strong style="color:#173a3a;">AFÁRÁ Accelerator Program</strong> and for the time you invested in completing your application.
+                Thank you sincerely for your interest in the <strong style="color:#034a21;">AFÁRÁ Accelerator Program</strong> and for the time you invested in completing your application.
               </p>
 
               <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
@@ -685,7 +685,7 @@ export async function sendDisqualificationEmail(email: string, firstName?: strin
               </p>
 
               <p style="margin:0 0 32px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
-                AFÁRÁ is specifically designed to support <strong style="color:#173a3a;">female-owned and female-led African businesses</strong> operating in the <strong style="color:#173a3a;">Energy and Infrastructure</strong> sectors. If your current work does not fall within these parameters, we hope you will find a programme better suited to your journey.
+                AFÁRÁ is specifically designed to support <strong style="color:#034a21;">female-owned and female-led African businesses</strong> operating in the <strong style="color:#034a21;">Energy and Infrastructure</strong> sectors. If your current work does not fall within these parameters, we hope you will find a programme better suited to your journey.
               </p>
 
               <!-- Divider -->
@@ -696,28 +696,28 @@ export async function sendDisqualificationEmail(email: string, firstName?: strin
               </table>
 
               <!-- Other resources -->
-              <h2 style="margin:32px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;color:#173a3a;">
+              <h2 style="margin:32px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;color:#034a21;">
                 We wish you well
               </h2>
 
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;">
                 <tr>
                   <td style="padding:10px 0;vertical-align:top;width:24px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#034a21;margin-top:6px;">&nbsp;</span>
                   </td>
                   <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">We encourage you to explore other programmes and resources aligned with your industry and goals</td>
                 </tr>
                 <tr>
                   <td style="padding:10px 0;vertical-align:top;width:24px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#034a21;margin-top:6px;">&nbsp;</span>
                   </td>
-                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">Stay connected with us at <a href="https://afaraaccelerator.org" style="color:#173a3a;text-decoration:underline;">afaraaccelerator.org</a> for future news and events</td>
+                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">Stay connected with us at <a href="https://afaraaccelerator.org" style="color:#034a21;text-decoration:underline;">afaraaccelerator.org</a> for future news and events</td>
                 </tr>
                 <tr>
                   <td style="padding:10px 0;vertical-align:top;width:24px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#173a3a;margin-top:6px;">&nbsp;</span>
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#034a21;margin-top:6px;">&nbsp;</span>
                   </td>
-                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">If you have any questions, please reach us at <a href="mailto:hello@afaraaccelerator.org" style="color:#173a3a;text-decoration:underline;">hello@afaraaccelerator.org</a></td>
+                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">If you have any questions, please reach us at <a href="mailto:hello@afaraaccelerator.org" style="color:#034a21;text-decoration:underline;">hello@afaraaccelerator.org</a></td>
                 </tr>
               </table>
 
@@ -732,7 +732,7 @@ export async function sendDisqualificationEmail(email: string, firstName?: strin
           <tr>
             <td style="padding:0 48px 48px 48px;">
               <p style="margin:32px 0 4px 0;font-size:15px;line-height:1.6;color:#2d2d2d;">Warm regards,</p>
-              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#173a3a;">
+              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#034a21;">
                 The AFÁRÁ Team
               </p>
             </td>
@@ -740,7 +740,7 @@ export async function sendDisqualificationEmail(email: string, firstName?: strin
 
           <!-- Footer -->
           <tr>
-            <td style="background-color:#173a3a;padding:24px 48px;">
+            <td style="background-color:#034a21;padding:24px 48px;">
               <p style="margin:0 0 6px 0;font-size:13px;line-height:1.6;color:#a8c4c4;">
                 AFÁRÁ is an initiative of
                 <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>
@@ -814,14 +814,14 @@ export async function sendWaitlistEmail(email: string, firstName?: string): Prom
 
           <!-- Green accent line -->
           <tr>
-            <td style="background-color:#173a3a;height:4px;font-size:0;line-height:0;">&nbsp;</td>
+            <td style="background-color:#034a21;height:4px;font-size:0;line-height:0;">&nbsp;</td>
           </tr>
 
           <!-- Main content -->
           <tr>
             <td style="padding:48px 48px 32px 48px;">
 
-              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#173a3a;line-height:1.3;">
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#034a21;line-height:1.3;">
                 An update on your application
               </h1>
 
@@ -830,11 +830,11 @@ export async function sendWaitlistEmail(email: string, firstName?: string): Prom
               </p>
 
               <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
-                Thank you for your application to the <strong style="color:#173a3a;">AFÁRÁ Accelerator Program</strong>. We have completed an initial review of all submissions and we are pleased to let you know that your application remains under active consideration.
+                Thank you for your application to the <strong style="color:#034a21;">AFÁRÁ Accelerator Program</strong>. We have completed an initial review of all submissions and we are pleased to let you know that your application remains under active consideration.
               </p>
 
               <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
-                Your application has been placed on our <strong style="color:#173a3a;">waitlist</strong> as we complete the final stages of the selection process. We will be in touch with a further update as soon as a decision is made.
+                Your application has been placed on our <strong style="color:#034a21;">waitlist</strong> as we complete the final stages of the selection process. We will be in touch with a further update as soon as a decision is made.
               </p>
 
               <p style="margin:0 0 32px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
@@ -850,7 +850,7 @@ export async function sendWaitlistEmail(email: string, firstName?: string): Prom
 
               <p style="margin:28px 0 0 0;font-size:15px;line-height:1.7;color:#555555;">
                 For any questions, please reach out at
-                <a href="mailto:hello@afaraaccelerator.org" style="color:#173a3a;text-decoration:underline;">hello@afaraaccelerator.org</a>.
+                <a href="mailto:hello@afaraaccelerator.org" style="color:#034a21;text-decoration:underline;">hello@afaraaccelerator.org</a>.
               </p>
 
             </td>
@@ -860,7 +860,7 @@ export async function sendWaitlistEmail(email: string, firstName?: string): Prom
           <tr>
             <td style="padding:0 48px 48px 48px;">
               <p style="margin:32px 0 4px 0;font-size:15px;line-height:1.6;color:#2d2d2d;">Warm regards,</p>
-              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#173a3a;">
+              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#034a21;">
                 The AFÁRÁ Team
               </p>
             </td>
@@ -868,7 +868,7 @@ export async function sendWaitlistEmail(email: string, firstName?: string): Prom
 
           <!-- Footer -->
           <tr>
-            <td style="background-color:#173a3a;padding:24px 48px;">
+            <td style="background-color:#034a21;padding:24px 48px;">
               <p style="margin:0 0 6px 0;font-size:13px;line-height:1.6;color:#a8c4c4;">
                 AFÁRÁ is an initiative of
                 <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>
@@ -1087,14 +1087,14 @@ export async function sendTeamWelcomeEmail(
 
           <!-- Accent line -->
           <tr>
-            <td style="background-color:#173a3a;height:4px;font-size:0;line-height:0;">&nbsp;</td>
+            <td style="background-color:#034a21;height:4px;font-size:0;line-height:0;">&nbsp;</td>
           </tr>
 
           <!-- Content -->
           <tr>
             <td style="padding:48px 48px 32px 48px;">
 
-              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#173a3a;line-height:1.3;">
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#034a21;line-height:1.3;">
                 Welcome to the AFÁRÁ team
               </h1>
 
@@ -1103,14 +1103,14 @@ export async function sendTeamWelcomeEmail(
               </p>
 
               <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
-                You have been added to the AFÁRÁ Accelerator Platform as a <strong style="color:#173a3a;">${displayRole}</strong>. Your account is ready — you can log in right now using the credentials below.
+                You have been added to the AFÁRÁ Accelerator Platform as a <strong style="color:#034a21;">${displayRole}</strong>. Your account is ready — you can log in right now using the credentials below.
               </p>
 
               <!-- Credentials box -->
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;background-color:#f0f5f5;border-radius:4px;">
                 <tr>
                   <td style="padding:24px 28px;">
-                    <p style="margin:0 0 4px 0;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#173a3a;">Your login credentials</p>
+                    <p style="margin:0 0 4px 0;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#034a21;">Your login credentials</p>
                     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:14px;">
                       <tr>
                         <td style="padding:6px 0;width:100px;font-size:14px;color:#555555;vertical-align:top;">Email</td>
@@ -1132,7 +1132,7 @@ export async function sendTeamWelcomeEmail(
               <!-- CTA Button -->
               <table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;">
                 <tr>
-                  <td style="border-radius:4px;background-color:#173a3a;">
+                  <td style="border-radius:4px;background-color:#034a21;">
                     <a href="${loginUrl}" style="display:inline-block;padding:14px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:4px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
                       Log In to AFÁRÁ
                     </a>
@@ -1149,7 +1149,7 @@ export async function sendTeamWelcomeEmail(
 
               <p style="margin:24px 0 0 0;font-size:15px;line-height:1.7;color:#555555;">
                 Questions? Reach us at
-                <a href="mailto:hello@afaraaccelerator.org" style="color:#173a3a;text-decoration:underline;">hello@afaraaccelerator.org</a>.
+                <a href="mailto:hello@afaraaccelerator.org" style="color:#034a21;text-decoration:underline;">hello@afaraaccelerator.org</a>.
               </p>
 
             </td>
@@ -1159,7 +1159,7 @@ export async function sendTeamWelcomeEmail(
           <tr>
             <td style="padding:0 48px 48px 48px;">
               <p style="margin:32px 0 4px 0;font-size:15px;line-height:1.6;color:#2d2d2d;">Warm regards,</p>
-              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#173a3a;">
+              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#034a21;">
                 The AFÁRÁ Team
               </p>
             </td>
@@ -1167,7 +1167,7 @@ export async function sendTeamWelcomeEmail(
 
           <!-- Footer -->
           <tr>
-            <td style="background-color:#173a3a;padding:24px 48px;">
+            <td style="background-color:#034a21;padding:24px 48px;">
               <p style="margin:0 0 6px 0;font-size:13px;line-height:1.6;color:#a8c4c4;">
                 AFÁRÁ is an initiative of
                 <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>
@@ -1275,14 +1275,14 @@ export async function sendDraftSaveNotificationEmail(
 
           <!-- Green accent line -->
           <tr>
-            <td style="background-color:#173a3a;height:4px;font-size:0;line-height:0;">&nbsp;</td>
+            <td style="background-color:#034a21;height:4px;font-size:0;line-height:0;">&nbsp;</td>
           </tr>
 
           <!-- Main content -->
           <tr>
             <td style="padding:48px 48px 32px 48px;">
 
-              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#173a3a;line-height:1.3;">
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#034a21;line-height:1.3;">
                 Your progress has been saved
               </h1>
 
@@ -1298,8 +1298,8 @@ export async function sendDraftSaveNotificationEmail(
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;background-color:#f0f5f5;border-radius:4px;">
                 <tr>
                   <td style="padding:20px 24px;">
-                    <p style="margin:0 0 4px 0;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#173a3a;">Last saved at</p>
-                    <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:20px;font-weight:600;color:#173a3a;">
+                    <p style="margin:0 0 4px 0;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#034a21;">Last saved at</p>
+                    <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:20px;font-weight:600;color:#034a21;">
                       Step ${safeStep + 1} of ${totalSteps} &mdash; ${currentStepInfo.title}
                     </p>
                     <p style="margin:4px 0 0 0;font-size:14px;color:#555555;">${currentStepInfo.description}</p>
@@ -1316,7 +1316,7 @@ export async function sendDraftSaveNotificationEmail(
 
               ${remainingSteps.length > 0 ? `
               <!-- Remaining sections -->
-              <h2 style="margin:28px 0 12px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;color:#173a3a;">
+              <h2 style="margin:28px 0 12px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;color:#034a21;">
                 Still to complete
               </h2>
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 28px 0;">
@@ -1329,7 +1329,7 @@ export async function sendDraftSaveNotificationEmail(
               <!-- CTA Button -->
               <table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;">
                 <tr>
-                  <td style="border-radius:4px;background-color:#173a3a;">
+                  <td style="border-radius:4px;background-color:#034a21;">
                     <a href="${applyUrl}" style="display:inline-block;padding:14px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:4px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
                       Continue My Application
                     </a>
@@ -1346,7 +1346,7 @@ export async function sendDraftSaveNotificationEmail(
 
               <p style="margin:24px 0 0 0;font-size:15px;line-height:1.7;color:#555555;">
                 If you have any questions, reach out to us at
-                <a href="mailto:hello@afaraaccelerator.org" style="color:#173a3a;text-decoration:underline;">hello@afaraaccelerator.org</a>.
+                <a href="mailto:hello@afaraaccelerator.org" style="color:#034a21;text-decoration:underline;">hello@afaraaccelerator.org</a>.
               </p>
 
             </td>
@@ -1356,7 +1356,7 @@ export async function sendDraftSaveNotificationEmail(
           <tr>
             <td style="padding:0 48px 48px 48px;">
               <p style="margin:32px 0 4px 0;font-size:15px;line-height:1.6;color:#2d2d2d;">Warm regards,</p>
-              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#173a3a;">
+              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#034a21;">
                 The AFÁRÁ Team
               </p>
             </td>
@@ -1364,7 +1364,7 @@ export async function sendDraftSaveNotificationEmail(
 
           <!-- Footer -->
           <tr>
-            <td style="background-color:#173a3a;padding:24px 48px;">
+            <td style="background-color:#034a21;padding:24px 48px;">
               <p style="margin:0 0 6px 0;font-size:13px;line-height:1.6;color:#a8c4c4;">
                 AFÁRÁ is an initiative of
                 <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>
@@ -1442,13 +1442,13 @@ export async function sendPasswordResetEmail(
 
           <!-- Green accent line -->
           <tr>
-            <td style="background-color:#173a3a;height:4px;font-size:0;line-height:0;">&nbsp;</td>
+            <td style="background-color:#034a21;height:4px;font-size:0;line-height:0;">&nbsp;</td>
           </tr>
 
           <!-- Main content -->
           <tr>
             <td style="padding:48px 48px 32px 48px;">
-              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;font-style:normal;color:#173a3a;line-height:1.3;">
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;font-style:normal;color:#034a21;line-height:1.3;">
                 Reset your password
               </h1>
 
@@ -1461,13 +1461,13 @@ export async function sendPasswordResetEmail(
               </p>
 
               <p style="margin:0 0 32px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
-                This link is valid for <strong style="color:#173a3a;">1 hour</strong>. If you did not request a password reset, you can safely ignore this email — your password will not change.
+                This link is valid for <strong style="color:#034a21;">1 hour</strong>. If you did not request a password reset, you can safely ignore this email — your password will not change.
               </p>
 
               <!-- CTA Button -->
               <table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;">
                 <tr>
-                  <td style="border-radius:4px;background-color:#173a3a;">
+                  <td style="border-radius:4px;background-color:#034a21;">
                     <a href="${resetUrl}" style="display:inline-block;padding:14px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:4px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
                       Reset Password
                     </a>
@@ -1484,7 +1484,7 @@ export async function sendPasswordResetEmail(
 
               <p style="margin:24px 0 0 0;font-size:13px;line-height:1.6;color:#888888;">
                 If the button above doesn't work, paste this link into your browser:<br />
-                <a href="${resetUrl}" style="color:#173a3a;word-break:break-all;">${resetUrl}</a>
+                <a href="${resetUrl}" style="color:#034a21;word-break:break-all;">${resetUrl}</a>
               </p>
             </td>
           </tr>
@@ -1566,13 +1566,13 @@ export async function sendAdminPasswordResetNotificationEmail(
 
           <!-- Green accent line -->
           <tr>
-            <td style="background-color:#173a3a;height:4px;font-size:0;line-height:0;">&nbsp;</td>
+            <td style="background-color:#034a21;height:4px;font-size:0;line-height:0;">&nbsp;</td>
           </tr>
 
           <!-- Main content -->
           <tr>
             <td style="padding:48px 48px 32px 48px;">
-              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#173a3a;line-height:1.3;">
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#034a21;line-height:1.3;">
                 Your password has been reset
               </h1>
 
@@ -1602,7 +1602,7 @@ export async function sendAdminPasswordResetNotificationEmail(
               <!-- CTA Button -->
               <table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;">
                 <tr>
-                  <td style="border-radius:4px;background-color:#173a3a;">
+                  <td style="border-radius:4px;background-color:#034a21;">
                     <a href="${loginUrl}" style="display:inline-block;padding:14px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:4px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
                       Sign In &amp; Set New Password
                     </a>
@@ -1619,7 +1619,7 @@ export async function sendAdminPasswordResetNotificationEmail(
 
               <p style="margin:24px 0 0 0;font-size:13px;line-height:1.6;color:#888888;">
                 If the button above doesn't work, paste this link into your browser:<br />
-                <a href="${loginUrl}" style="color:#173a3a;word-break:break-all;">${loginUrl}</a>
+                <a href="${loginUrl}" style="color:#034a21;word-break:break-all;">${loginUrl}</a>
               </p>
             </td>
           </tr>
