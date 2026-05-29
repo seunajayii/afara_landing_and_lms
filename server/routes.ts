@@ -19,6 +19,27 @@ const loginSchema = z.object({
   password: z.string().min(6)
 });
 
+/**
+ * Returns the canonical application base URL used for security-sensitive emails
+ * (password reset links, login notifications, etc.).
+ *
+ * The value MUST come from the APP_BASE_URL environment variable so it is never
+ * derived from attacker-supplied request headers (Origin, Host, Referer, etc.).
+ * If the variable is unset, the function throws so callers can return a 500 and
+ * log the misconfiguration rather than silently building a poisoned URL.
+ */
+function getAppBaseUrl(): string {
+  const configured = process.env.APP_BASE_URL;
+  if (!configured) {
+    console.error(
+      "SECURITY: APP_BASE_URL environment variable is not set. " +
+      "Security-sensitive emails cannot be sent safely without a trusted base URL."
+    );
+    throw new Error("APP_BASE_URL is not configured");
+  }
+  return configured.replace(/\/+$/, ""); // strip trailing slashes
+}
+
 const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
@@ -49,6 +70,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       req.session.userId = user.id;
       req.session.userRole = user.role;
+      req.session.mustChangePassword = user.mustChangePassword ?? false;
       
       const { passwordHash, ...safeUser } = user;
       res.json({ user: safeUser });
@@ -106,7 +128,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         passwordResetToken: token,
         passwordResetExpiresAt: expiresAt,
       } as any);
-      const baseUrl = req.headers.origin || `${req.protocol}://${req.get("host")}`;
+      const baseUrl = getAppBaseUrl();
       const resetUrl = `${baseUrl}/reset-password?token=${token}`;
       const { sendPasswordResetEmail } = await import("./email");
       await sendPasswordResetEmail(user.email, user.firstName, resetUrl);
@@ -174,6 +196,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         mustChangePassword: false,
       });
       if (!updated) return res.status(404).json({ error: "User not found" });
+      req.session.mustChangePassword = false;
       const { passwordHash: _ph, ...safeUser } = updated;
       res.json({ user: safeUser });
     } catch (error) {
@@ -197,11 +220,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // --- Auth middleware helpers ---
-  const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+  // Checks session identity and then re-validates mustChangePassword against the
+  // authoritative database record so stale session state cannot be exploited
+  // (e.g. when an admin resets a password while a user session is still live).
+  const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
     if (!req.session?.userId) {
       return res.status(401).json({ error: "Authentication required" });
     }
-    next();
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !user.isActive) {
+        req.session.destroy(() => {});
+        return res.status(401).json({ error: "Authentication required" });
+      }
+      if (user.mustChangePassword) {
+        // Keep session flag in sync so the client can detect this too
+        req.session.mustChangePassword = true;
+        return res.status(403).json({ error: "Password change required before accessing the platform" });
+      }
+      next();
+    } catch (err) {
+      console.error("requireAuth DB lookup failed:", err);
+      return res.status(500).json({ error: "Authentication check failed" });
+    }
   };
 
   const requireAdminRole = (req: Request, res: Response, next: NextFunction) => {
@@ -352,7 +393,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Send notification email so the user knows to expect the forced change
       try {
         const { sendAdminPasswordResetNotificationEmail } = await import("./email");
-        const baseUrl = req.headers.origin || `${req.protocol}://${req.get("host")}`;
+        const baseUrl = getAppBaseUrl();
         await sendAdminPasswordResetNotificationEmail(user.email, user.firstName, `${baseUrl}/login`);
       } catch (emailErr) {
         console.error("Failed to send password reset notification email:", emailErr);

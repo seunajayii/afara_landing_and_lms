@@ -47,49 +47,16 @@ export async function createUserWithPassword(
   });
 }
 
-export const ADMIN_DEFAULT_PASSWORD = "Admin123!";
-
-// Reset any admin-role accounts that can't log in with the default password
-// Runs on startup so production accounts are always recoverable
-export async function resetAdminPasswords(): Promise<void> {
-  const adminEmails = [
-    "admin@afaraaccelerator.org",
-    "dolapo@openspacesandbridges.com",
-  ];
-  for (const email of adminEmails) {
-    const user = await storage.getUserByEmail(email);
-    if (!user) continue;
-    const isOnDefault = user.passwordHash
-      ? await verifyPassword(ADMIN_DEFAULT_PASSWORD, user.passwordHash)
-      : false;
-    if (!isOnDefault) {
-      const passwordHash = await hashPassword(ADMIN_DEFAULT_PASSWORD);
-      await storage.updateUser(user.id, { passwordHash, mustChangePassword: false });
-      console.log(`Reset password to default for: ${email}`);
-    }
-  }
-}
-
 export async function seedSuperAdmin(): Promise<void> {
   const existingAdmin = await storage.getUserByEmail("admin@afaraaccelerator.org");
   if (existingAdmin) {
-    const updates: Record<string, unknown> = {};
-    if (existingAdmin.role !== "superadmin") {
-      updates.role = "superadmin";
-    }
-    if (existingAdmin.mustChangePassword) {
-      updates.mustChangePassword = false;
-    }
-    if (Object.keys(updates).length > 0) {
-      await storage.updateUser(existingAdmin.id, updates);
-      console.log("Super admin updated");
-    } else {
-      console.log("Super admin already exists");
-    }
+    console.log("Super admin already exists");
     return;
   }
-  
-  const passwordHash = await hashPassword(ADMIN_DEFAULT_PASSWORD);
+
+  const { randomBytes } = await import("crypto");
+  const initialPassword = randomBytes(24).toString("base64");
+  const passwordHash = await hashPassword(initialPassword);
   await storage.createUser({
     email: "admin@afaraaccelerator.org",
     passwordHash,
@@ -97,7 +64,8 @@ export async function seedSuperAdmin(): Promise<void> {
     lastName: "Admin",
     role: "superadmin",
     isActive: true,
-    mustChangePassword: false,
+    mustChangePassword: true,
   });
-  console.log("Super admin created: admin@afaraaccelerator.org");
+  console.log(`Super admin created: admin@afaraaccelerator.org (temporary password printed once)`);
+  console.log(`Temporary super-admin password: ${initialPassword}`);
 }

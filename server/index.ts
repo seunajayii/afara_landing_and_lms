@@ -2,13 +2,14 @@ import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { seedSuperAdmin, resetAdminPasswords } from "./auth";
+import { seedSuperAdmin } from "./auth";
 import { runSchemaMigrations } from "./migrations";
 
 declare module "express-session" {
   interface SessionData {
     userId: string;
     userRole: string;
+    mustChangePassword?: boolean;
   }
 }
 
@@ -61,7 +62,6 @@ app.use((req, res, next) => {
 (async () => {
   await runSchemaMigrations();
   await seedSuperAdmin();
-  await resetAdminPasswords();
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
