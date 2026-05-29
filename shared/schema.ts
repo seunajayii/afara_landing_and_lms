@@ -412,6 +412,7 @@ export const applications = pgTable("applications", {
   updatedAt: timestamp("updated_at"),
   submittedAt: timestamp("submitted_at"),
   lastDraftEmailSentAt: timestamp("last_draft_email_sent_at"),
+  resumeToken: text("resume_token").default(sql`gen_random_uuid()`),
 });
 
 // Typed attachment stored as JSON in attachmentJson columns
@@ -446,6 +447,7 @@ export const insertApplicationSchema = createInsertSchema(applications).omit({
   reviewedAt: true, 
   reviewedById: true,
   reviewNotes: true,
+  resumeToken: true,
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;

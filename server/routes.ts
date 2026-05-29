@@ -1630,26 +1630,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Public: look up a saved draft by email so applicants can resume
+  // Public: look up a saved draft by email.
+  // Without a token: returns only non-sensitive metadata (id, firstName, currentStep, updatedAt).
+  // With a valid resumeToken: returns full applicant-controlled form data (internal review fields stripped).
   app.get("/api/applications/draft", async (req: Request, res: Response) => {
     try {
       const email = ((req.query.email as string) || "").trim().toLowerCase();
       if (!email) return res.status(400).json({ error: "Email is required" });
       const application = await storage.getApplicationDraftByEmail(email);
       if (!application) return res.status(404).json({ error: "No draft found" });
-      res.json(application);
+
+      const providedToken = (req.query.token as string | undefined) || "";
+      const storedToken = application.resumeToken || "";
+      const tokenValid = providedToken && storedToken && providedToken === storedToken;
+
+      if (tokenValid) {
+        const { reviewNotes, reviewedById, reviewedAt, lastDraftEmailSentAt, resumeToken: _tok, ...fullDraft } = application;
+        return res.json(fullDraft);
+      }
+
+      res.json({
+        id: application.id,
+        firstName: application.firstName,
+        currentStep: application.currentStep,
+        updatedAt: application.updatedAt,
+      });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch draft" });
     }
   });
 
-  // Public: look up application status by email
+  // Public: look up application status by email + resumeToken.
+  // Requires the resumeToken to prevent unauthenticated enumeration and status disclosure.
   app.get("/api/applications/status", async (req: Request, res: Response) => {
     try {
       const email = ((req.query.email as string) || "").trim().toLowerCase();
       if (!email) return res.status(400).json({ error: "Email is required" });
+      const providedToken = ((req.query.token as string) || "").trim();
+      if (!providedToken) return res.status(403).json({ error: "A resume token is required to check application status" });
       const application = await storage.getMostRecentApplicationByEmail(email);
       if (!application) return res.status(404).json({ error: "No application found" });
+      const storedToken = application.resumeToken || "";
+      if (!storedToken || providedToken !== storedToken) {
+        return res.status(403).json({ error: "Invalid resume token" });
+      }
       res.json({
         status: application.status,
         submittedAt: application.submittedAt,
@@ -1685,17 +1709,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const application = await storage.createApplication(data);
 
-      // When status is "submitted", auto-create a community_member account
+      // When status is "submitted", send confirmation email only.
+      // Account provisioning is deferred until admin acceptance to avoid creating
+      // accounts for unverified email addresses.
       if (data.status === "submitted") {
         try {
-          const existingUser = await storage.getUserByEmail(data.email);
-          if (!existingUser) {
-            await createUserWithPassword(data.email, "Comm123!", data.firstName, data.lastName, "community_member", true);
-          }
           const { sendApplicationConfirmationEmail } = await import("./email");
           await sendApplicationConfirmationEmail(data.email, data.firstName);
         } catch (innerError) {
-          console.error("Failed to create community member or send confirmation email:", innerError);
+          console.error("Failed to send application confirmation email:", innerError);
         }
       }
 
@@ -1741,6 +1763,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "currentStep","status","reviewNotes","reviewedById",
     "reviewedAt","updatedAt","submittedAt","lastDraftEmailSentAt",
   ]);
+
+  // Allowlist for fields writable via the public (unauthenticated) draft-save endpoint.
+  // Internal review/workflow fields are intentionally excluded to prevent tampering.
+  const PUBLIC_PATCH_APPLICATION_FIELDS = new Set([
+    "firstName","lastName","phone","countryOfOperation","companyName",
+    "roleInCompany","personalStatement","videoEssayUrl",
+    "professionalBackground","yearsOfExperience","keyResponsibilities",
+    "majorAchievements","hasLedTeams","teamLeadershipExperience",
+    "hasProjectExperience","projectExperience","primarySector",
+    "sectorSpecification","subSectors","otherSubSector",
+    "businessDescription","problemBeingSolved","businessStage",
+    "tractionEvidence","targetMarket","scalabilityExplanation",
+    "growthPlans","isRaisingFunding",
+    "companyLegalName","companyCountry","companyHeadquarters",
+    "incorporationYear","ownershipPercentage","numberOfShareholders",
+    "shareholdersOver25Percent",
+    "isIncorporated","incorporationCertificateUrl","registrationProofUrl",
+    "revenueStreams","keepsFinancialRecords","pitchDeckUrl","businessPlanUrl",
+    "financialStatementsUrl","canProvideFinancials","isTaxRegistered",
+    "projectDescription","projectLocation","projectSector",
+    "projectCurrentStatus","projectStage","projectDocuments",
+    "otherProjectDocuments","projectedImpact",
+    "businessImpact","primaryBeneficiaries","infrastructureGapContribution",
+    "createsWomenOpportunities","womenOpportunitiesDescription",
+    "mainChallenges","supportAreasNeeded","otherSupportArea",
+    "keyActivitiesForNextStage","fundingRequired","expectedTimeline",
+    "specificProgramOutcomes","hoursPerWeek","openToMentorship",
+    "canCommitToProgram","canAttendLagosEvent","commitmentManagementPlan",
+    "willingToMentor","peerMentorshipImportance",
+    "whyAfaraIsRight","linkedinUrl","additionalInfo",
+    "currentStep","status",
+  ]);
   const YES_NO_BOOLEAN_FIELDS = new Set(["canProvideFinancials","isTaxRegistered"]);
   // Drizzle's PgTimestamp.mapToDriverValue calls .toISOString(), so these must be Date objects, not strings
   const TIMESTAMP_FIELDS = new Set(["submittedAt","reviewedAt","lastDraftEmailSentAt"]);
@@ -1763,7 +1817,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return out;
   }
 
-  // Public: applicants save/submit their own draft (requires email ownership proof)
+  // Public variant: only allows applicant-controlled fields; strips internal review/workflow fields
+  function normalizeApplicationBodyPublic(body: Record<string, unknown>): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(body)) {
+      if (!PUBLIC_PATCH_APPLICATION_FIELDS.has(key)) continue;
+      if (YES_NO_BOOLEAN_FIELDS.has(key)) {
+        if (value === "yes") { out[key] = true; continue; }
+        if (value === "no")  { out[key] = false; continue; }
+      }
+      out[key] = value;
+    }
+    return out;
+  }
+
+  // Public: applicants save/submit their own draft
+  // Ownership is proved by the resumeToken issued when the draft was created.
+  // If no token is stored (legacy row), email match is used as fallback.
   app.patch("/api/applications/:id/save", async (req: Request, res: Response) => {
     try {
       const newStatus = req.body.status;
@@ -1772,13 +1842,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Forbidden: only draft and submitted transitions are allowed on this endpoint" });
       }
 
-      // Ownership check: caller must supply the same email as stored on the draft
       const existing = await storage.getApplication(req.params.id);
       if (!existing) return res.status(404).json({ error: "Application not found" });
+
+      // Ownership check — token-based (primary) or email-based (legacy fallback)
+      const storedToken = existing.resumeToken || "";
+      const providedToken = (req.body.resumeToken || "").trim();
       const requestEmail = (req.body.email || "").trim().toLowerCase();
       const storedEmail = (existing.email || "").trim().toLowerCase();
-      if (!requestEmail || requestEmail !== storedEmail) {
-        return res.status(403).json({ error: "Forbidden: email does not match application record" });
+
+      if (storedToken) {
+        // Token is set: require it — email alone is not sufficient proof of ownership
+        if (!providedToken || providedToken !== storedToken) {
+          return res.status(403).json({ error: "Forbidden: invalid or missing resume token" });
+        }
+      } else {
+        // Legacy row without a token: fall back to email match
+        if (!requestEmail || requestEmail !== storedEmail) {
+          return res.status(403).json({ error: "Forbidden: email does not match application record" });
+        }
       }
 
       // Duplicate submission guard: if transitioning to submitted, block if:
@@ -1797,7 +1879,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const rawPayload = req.body.email
         ? { ...req.body, email: (req.body.email as string).toLowerCase().trim() }
         : req.body;
-      const updatePayload = normalizeApplicationBody(rawPayload);
+      const updatePayload = normalizeApplicationBodyPublic(rawPayload);
       const application = await storage.updateApplication(req.params.id, updatePayload);
       if (!application) return res.status(404).json({ error: "Application not found" });
 
@@ -1812,8 +1894,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (cooldownExpired) {
           const stepNumber = typeof req.body.currentStep === "number" ? req.body.currentStep : 0;
           const firstName = application.firstName || existing.firstName || undefined;
+          const token = application.resumeToken || existing.resumeToken;
+          const baseUrl = process.env.APP_URL || "https://afaraaccelerator.org";
+          const resumeUrl = token
+            ? `${baseUrl}/apply?token=${encodeURIComponent(token)}&email=${encodeURIComponent(application.email)}`
+            : `${baseUrl}/apply`;
           import("./email").then(({ sendDraftSaveNotificationEmail }) => {
-            sendDraftSaveNotificationEmail(application.email, firstName, stepNumber, 8)
+            sendDraftSaveNotificationEmail(application.email, firstName, stepNumber, 8, resumeUrl)
               .then(() => {
                 storage.updateApplication(req.params.id, { lastDraftEmailSentAt: new Date() } as any)
                   .catch(err => console.error("Failed to stamp lastDraftEmailSentAt:", err));
@@ -1823,17 +1910,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // When transitioning to submitted, auto-create community_member account + confirmation email
+      // When transitioning to submitted, send confirmation email only.
+      // Account provisioning is deferred until admin acceptance to avoid creating
+      // accounts for unverified email addresses.
       if (newStatus === "submitted") {
         try {
-          const existingUser = await storage.getUserByEmail(application.email);
-          if (!existingUser) {
-            await createUserWithPassword(application.email, "Comm123!", application.firstName, application.lastName, "community_member", true);
-          }
           const { sendApplicationConfirmationEmail } = await import("./email");
           await sendApplicationConfirmationEmail(application.email, application.firstName);
         } catch (innerError) {
-          console.error("Failed to create community member or send confirmation email:", innerError);
+          console.error("Failed to send application confirmation email:", innerError);
         }
       }
 
@@ -1850,10 +1935,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (newStatus === "accepted") {
       try {
         const user = await storage.getUserByEmail(application.email);
-        if (user) await storage.updateUser(user.id, { role: "participant" });
+        if (user) {
+          await storage.updateUser(user.id, { role: "participant" });
+        } else {
+          // Account provisioning deferred from submission to here so only
+          // admin-verified applicants receive accounts.
+          const tempPassword = randomUUID() + randomUUID();
+          await createUserWithPassword(application.email, tempPassword, application.firstName, application.lastName, "participant", true);
+        }
         await sendAcceptanceEmail(application.email, application.firstName, reviewNotes);
       } catch (err) {
-        console.error("Failed to promote user or send acceptance email:", err);
+        console.error("Failed to provision account or send acceptance email:", err);
       }
     } else if (newStatus === "rejected") {
       try {

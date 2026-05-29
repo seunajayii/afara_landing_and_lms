@@ -300,12 +300,20 @@ const projectStageOptions = [
   "Operational with scale-up potential",
 ];
 
+const getStoredToken = (email: string): string | null => {
+  try { return localStorage.getItem(`afara_draft_token:${email.toLowerCase().trim()}`); } catch { return null; }
+};
+const storeToken = (email: string, token: string): void => {
+  try { localStorage.setItem(`afara_draft_token:${email.toLowerCase().trim()}`, token); } catch {}
+};
+
 export default function Apply() {
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [alreadySubmitted, setAlreadySubmitted] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);
+  const [resumeToken, setResumeToken] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showResumeDialog, setShowResumeDialog] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<any>(null);
@@ -313,10 +321,24 @@ export default function Apply() {
   const [resumeEmail, setResumeEmail] = useState("");
   const [isCheckingDraft, setIsCheckingDraft] = useState(false);
   const [draftLookupError, setDraftLookupError] = useState("");
+  const [draftNeedsEmailLink, setDraftNeedsEmailLink] = useState(false);
   const [statusEmail, setStatusEmail] = useState("");
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [statusResult, setStatusResult] = useState<{ status: string; submittedAt: string | null; updatedAt: string | null } | null>(null);
   const [statusError, setStatusError] = useState("");
+
+  // Handle magic-link resume from email: ?token=...&email=...
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get("token");
+    const urlEmail = params.get("email");
+    if (urlToken && urlEmail) {
+      storeToken(urlEmail, urlToken);
+      setResumeToken(urlToken);
+      setResumeEmail(urlEmail);
+      setAppMode("select");
+    }
+  }, []);
 
   const form = useForm<ApplicationFormData>({
     resolver: zodResolver(applicationSchema),
@@ -412,6 +434,7 @@ export default function Apply() {
         const response = await apiRequest("PATCH", `/api/applications/${draftId}/save`, {
           ...cleanedData,
           status: "draft",
+          resumeToken: resumeToken || undefined,
         });
         return response.json();
       } else {
@@ -423,8 +446,10 @@ export default function Apply() {
       }
     },
     onSuccess: (data) => {
-      if (data.id) {
-        setDraftId(data.id);
+      if (data.id) setDraftId(data.id);
+      if (data.resumeToken && data.email) {
+        storeToken(data.email, data.resumeToken);
+        setResumeToken(data.resumeToken);
       }
       setLastSaved(new Date());
       toast({
@@ -455,6 +480,7 @@ export default function Apply() {
           ...cleanedData,
           status: "submitted",
           submittedAt: new Date().toISOString(),
+          resumeToken: resumeToken || undefined,
         });
         return response.json();
       } else {
@@ -504,12 +530,19 @@ export default function Apply() {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
     if (draftId) return;
     try {
-      const response = await fetch(`/api/applications/draft?email=${encodeURIComponent(email)}`);
+      const storedTok = getStoredToken(email);
+      const tokenParam = storedTok ? `&token=${encodeURIComponent(storedTok)}` : "";
+      const response = await fetch(`/api/applications/draft?email=${encodeURIComponent(email)}${tokenParam}`);
       if (response.ok) {
         const draft = await response.json();
         if (draft?.id) {
-          setPendingDraft(draft);
-          setShowResumeDialog(true);
+          if (storedTok && draft.email) {
+            // Full data returned — can resume directly
+            setPendingDraft(draft);
+            setResumeToken(storedTok);
+            setShowResumeDialog(true);
+          }
+          // If no token, silently skip auto-resume — user can use the explicit "Find My Draft" flow
         }
       }
     } catch {
@@ -620,15 +653,26 @@ export default function Apply() {
     }
     setIsCheckingDraft(true);
     setDraftLookupError("");
+    setDraftNeedsEmailLink(false);
     try {
-      const response = await fetch(`/api/applications/draft?email=${encodeURIComponent(email)}`);
+      const storedTok = getStoredToken(email);
+      const tokenParam = storedTok ? `&token=${encodeURIComponent(storedTok)}` : "";
+      const response = await fetch(`/api/applications/draft?email=${encodeURIComponent(email)}${tokenParam}`);
       if (response.ok) {
         const draft = await response.json();
         if (draft?.id) {
-          setPendingDraft(draft);
-          handleResumeDraftFrom(draft);
-          setAppMode("form");
-          return;
+          if (storedTok && draft.email) {
+            // Full data returned via valid token
+            setResumeToken(storedTok);
+            setPendingDraft(draft);
+            handleResumeDraftFrom(draft);
+            setAppMode("form");
+            return;
+          } else {
+            // Draft found but no token on this device — show guidance
+            setDraftNeedsEmailLink(true);
+            return;
+          }
         }
       }
       setDraftLookupError("No saved draft found for this email. You can start a new application instead.");
@@ -649,10 +693,17 @@ export default function Apply() {
     setStatusError("");
     setStatusResult(null);
     try {
-      const response = await fetch(`/api/applications/status?email=${encodeURIComponent(email)}`);
+      const storedTok = getStoredToken(email);
+      if (!storedTok) {
+        setStatusError("To check your status, please use the link in the progress email we sent when you saved your application.");
+        return;
+      }
+      const response = await fetch(`/api/applications/status?email=${encodeURIComponent(email)}&token=${encodeURIComponent(storedTok)}`);
       if (response.ok) {
         const data = await response.json();
         setStatusResult(data);
+      } else if (response.status === 403) {
+        setStatusError("To check your status, please use the link in the progress email we sent when you saved your application.");
       } else {
         setStatusError("No application found for this email address.");
       }
@@ -786,7 +837,7 @@ export default function Apply() {
                       type="email"
                       placeholder="your@email.com"
                       value={resumeEmail}
-                      onChange={(e) => { setResumeEmail(e.target.value); setDraftLookupError(""); }}
+                      onChange={(e) => { setResumeEmail(e.target.value); setDraftLookupError(""); setDraftNeedsEmailLink(false); }}
                       onKeyDown={(e) => { if (e.key === "Enter") handleCheckDraft(); }}
                       className="pl-9"
                       data-testid="input-resume-email"
@@ -794,6 +845,11 @@ export default function Apply() {
                   </div>
                   {draftLookupError && (
                     <p className="text-sm text-destructive" data-testid="text-draft-lookup-error">{draftLookupError}</p>
+                  )}
+                  {draftNeedsEmailLink && (
+                    <p className="text-sm text-muted-foreground" data-testid="text-draft-needs-email-link">
+                      We found your saved draft. To resume it, use the link in the progress email we sent when you last saved your application.
+                    </p>
                   )}
                   <Button
                     variant="outline"

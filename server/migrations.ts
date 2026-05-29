@@ -8,7 +8,8 @@ export async function runSchemaMigrations() {
       ALTER TABLE applications
         ADD COLUMN IF NOT EXISTS registration_proof_url TEXT,
         ADD COLUMN IF NOT EXISTS financial_statements_url TEXT,
-        ADD COLUMN IF NOT EXISTS last_draft_email_sent_at TIMESTAMP
+        ADD COLUMN IF NOT EXISTS last_draft_email_sent_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS resume_token TEXT DEFAULT gen_random_uuid()
     `);
     // Add disqualified status to the enum (safe — only adds, never removes)
     await db.execute(sql`

@@ -1226,7 +1226,8 @@ export async function sendDraftSaveNotificationEmail(
   email: string,
   firstName: string | undefined,
   currentStep: number,
-  totalSteps: number
+  totalSteps: number,
+  resumeUrl?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const { client, fromEmail } = await getResendClient();
@@ -1238,7 +1239,7 @@ export async function sendDraftSaveNotificationEmail(
     const safeStep = Math.max(0, Math.min(currentStep, APPLICATION_STEPS.length - 1));
     const currentStepInfo = APPLICATION_STEPS[safeStep];
     const remainingSteps = APPLICATION_STEPS.slice(safeStep + 1);
-    const applyUrl = 'https://afaraaccelerator.org/apply';
+    const applyUrl = resumeUrl || 'https://afaraaccelerator.org/apply';
 
     const remainingRowsHtml = remainingSteps.length > 0
       ? remainingSteps.map(s => `
