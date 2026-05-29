@@ -229,6 +229,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return true;
   };
 
+  // Strip security-sensitive fields before returning a user object in an API response
+  const sanitizeUser = (user: Record<string, any>) => {
+    const { passwordHash, passwordResetToken, passwordResetExpiresAt, mustChangePassword, ...safe } = user;
+    return safe;
+  };
+
+  const isAdminSession = (req: Request) => {
+    const role = req.session?.userRole as string | undefined;
+    return role === "admin" || role === "superadmin";
+  };
+
   app.get("/api/users", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const users = await storage.getAllUsers();
@@ -240,9 +251,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/users/:id", requireAuth, async (req: Request, res: Response) => {
     try {
+      if (req.params.id !== req.session.userId && !isAdminSession(req)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const user = await storage.getUser(req.params.id);
       if (!user) return res.status(404).json({ error: "User not found" });
-      res.json(user);
+      res.json(sanitizeUser(user));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch user" });
     }
@@ -257,11 +271,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/users", async (req: Request, res: Response) => {
+  app.post("/api/users", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const data = insertUserSchema.parse(req.body);
       const user = await storage.createUser(data);
-      res.status(201).json(user);
+      res.status(201).json(sanitizeUser(user));
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: error.errors });
@@ -369,6 +383,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const profile = await storage.getProfile(req.params.userId);
       if (!profile) return res.status(404).json({ error: "Profile not found" });
+      const callerIsOwner = req.session?.userId === req.params.userId;
+      if (!callerIsOwner && !isAdminSession(req)) {
+        const { meetingPlatformPreference, meetingLink, ...publicProfile } = profile;
+        return res.json(publicProfile);
+      }
       res.json(profile);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch profile" });
@@ -401,7 +420,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/mentors", async (req: Request, res: Response) => {
     try {
       const mentors = await storage.getAllMentors();
-      res.json(mentors);
+      res.json(mentors.map(({ passwordHash, passwordResetToken, passwordResetExpiresAt, mustChangePassword, ...m }) => m));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch mentors" });
     }
@@ -413,7 +432,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!mentorProfile) return res.status(404).json({ error: "Mentor profile not found" });
       const user = await storage.getUser(req.params.userId);
       const profile = await storage.getProfile(req.params.userId);
-      res.json({ ...user, mentorProfile, profile });
+      const safeUser = user ? sanitizeUser(user) : {};
+      const callerIsOwner = req.session?.userId === req.params.userId;
+      const safeProfile = profile && !callerIsOwner && !isAdminSession(req)
+        ? (({ meetingPlatformPreference, meetingLink, ...p }) => p)(profile)
+        : profile;
+      res.json({ ...safeUser, mentorProfile, profile: safeProfile });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch mentor" });
     }
@@ -445,7 +469,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/facilitators", async (req: Request, res: Response) => {
     try {
       const facilitators = await storage.getAllFacilitators();
-      res.json(facilitators);
+      res.json(facilitators.map(({ passwordHash, passwordResetToken, passwordResetExpiresAt, mustChangePassword, ...f }) => f));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch facilitators" });
     }
@@ -457,7 +481,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!facilitatorProfile) return res.status(404).json({ error: "Facilitator profile not found" });
       const user = await storage.getUser(req.params.userId);
       const profile = await storage.getProfile(req.params.userId);
-      res.json({ ...user, facilitatorProfile, profile });
+      const safeUser = user ? sanitizeUser(user) : {};
+      const callerIsOwner = req.session?.userId === req.params.userId;
+      const safeProfile = profile && !callerIsOwner && !isAdminSession(req)
+        ? (({ meetingPlatformPreference, meetingLink, ...p }) => p)(profile)
+        : profile;
+      res.json({ ...safeUser, facilitatorProfile, profile: safeProfile });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch facilitator" });
     }
@@ -514,7 +543,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/courses", async (req: Request, res: Response) => {
+  app.post("/api/courses", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const data = insertCourseSchema.parse(req.body);
       const course = await storage.createCourse(data);
@@ -527,7 +556,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/courses/:id", async (req: Request, res: Response) => {
+  app.patch("/api/courses/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const course = await storage.updateCourse(req.params.id, req.body);
       if (!course) return res.status(404).json({ error: "Course not found" });
@@ -537,7 +566,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/courses/:id", async (req: Request, res: Response) => {
+  app.delete("/api/courses/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       await storage.deleteCourse(req.params.id);
       res.status(204).send();
@@ -555,7 +584,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/modules", async (req: Request, res: Response) => {
+  app.post("/api/modules", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const data = insertModuleSchema.parse(req.body);
       const module = await storage.createModule(data);
@@ -568,7 +597,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/modules/:id", async (req: Request, res: Response) => {
+  app.patch("/api/modules/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const module = await storage.updateModule(req.params.id, req.body);
       if (!module) return res.status(404).json({ error: "Module not found" });
@@ -578,7 +607,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/modules/:id", async (req: Request, res: Response) => {
+  app.delete("/api/modules/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       await storage.deleteModule(req.params.id);
       res.status(204).send();
@@ -606,7 +635,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/lessons", async (req: Request, res: Response) => {
+  app.post("/api/lessons", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const data = insertLessonSchema.parse(req.body);
       const lesson = await storage.createLesson(data);
@@ -619,7 +648,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/lessons/:id", async (req: Request, res: Response) => {
+  app.patch("/api/lessons/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const lesson = await storage.updateLesson(req.params.id, req.body);
       if (!lesson) return res.status(404).json({ error: "Lesson not found" });
@@ -629,7 +658,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/lessons/:id", async (req: Request, res: Response) => {
+  app.delete("/api/lessons/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       await storage.deleteLesson(req.params.id);
       res.status(204).send();
@@ -713,8 +742,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/mentorship/requests/mentee/:menteeId", async (req: Request, res: Response) => {
+  app.get("/api/mentorship/requests/mentee/:menteeId", requireAuth, async (req: Request, res: Response) => {
     try {
+      if (req.params.menteeId !== req.session.userId && !isAdminSession(req)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const requests = await storage.getMentorshipRequestsByMentee(req.params.menteeId);
       res.json(requests);
     } catch (error) {
@@ -722,8 +754,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/mentorship/requests/mentor/:mentorId", async (req: Request, res: Response) => {
+  app.get("/api/mentorship/requests/mentor/:mentorId", requireAuth, async (req: Request, res: Response) => {
     try {
+      if (req.params.mentorId !== req.session.userId && !isAdminSession(req)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const requests = await storage.getMentorshipRequestsByMentor(req.params.mentorId);
       res.json(requests);
     } catch (error) {
@@ -731,9 +766,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/mentorship/requests", async (req: Request, res: Response) => {
+  app.post("/api/mentorship/requests", requireAuth, async (req: Request, res: Response) => {
     try {
       const data = insertMentorshipRequestSchema.parse(req.body);
+      if (data.menteeId !== req.session.userId && !isAdminSession(req)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const request = await storage.createMentorshipRequest(data);
       res.status(201).json(request);
     } catch (error) {
@@ -744,18 +782,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/mentorship/requests/:id", async (req: Request, res: Response) => {
+  app.patch("/api/mentorship/requests/:id", requireAuth, async (req: Request, res: Response) => {
     try {
+      const existing = await storage.getMentorshipRequest(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Request not found" });
+      if (existing.menteeId !== req.session.userId && existing.mentorId !== req.session.userId && !isAdminSession(req)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const request = await storage.updateMentorshipRequest(req.params.id, req.body);
-      if (!request) return res.status(404).json({ error: "Request not found" });
       res.json(request);
     } catch (error) {
       res.status(500).json({ error: "Failed to update mentorship request" });
     }
   });
 
-  app.get("/api/mentorship/sessions/mentor/:mentorId", async (req: Request, res: Response) => {
+  app.get("/api/mentorship/sessions/mentor/:mentorId", requireAuth, async (req: Request, res: Response) => {
     try {
+      if (req.params.mentorId !== req.session.userId && !isAdminSession(req)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const sessions = await storage.getMentorshipSessionsByMentor(req.params.mentorId);
       res.json(sessions);
     } catch (error) {
@@ -763,8 +808,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/mentorship/sessions/mentee/:menteeId", async (req: Request, res: Response) => {
+  app.get("/api/mentorship/sessions/mentee/:menteeId", requireAuth, async (req: Request, res: Response) => {
     try {
+      if (req.params.menteeId !== req.session.userId && !isAdminSession(req)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const sessions = await storage.getMentorshipSessionsByMentee(req.params.menteeId);
       res.json(sessions);
     } catch (error) {
@@ -772,9 +820,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/mentorship/sessions", async (req: Request, res: Response) => {
+  app.post("/api/mentorship/sessions", requireAuth, async (req: Request, res: Response) => {
     try {
       const data = insertMentorshipSessionSchema.parse(req.body);
+      if (data.mentorId !== req.session.userId && data.menteeId !== req.session.userId && !isAdminSession(req)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const session = await storage.createMentorshipSession(data);
       res.status(201).json(session);
     } catch (error) {
@@ -785,10 +836,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/mentorship/sessions/:id", async (req: Request, res: Response) => {
+  app.patch("/api/mentorship/sessions/:id", requireAuth, async (req: Request, res: Response) => {
     try {
+      const existing = await storage.getMentorshipSession(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Session not found" });
+      if (existing.mentorId !== req.session.userId && existing.menteeId !== req.session.userId && !isAdminSession(req)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const session = await storage.updateMentorshipSession(req.params.id, req.body);
-      if (!session) return res.status(404).json({ error: "Session not found" });
       res.json(session);
     } catch (error) {
       res.status(500).json({ error: "Failed to update mentorship session" });
@@ -1263,8 +1318,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/certificates/user/:userId", async (req: Request, res: Response) => {
+  app.get("/api/certificates/user/:userId", requireAuth, async (req: Request, res: Response) => {
     try {
+      if (req.params.userId !== req.session.userId && !isAdminSession(req)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const userCertificates = await storage.getCertificatesByUser(req.params.userId);
       const certificatesWithCourses = await Promise.all(
         userCertificates.map(async (cert) => {
@@ -1278,27 +1336,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/certificates/:id", async (req: Request, res: Response) => {
+  app.get("/api/certificates/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const certificate = await storage.getCertificate(req.params.id);
       if (!certificate) return res.status(404).json({ error: "Certificate not found" });
+      if (certificate.userId !== req.session.userId && !isAdminSession(req)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const course = await storage.getCourse(certificate.courseId);
       const user = await storage.getUser(certificate.userId);
-      res.json({ ...certificate, course, user });
+      const safeUser = user ? sanitizeUser(user) : null;
+      res.json({ ...certificate, course, user: safeUser });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch certificate" });
     }
   });
 
-  app.post("/api/certificates", async (req: Request, res: Response) => {
+  app.post("/api/certificates", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
-      const data = {
+      const data = insertCertificateSchema.parse({
         ...req.body,
         certificateNumber: `AFARA-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`
-      };
+      });
       const certificate = await storage.createCertificate(data);
       res.status(201).json(certificate);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
       res.status(500).json({ error: "Failed to create certificate" });
     }
   });
