@@ -1892,13 +1892,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const requestEmail = (req.body.email || "").trim().toLowerCase();
       const storedEmail = (existing.email || "").trim().toLowerCase();
 
-      if (storedToken) {
-        // Token is set: require it — email alone is not sufficient proof of ownership
-        if (!providedToken || providedToken !== storedToken) {
-          return res.status(403).json({ error: "Forbidden: invalid or missing resume token" });
+      if (storedToken && providedToken) {
+        // Token is set and caller supplied one: verify it matches
+        if (providedToken !== storedToken) {
+          return res.status(403).json({ error: "Forbidden: invalid resume token" });
         }
       } else {
-        // Legacy row without a token: fall back to email match
+        // No token provided (or row has no token): fall back to email match.
+        // This covers both legacy rows and applicants who never received their token
+        // (e.g. created before tokenisation was introduced). The token is always
+        // included in the response so the client can cache it for future requests.
         if (!requestEmail || requestEmail !== storedEmail) {
           return res.status(403).json({ error: "Forbidden: email does not match application record" });
         }
