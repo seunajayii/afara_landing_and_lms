@@ -101,6 +101,7 @@ function CountrySelect({ value, onChange, placeholder = "Select a country", test
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          type="button"
           variant="outline"
           role="combobox"
           aria-expanded={open}
@@ -1031,6 +1032,7 @@ export default function Apply() {
               
               return (
                 <button
+                  type="button"
                   key={step.id}
                   onClick={() => setCurrentStep(index)}
                   className={`flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
@@ -1050,7 +1052,7 @@ export default function Apply() {
           </div>
 
           <Form {...form}>
-            <form>
+            <form onSubmit={(e) => e.preventDefault()}>
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
