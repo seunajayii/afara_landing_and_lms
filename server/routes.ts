@@ -1753,6 +1753,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const application = await storage.createApplication(data);
 
+      if (data.status === "draft") {
+        // First-time draft save: send progress notification email (fire-and-forget)
+        const stepNumber = typeof req.body.currentStep === "number" ? req.body.currentStep : 0;
+        const token = application.resumeToken;
+        const baseUrl = process.env.APP_URL || "https://afaraaccelerator.org";
+        const resumeUrl = token
+          ? `${baseUrl}/apply?token=${encodeURIComponent(token)}&email=${encodeURIComponent(application.email)}`
+          : `${baseUrl}/apply`;
+        import("./email").then(({ sendDraftSaveNotificationEmail }) => {
+          sendDraftSaveNotificationEmail(application.email, data.firstName, stepNumber, 8, resumeUrl)
+            .catch(err => console.error("Draft save notification email failed:", err));
+        }).catch(err => console.error("Failed to import email module:", err));
+      }
+
       // When status is "submitted", send confirmation email only.
       // Account provisioning is deferred until admin acceptance to avoid creating
       // accounts for unverified email addresses.
@@ -1947,30 +1961,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!application) return res.status(404).json({ error: "Application not found" });
 
       // When saving a draft, send a progress notification email (fire-and-forget)
-      // Throttled to once per 24 hours per application to avoid spamming applicants.
-      if (!newStatus || newStatus === "draft") {
-        const lastSent = existing.lastDraftEmailSentAt
-          ? new Date(existing.lastDraftEmailSentAt).getTime()
-          : 0;
-        const threeDays = 3 * 24 * 60 * 60 * 1000;
-        const cooldownExpired = Date.now() - lastSent > threeDays;
-        if (cooldownExpired) {
-          const stepNumber = typeof req.body.currentStep === "number" ? req.body.currentStep : 0;
-          const firstName = application.firstName || existing.firstName || undefined;
-          const token = application.resumeToken || existing.resumeToken;
-          const baseUrl = process.env.APP_URL || "https://afaraaccelerator.org";
-          const resumeUrl = token
-            ? `${baseUrl}/apply?token=${encodeURIComponent(token)}&email=${encodeURIComponent(application.email)}`
-            : `${baseUrl}/apply`;
-          import("./email").then(({ sendDraftSaveNotificationEmail }) => {
-            sendDraftSaveNotificationEmail(application.email, firstName, stepNumber, 8, resumeUrl)
-              .then(() => {
-                storage.updateApplication(req.params.id, { lastDraftEmailSentAt: new Date() } as any)
-                  .catch(err => console.error("Failed to stamp lastDraftEmailSentAt:", err));
-              })
-              .catch(err => console.error("Draft save notification email failed:", err));
-          }).catch(err => console.error("Failed to import email module:", err));
-        }
+      if (newStatus === "draft") {
+        const stepNumber = typeof req.body.currentStep === "number" ? req.body.currentStep : 0;
+        const firstName = application.firstName || existing.firstName || undefined;
+        const token = application.resumeToken || existing.resumeToken;
+        const baseUrl = process.env.APP_URL || "https://afaraaccelerator.org";
+        const resumeUrl = token
+          ? `${baseUrl}/apply?token=${encodeURIComponent(token)}&email=${encodeURIComponent(application.email)}`
+          : `${baseUrl}/apply`;
+        import("./email").then(({ sendDraftSaveNotificationEmail }) => {
+          sendDraftSaveNotificationEmail(application.email, firstName, stepNumber, 8, resumeUrl)
+            .catch(err => console.error("Draft save notification email failed:", err));
+        }).catch(err => console.error("Failed to import email module:", err));
       }
 
       // When transitioning to submitted, send confirmation email only.
