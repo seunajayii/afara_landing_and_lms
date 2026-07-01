@@ -715,10 +715,15 @@ export default function Apply() {
     }
   };
 
-  const handleNext = async () => {
+  const handleNext = () => {
     if (currentStep < 7) {
-      setCurrentStep(currentStep + 1);
+      const nextStep = currentStep + 1;
+      setCurrentStep(nextStep);
       window.scrollTo(0, 0);
+      const data = form.getValues();
+      if (data.email && data.firstName && data.lastName) {
+        saveDraftMutation.mutate({ ...data, currentStep: nextStep });
+      }
     }
   };
 
@@ -730,8 +735,9 @@ export default function Apply() {
   };
 
   const handleSubmit = () => {
-    const data = form.getValues();
-    submitMutation.mutate(data);
+    form.handleSubmit((data) => {
+      submitMutation.mutate(data);
+    })();
   };
 
   const progressPercent = ((currentStep + 1) / steps.length) * 100;

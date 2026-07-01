@@ -1739,7 +1739,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const normalized = normalizeApplicationBody(req.body);
       const raw = insertApplicationSchema.parse(normalized);
-      const data = { ...raw, email: raw.email.toLowerCase().trim() };
+      const data: typeof raw & { submittedAt?: Date } = { ...raw, email: raw.email.toLowerCase().trim() };
+      if (data.status === "submitted") {
+        data.submittedAt = new Date();
+      }
 
       if (data.status === "submitted") {
         const existing = await storage.getSubmittedApplicationByEmail(data.email);
@@ -1840,6 +1843,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Drizzle's PgTimestamp.mapToDriverValue calls .toISOString(), so these must be Date objects, not strings
   const TIMESTAMP_FIELDS = new Set(["submittedAt","reviewedAt","lastDraftEmailSentAt"]);
 
+  const INTEGER_APPLICATION_FIELDS = new Set([
+    "yearsOfExperience","incorporationYear","ownershipPercentage",
+    "numberOfShareholders","hoursPerWeek","currentStep",
+  ]);
+
   function normalizeApplicationBody(body: Record<string, unknown>): Record<string, unknown> {
     const out: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(body)) {
@@ -1847,6 +1855,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (YES_NO_BOOLEAN_FIELDS.has(key)) {
         if (value === "yes") { out[key] = true; continue; }
         if (value === "no")  { out[key] = false; continue; }
+      }
+      // Coerce integer fields from string to number (HTML inputs always return strings)
+      if (INTEGER_APPLICATION_FIELDS.has(key) && typeof value === "string") {
+        if (value === "") continue; // treat empty as missing
+        const n = parseInt(value, 10);
+        if (!isNaN(n)) { out[key] = n; continue; }
+        continue; // skip non-numeric garbage
       }
       // Convert ISO timestamp strings to Date objects for Drizzle
       if (TIMESTAMP_FIELDS.has(key) && typeof value === "string" && value) {
@@ -1924,6 +1939,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? { ...req.body, email: (req.body.email as string).toLowerCase().trim() }
         : req.body;
       const updatePayload = normalizeApplicationBodyPublic(rawPayload);
+      // Set submittedAt server-side when transitioning to submitted
+      if (newStatus === "submitted") {
+        (updatePayload as Record<string, unknown>).submittedAt = new Date();
+      }
       const application = await storage.updateApplication(req.params.id, updatePayload);
       if (!application) return res.status(404).json({ error: "Application not found" });
 
