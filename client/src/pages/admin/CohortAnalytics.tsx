@@ -1,0 +1,437 @@
+import { useState } from "react";
+import { AdminSidebar } from "@/components/AdminSidebar";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import {
+  BarChart2,
+  Brain,
+  Sparkles,
+  Loader2,
+  TrendingUp,
+  Users,
+  Globe,
+  Zap,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  RefreshCw,
+} from "lucide-react";
+import type { Application, ApplicationEvaluation } from "@shared/schema";
+
+const RECOMMENDATION_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; color: string }> = {
+  strong_yes: { label: "Strong Yes", variant: "default", color: "bg-green-600" },
+  yes: { label: "Yes", variant: "default", color: "bg-green-400" },
+  maybe: { label: "Maybe", variant: "secondary", color: "bg-yellow-500" },
+  no: { label: "No", variant: "destructive", color: "bg-red-500" },
+};
+
+interface CohortData {
+  applications: Application[];
+  evaluations: ApplicationEvaluation[];
+}
+
+function ScoreHistogram({ evaluations }: { evaluations: ApplicationEvaluation[] }) {
+  const buckets = [
+    { label: "0–19", min: 0, max: 19 },
+    { label: "20–39", min: 20, max: 39 },
+    { label: "40–59", min: 40, max: 59 },
+    { label: "60–79", min: 60, max: 79 },
+    { label: "80–100", min: 80, max: 100 },
+  ];
+
+  const counts = buckets.map((b) => ({
+    ...b,
+    count: evaluations.filter((e) => e.overallScore >= b.min && e.overallScore <= b.max).length,
+  }));
+  const maxCount = Math.max(...counts.map((c) => c.count), 1);
+
+  return (
+    <div className="flex items-end gap-2 h-32">
+      {counts.map((b) => (
+        <div key={b.label} className="flex-1 flex flex-col items-center gap-1">
+          <span className="text-xs font-medium text-foreground">{b.count}</span>
+          <div
+            className="w-full rounded-t-sm bg-primary/80 transition-all"
+            style={{ height: `${Math.max(4, (b.count / maxCount) * 96)}px` }}
+          />
+          <span className="text-xs text-muted-foreground">{b.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DimensionAvgBar({ label, scores }: { label: string; scores: number[] }) {
+  const avg = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-1">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <span className="text-xs font-semibold">{avg}/100</span>
+      </div>
+      <div className="h-2 bg-muted rounded-full overflow-hidden">
+        <div className="h-full rounded-full bg-primary/70 transition-all" style={{ width: `${avg}%` }} />
+      </div>
+    </div>
+  );
+}
+
+export default function CohortAnalytics() {
+  const { toast } = useToast();
+  const [narrative, setNarrative] = useState<string | null>(null);
+  const [isGeneratingNarrative, setIsGeneratingNarrative] = useState(false);
+
+  const { data, isLoading } = useQuery<CohortData>({
+    queryKey: ["/api/admin/cohort-analytics"],
+  });
+
+  const applications = data?.applications ?? [];
+  const evaluations = data?.evaluations ?? [];
+
+  const evalMap = new Map(evaluations.map((e) => [e.applicationId, e]));
+  const appMap = new Map(applications.map((a) => [a.id, a]));
+
+  const evaluated = evaluations.length;
+  const avgScore = evaluated > 0
+    ? Math.round(evaluations.reduce((sum, e) => sum + e.overallScore, 0) / evaluated)
+    : 0;
+
+  const recCounts = {
+    strong_yes: evaluations.filter((e) => e.recommendation === "strong_yes").length,
+    yes: evaluations.filter((e) => e.recommendation === "yes").length,
+    maybe: evaluations.filter((e) => e.recommendation === "maybe").length,
+    no: evaluations.filter((e) => e.recommendation === "no").length,
+  };
+
+  const shortlistCount = recCounts.strong_yes + recCounts.yes;
+
+  const ranked = evaluations
+    .slice()
+    .sort((a, b) => b.overallScore - a.overallScore)
+    .map((e) => ({ eval: e, app: appMap.get(e.applicationId) }))
+    .filter((item) => item.app);
+
+  const sectorGroups: Record<string, ApplicationEvaluation[]> = {};
+  evaluations.forEach((e) => {
+    const app = appMap.get(e.applicationId);
+    const sector = app?.primarySector || "Unknown";
+    if (!sectorGroups[sector]) sectorGroups[sector] = [];
+    sectorGroups[sector].push(e);
+  });
+  const sectorStats = Object.entries(sectorGroups)
+    .map(([sector, evals]) => ({
+      sector,
+      count: evals.length,
+      avgScore: Math.round(evals.reduce((s, e) => s + e.overallScore, 0) / evals.length),
+    }))
+    .sort((a, b) => b.avgScore - a.avgScore);
+
+  const countryGroups: Record<string, number> = {};
+  evaluations.forEach((e) => {
+    const app = appMap.get(e.applicationId);
+    const country = app?.countryOfOperation || app?.companyCountry || "Unknown";
+    countryGroups[country] = (countryGroups[country] || 0) + 1;
+  });
+  const countryStats = Object.entries(countryGroups)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);
+
+  const handleGenerateNarrative = async () => {
+    if (evaluated === 0) return;
+    setIsGeneratingNarrative(true);
+    try {
+      const payload = evaluations.map((e) => {
+        const app = appMap.get(e.applicationId);
+        return {
+          applicantName: app ? `${app.firstName} ${app.lastName}` : "Unknown",
+          company: app?.companyName || app?.companyLegalName || "N/A",
+          country: app?.countryOfOperation || app?.companyCountry || "N/A",
+          sector: app?.primarySector || "N/A",
+          overallScore: e.overallScore,
+          recommendation: e.recommendation,
+        };
+      });
+      const res = await apiRequest("POST", "/api/admin/cohort-narrative", { evaluations: payload });
+      if (!res.ok) throw new Error("Failed to generate narrative");
+      const data = await res.json();
+      setNarrative(data.narrative);
+    } catch (err: any) {
+      toast({ title: "Error", description: err?.message || "Failed to generate cohort narrative", variant: "destructive" });
+    } finally {
+      setIsGeneratingNarrative(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col md:flex-row min-h-screen">
+      <AdminSidebar />
+      <main className="flex-1 p-6 bg-background overflow-auto">
+        <div className="max-w-6xl mx-auto space-y-6">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
+              <BarChart2 className="h-7 w-7 text-primary" />
+              Cohort Analytics
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              AI-powered insights across all evaluated applications
+            </p>
+          </div>
+
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28" />)}
+            </div>
+          ) : (
+            <>
+              {/* Key stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Applications</CardTitle>
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold" data-testid="text-total-apps">{applications.length}</div>
+                    <p className="text-xs text-muted-foreground mt-0.5">{evaluated} evaluated</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+                    <CardTitle className="text-sm font-medium">Avg AI Score</CardTitle>
+                    <Brain className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-primary" data-testid="text-avg-score">
+                      {evaluated > 0 ? avgScore : "—"}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">out of 100</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+                    <CardTitle className="text-sm font-medium">Shortlist</CardTitle>
+                    <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-600" data-testid="text-shortlist">{shortlistCount}</div>
+                    <p className="text-xs text-muted-foreground mt-0.5">Strong Yes + Yes</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+                    <CardTitle className="text-sm font-medium">Countries</CardTitle>
+                    <Globe className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{Object.keys(countryGroups).length}</div>
+                    <p className="text-xs text-muted-foreground mt-0.5">represented</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {evaluated === 0 ? (
+                <Card>
+                  <CardContent className="py-16 text-center space-y-3">
+                    <Brain className="h-10 w-10 text-muted-foreground mx-auto" />
+                    <p className="text-muted-foreground font-medium">No evaluations yet</p>
+                    <p className="text-sm text-muted-foreground">
+                      Open any submitted application and click "Run AI Evaluation" to begin building cohort insights.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  {/* Recommendation breakdown + score histogram */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm font-medium">Recommendation Breakdown</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {(["strong_yes", "yes", "maybe", "no"] as const).map((rec) => {
+                          const cfg = RECOMMENDATION_CONFIG[rec];
+                          const count = recCounts[rec];
+                          const pct = evaluated > 0 ? Math.round((count / evaluated) * 100) : 0;
+                          return (
+                            <div key={rec}>
+                              <div className="flex items-center justify-between mb-1">
+                                <Badge variant={cfg.variant} className="text-xs">{cfg.label}</Badge>
+                                <span className="text-xs text-muted-foreground">{count} ({pct}%)</span>
+                              </div>
+                              <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full ${cfg.color}`} style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm font-medium">Score Distribution</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ScoreHistogram evaluations={evaluations} />
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Dimension averages */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm font-medium flex items-center gap-2">
+                        <Zap className="h-4 w-4 text-primary" />
+                        Average Dimension Scores
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <DimensionAvgBar label="Leadership & Track Record" scores={evaluations.map((e) => e.leadershipScore)} />
+                      <DimensionAvgBar label="Business Viability" scores={evaluations.map((e) => e.businessViabilityScore)} />
+                      <DimensionAvgBar label="Market Opportunity & Scalability" scores={evaluations.map((e) => e.marketScaleScore)} />
+                      <DimensionAvgBar label="Energy & Infrastructure Impact" scores={evaluations.map((e) => e.energyInfraImpactScore)} />
+                      <DimensionAvgBar label="Program Readiness" scores={evaluations.map((e) => e.programReadinessScore)} />
+                    </CardContent>
+                  </Card>
+
+                  {/* Top ranked candidates */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm font-medium flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4 text-primary" />
+                        Ranked Candidates
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {ranked.map(({ eval: e, app }, idx) => {
+                          const rec = RECOMMENDATION_CONFIG[e.recommendation];
+                          return (
+                            <div
+                              key={e.id}
+                              className="flex flex-wrap items-center gap-3 p-3 rounded-md bg-muted/30"
+                              data-testid={`row-candidate-${e.id}`}
+                            >
+                              <span className="text-sm font-mono text-muted-foreground w-6 text-right flex-shrink-0">
+                                {idx + 1}.
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-sm truncate">
+                                  {app!.firstName} {app!.lastName}
+                                </div>
+                                <div className="text-xs text-muted-foreground truncate">
+                                  {app!.companyName || app!.companyLegalName || "—"} · {app!.countryOfOperation || app!.companyCountry || "—"}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-lg font-bold text-primary">{e.overallScore}</span>
+                                {rec && <Badge variant={rec.variant} className="text-xs">{rec.label}</Badge>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Sector and country breakdown */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm font-medium">By Sector</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {sectorStats.map(({ sector, count, avgScore }) => (
+                          <div key={sector} className="flex items-center gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm truncate">{sector}</div>
+                              <div className="text-xs text-muted-foreground">{count} applicant{count !== 1 ? "s" : ""}</div>
+                            </div>
+                            <div className="text-sm font-semibold text-primary">{avgScore} avg</div>
+                          </div>
+                        ))}
+                        {sectorStats.length === 0 && (
+                          <p className="text-sm text-muted-foreground italic">No sector data</p>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm font-medium flex items-center gap-2">
+                          <Globe className="h-4 w-4 text-muted-foreground" />
+                          By Country
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {countryStats.map(([country, count]) => {
+                          const pct = evaluated > 0 ? Math.round((count / evaluated) * 100) : 0;
+                          return (
+                            <div key={country}>
+                              <div className="flex justify-between text-xs mb-0.5">
+                                <span className="text-foreground">{country}</span>
+                                <span className="text-muted-foreground">{count} ({pct}%)</span>
+                              </div>
+                              <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                                <div className="h-full rounded-full bg-primary/60" style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {countryStats.length === 0 && (
+                          <p className="text-sm text-muted-foreground italic">No country data</p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* AI cohort narrative */}
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <CardTitle className="text-sm font-medium flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-primary" />
+                          AI Cohort Narrative
+                        </CardTitle>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleGenerateNarrative}
+                          disabled={isGeneratingNarrative}
+                          data-testid="button-generate-narrative"
+                          className="gap-1.5"
+                        >
+                          {isGeneratingNarrative ? (
+                            <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</>
+                          ) : narrative ? (
+                            <><RefreshCw className="h-3.5 w-3.5" /> Regenerate</>
+                          ) : (
+                            <><Sparkles className="h-3.5 w-3.5" /> Generate Narrative</>
+                          )}
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {narrative ? (
+                        <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{narrative}</p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground italic">
+                          Generate an AI-written strategic summary of the current applicant cohort for the selection committee.
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}

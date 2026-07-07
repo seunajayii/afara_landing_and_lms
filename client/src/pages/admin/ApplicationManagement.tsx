@@ -71,8 +71,12 @@ import {
   Shield,
   Languages,
   Loader2,
+  Brain,
+  RefreshCw,
+  Sparkles,
+  AlertCircle,
 } from "lucide-react";
-import type { Application } from "@shared/schema";
+import type { Application, ApplicationEvaluation } from "@shared/schema";
 import { format } from "date-fns";
 
 function TableSkeleton() {
@@ -223,6 +227,182 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+// ─── AI Evaluation ───────────────────────────────────────────────────────────
+
+const EVAL_RECOMMENDATION_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+  strong_yes: { label: "Strong Yes", variant: "default" },
+  yes: { label: "Yes", variant: "default" },
+  maybe: { label: "Maybe", variant: "secondary" },
+  no: { label: "No", variant: "destructive" },
+};
+
+function ScoreBar({ label, score }: { label: string; score: number }) {
+  const pct = Math.max(0, Math.min(100, score));
+  const color = pct >= 70 ? "bg-green-500" : pct >= 50 ? "bg-yellow-500" : "bg-red-500";
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-1">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <span className="text-xs font-semibold">{score}/100</span>
+      </div>
+      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+        <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function AIEvaluationPanel({ applicationId }: { applicationId: string }) {
+  const { toast } = useToast();
+
+  const { data: evaluation, isLoading: isLoadingEval } = useQuery<ApplicationEvaluation | null>({
+    queryKey: ["/api/admin/applications", applicationId, "evaluation"],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/applications/${applicationId}/evaluation`, { credentials: "include" });
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error("Failed to fetch evaluation");
+      return res.json();
+    },
+    retry: false,
+  });
+
+  const evaluateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/admin/applications/${applicationId}/evaluate`, {});
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Evaluation failed");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/applications", applicationId, "evaluation"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/cohort-analytics"] });
+      toast({ title: "Evaluation Complete", description: "AI evaluation saved successfully." });
+    },
+    onError: (error: any) => {
+      toast({ title: "Evaluation Failed", description: error?.message || "AI evaluation failed", variant: "destructive" });
+    },
+  });
+
+  const recConfig = evaluation ? EVAL_RECOMMENDATION_CONFIG[evaluation.recommendation] : null;
+
+  return (
+    <div className="border rounded-md p-4 space-y-4 bg-muted/20">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Brain className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold">AI Evaluation</span>
+          {evaluation && (
+            <span className="text-xs text-muted-foreground">
+              · {format(new Date(evaluation.evaluatedAt), "d MMM yyyy, h:mm a")}
+            </span>
+          )}
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => evaluateMutation.mutate()}
+          disabled={evaluateMutation.isPending}
+          data-testid="button-run-evaluation"
+          className="gap-1.5"
+        >
+          {evaluateMutation.isPending ? (
+            <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Evaluating…</>
+          ) : evaluation ? (
+            <><RefreshCw className="h-3.5 w-3.5" /> Re-evaluate</>
+          ) : (
+            <><Sparkles className="h-3.5 w-3.5" /> Run AI Evaluation</>
+          )}
+        </Button>
+      </div>
+
+      {isLoadingEval && (
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-1.5 w-full" />
+          <Skeleton className="h-1.5 w-full" />
+        </div>
+      )}
+
+      {!isLoadingEval && !evaluation && !evaluateMutation.isPending && (
+        <p className="text-xs text-muted-foreground italic">
+          No evaluation yet. Click "Run AI Evaluation" to generate an AI-powered assessment across 5 dimensions.
+        </p>
+      )}
+
+      {evaluation && (
+        <div className="space-y-4">
+          {/* Overall score + recommendation */}
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="text-center min-w-[56px]">
+              <div className="text-3xl font-bold text-primary leading-none">{evaluation.overallScore}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">/ 100</div>
+            </div>
+            {recConfig && (
+              <Badge variant={recConfig.variant} className="text-sm px-3 py-1">
+                {recConfig.label}
+              </Badge>
+            )}
+          </div>
+
+          {/* Summary */}
+          {evaluation.summary && (
+            <p className="text-sm text-foreground leading-relaxed">{evaluation.summary}</p>
+          )}
+
+          {/* Dimension scores */}
+          <div className="space-y-2.5">
+            <ScoreBar label="Leadership & Track Record" score={evaluation.leadershipScore} />
+            <ScoreBar label="Business Viability" score={evaluation.businessViabilityScore} />
+            <ScoreBar label="Market Opportunity & Scalability" score={evaluation.marketScaleScore} />
+            <ScoreBar label="Energy & Infrastructure Impact" score={evaluation.energyInfraImpactScore} />
+            <ScoreBar label="Program Readiness" score={evaluation.programReadinessScore} />
+          </div>
+
+          {/* Strengths and concerns */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {evaluation.strengths && evaluation.strengths.length > 0 && (
+              <div>
+                <div className="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide mb-1.5">
+                  Strengths
+                </div>
+                <ul className="space-y-1">
+                  {evaluation.strengths.map((s, i) => (
+                    <li key={i} className="text-xs text-foreground flex gap-1.5">
+                      <CheckCircle className="h-3.5 w-3.5 text-green-600 flex-shrink-0 mt-0.5" />
+                      <span>{s}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {evaluation.concerns && evaluation.concerns.length > 0 && (
+              <div>
+                <div className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-1.5">
+                  Concerns
+                </div>
+                <ul className="space-y-1">
+                  {evaluation.concerns.map((c, i) => (
+                    <li key={i} className="text-xs text-foreground flex gap-1.5">
+                      <AlertCircle className="h-3.5 w-3.5 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <span>{c}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          <div className="text-xs text-muted-foreground">
+            Model: {evaluation.evaluatedByModel}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Full application preview ────────────────────────────────────────────────
 
 function ApplicationPreviewSheet({
@@ -353,6 +533,9 @@ function ApplicationPreviewSheet({
 
         {/* Body */}
         <div className="px-6 py-6 space-y-8 flex-1">
+
+          {/* AI Evaluation panel */}
+          {app.status !== "draft" && <AIEvaluationPanel applicationId={app.id} />}
 
           {/* Review notes (if any) */}
           {app.reviewNotes && (

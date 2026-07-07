@@ -30,6 +30,7 @@ import CertificateManagement from "@/pages/admin/CertificateManagement";
 import ApplicationManagement from "@/pages/admin/ApplicationManagement";
 import EventManagement from "@/pages/admin/EventManagement";
 import NewsletterManagement from "@/pages/admin/NewsletterManagement";
+import CohortAnalytics from "@/pages/admin/CohortAnalytics";
 import Apply from "@/pages/Apply";
 import Profile from "@/pages/lms/Profile";
 import ChangePassword from "@/pages/ChangePassword";
@@ -135,6 +136,7 @@ function Router() {
       <Route path="/admin/applications">{() => <AdminProtectedRoute component={ApplicationManagement} />}</Route>
       <Route path="/admin/events">{() => <AdminProtectedRoute component={EventManagement} />}</Route>
       <Route path="/admin/newsletter">{() => <AdminProtectedRoute component={NewsletterManagement} />}</Route>
+      <Route path="/admin/cohort-analytics">{() => <AdminProtectedRoute component={CohortAnalytics} />}</Route>
       
       <Route component={NotFound} />
     </Switch>

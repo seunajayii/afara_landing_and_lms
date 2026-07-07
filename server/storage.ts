@@ -21,6 +21,7 @@ import {
   type NewsletterSubscriber, type InsertNewsletterSubscriber,
   type NewsletterCampaign, type InsertNewsletterCampaign,
   type Application, type InsertApplication,
+  type ApplicationEvaluation, type InsertApplicationEvaluation,
   users, profiles, mentorProfiles, facilitatorProfiles,
   courses, modules, lessons, enrollments, lessonProgress,
   mentorshipRequests, mentorshipSessions,
@@ -28,7 +29,7 @@ import {
   discussionThreads, discussionPosts, postLikes,
   certificates, achievements, userAchievements, notifications,
   newsletterSubscribers, newsletterCampaigns,
-  applications
+  applications, applicationEvaluations
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, ne, desc, asc, sql, or, inArray } from "drizzle-orm";
@@ -156,7 +157,10 @@ export interface IStorage {
   createApplication(application: InsertApplication): Promise<Application>;
   updateApplication(id: string, data: Partial<InsertApplication>): Promise<Application | undefined>;
   deleteApplication(id: string): Promise<void>;
-  
+  getApplicationEvaluation(applicationId: string): Promise<ApplicationEvaluation | undefined>;
+  upsertApplicationEvaluation(data: InsertApplicationEvaluation): Promise<ApplicationEvaluation>;
+  getAllApplicationEvaluations(): Promise<ApplicationEvaluation[]>;
+
   getNewsletterSubscriber(id: string): Promise<NewsletterSubscriber | undefined>;
   getNewsletterSubscriberByEmail(email: string): Promise<NewsletterSubscriber | undefined>;
   getAllNewsletterSubscribers(): Promise<NewsletterSubscriber[]>;
@@ -751,6 +755,40 @@ export class DatabaseStorage implements IStorage {
 
   async deleteApplication(id: string): Promise<void> {
     await db.delete(applications).where(eq(applications.id, id));
+  }
+
+  async getApplicationEvaluation(applicationId: string): Promise<ApplicationEvaluation | undefined> {
+    const [evaluation] = await db.select().from(applicationEvaluations).where(eq(applicationEvaluations.applicationId, applicationId));
+    return evaluation;
+  }
+
+  async upsertApplicationEvaluation(data: InsertApplicationEvaluation): Promise<ApplicationEvaluation> {
+    const [result] = await db
+      .insert(applicationEvaluations)
+      .values(data)
+      .onConflictDoUpdate({
+        target: applicationEvaluations.applicationId,
+        set: {
+          overallScore: data.overallScore,
+          leadershipScore: data.leadershipScore,
+          businessViabilityScore: data.businessViabilityScore,
+          marketScaleScore: data.marketScaleScore,
+          energyInfraImpactScore: data.energyInfraImpactScore,
+          programReadinessScore: data.programReadinessScore,
+          summary: data.summary,
+          strengths: data.strengths,
+          concerns: data.concerns,
+          recommendation: data.recommendation,
+          evaluatedAt: new Date(),
+          evaluatedByModel: data.evaluatedByModel,
+        },
+      })
+      .returning();
+    return result;
+  }
+
+  async getAllApplicationEvaluations(): Promise<ApplicationEvaluation[]> {
+    return db.select().from(applicationEvaluations);
   }
 
   async getNewsletterSubscriber(id: string): Promise<NewsletterSubscriber | undefined> {

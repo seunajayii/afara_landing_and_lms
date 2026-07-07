@@ -437,6 +437,25 @@ export const insertEventRegistrationSchema = createInsertSchema(eventRegistratio
 export const insertResourceSchema = createInsertSchema(resources).omit({ id: true, createdAt: true });
 export const insertDiscussionThreadSchema = createInsertSchema(discussionThreads).omit({ id: true, createdAt: true });
 export const insertDiscussionPostSchema = createInsertSchema(discussionPosts).omit({ id: true, createdAt: true });
+export const aiRecommendationEnum = pgEnum("ai_recommendation", ["strong_yes", "yes", "maybe", "no"]);
+
+export const applicationEvaluations = pgTable("application_evaluations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  applicationId: varchar("application_id").notNull().unique().references(() => applications.id, { onDelete: "cascade" }),
+  overallScore: integer("overall_score").notNull(),
+  leadershipScore: integer("leadership_score").notNull(),
+  businessViabilityScore: integer("business_viability_score").notNull(),
+  marketScaleScore: integer("market_scale_score").notNull(),
+  energyInfraImpactScore: integer("energy_infra_impact_score").notNull(),
+  programReadinessScore: integer("program_readiness_score").notNull(),
+  summary: text("summary").notNull(),
+  strengths: text("strengths").array().notNull(),
+  concerns: text("concerns").array().notNull(),
+  recommendation: aiRecommendationEnum("recommendation").notNull(),
+  evaluatedAt: timestamp("evaluated_at").notNull().defaultNow(),
+  evaluatedByModel: text("evaluated_by_model").notNull(),
+});
+
 export const insertCertificateSchema = createInsertSchema(certificates).omit({ id: true, issuedAt: true });
 export const insertAchievementSchema = createInsertSchema(achievements).omit({ id: true });
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
@@ -449,6 +468,7 @@ export const insertApplicationSchema = createInsertSchema(applications).omit({
   reviewNotes: true,
   resumeToken: true,
 });
+export const insertApplicationEvaluationSchema = createInsertSchema(applicationEvaluations).omit({ id: true, evaluatedAt: true });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -494,3 +514,5 @@ export type InsertNewsletterCampaign = z.infer<typeof insertNewsletterCampaignSc
 export type NewsletterCampaign = typeof newsletterCampaigns.$inferSelect;
 export type InsertApplication = z.infer<typeof insertApplicationSchema>;
 export type Application = typeof applications.$inferSelect;
+export type InsertApplicationEvaluation = z.infer<typeof insertApplicationEvaluationSchema>;
+export type ApplicationEvaluation = typeof applicationEvaluations.$inferSelect;

@@ -2107,6 +2107,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // AI Evaluation: run evaluation for a single application
+  app.post("/api/admin/applications/:id/evaluate", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const application = await storage.getApplication(req.params.id);
+      if (!application) return res.status(404).json({ error: "Application not found" });
+      if (application.status === "draft") return res.status(400).json({ error: "Cannot evaluate a draft application" });
+
+      const { evaluateApplication, EVAL_MODEL } = await import("./ai-evaluation");
+      const result = await evaluateApplication(application);
+
+      const evaluation = await storage.upsertApplicationEvaluation({
+        applicationId: application.id,
+        ...result,
+        evaluatedByModel: EVAL_MODEL,
+      });
+
+      res.json(evaluation);
+    } catch (error) {
+      console.error("AI evaluation error:", error instanceof Error ? error.message : error);
+      res.status(500).json({ error: "AI evaluation failed. Please try again." });
+    }
+  });
+
+  // AI Evaluation: get existing evaluation for an application
+  app.get("/api/admin/applications/:id/evaluation", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const evaluation = await storage.getApplicationEvaluation(req.params.id);
+      if (!evaluation) return res.status(404).json({ error: "No evaluation found" });
+      res.json(evaluation);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch evaluation" });
+    }
+  });
+
+  // AI Evaluation: cohort analytics data
+  app.get("/api/admin/cohort-analytics", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const [applications, evaluations] = await Promise.all([
+        storage.getAllApplications(),
+        storage.getAllApplicationEvaluations(),
+      ]);
+      res.json({ applications, evaluations });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch cohort analytics" });
+    }
+  });
+
+  // AI Evaluation: generate cohort narrative
+  app.post("/api/admin/cohort-narrative", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const { evaluations } = req.body;
+      if (!Array.isArray(evaluations) || evaluations.length === 0) {
+        return res.status(400).json({ error: "No evaluations provided" });
+      }
+      const { generateCohortNarrative } = await import("./ai-evaluation");
+      const narrative = await generateCohortNarrative(evaluations);
+      res.json({ narrative });
+    } catch (error) {
+      console.error("Cohort narrative error:", error instanceof Error ? error.message : error);
+      res.status(500).json({ error: "Failed to generate cohort narrative" });
+    }
+  });
+
   // Newsletter Routes
   const subscribeSchema = z.object({
     email: z.string().email(),
