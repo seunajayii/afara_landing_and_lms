@@ -1,0 +1,1 @@
+- [Cohort system](cohort-system.md) — cohorts table added; cohortId FK on applications; cohort CRUD + batch-eval routes all require admin role

@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { Input } from "@/components/ui/input";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -17,11 +18,14 @@ import {
   Globe,
   Zap,
   CheckCircle,
-  XCircle,
-  AlertCircle,
   RefreshCw,
+  Plus,
+  PlayCircle,
+  X,
+  FolderOpen,
+  Trash2,
 } from "lucide-react";
-import type { Application, ApplicationEvaluation } from "@shared/schema";
+import type { Application, ApplicationEvaluation, Cohort } from "@shared/schema";
 
 const RECOMMENDATION_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; color: string }> = {
   strong_yes: { label: "Strong Yes", variant: "default", color: "bg-green-600" },
@@ -33,6 +37,7 @@ const RECOMMENDATION_CONFIG: Record<string, { label: string; variant: "default" 
 interface CohortData {
   applications: Application[];
   evaluations: ApplicationEvaluation[];
+  cohorts: Cohort[];
 }
 
 function ScoreHistogram({ evaluations }: { evaluations: ApplicationEvaluation[] }) {
@@ -43,13 +48,11 @@ function ScoreHistogram({ evaluations }: { evaluations: ApplicationEvaluation[] 
     { label: "60–79", min: 60, max: 79 },
     { label: "80–100", min: 80, max: 100 },
   ];
-
   const counts = buckets.map((b) => ({
     ...b,
     count: evaluations.filter((e) => e.overallScore >= b.min && e.overallScore <= b.max).length,
   }));
   const maxCount = Math.max(...counts.map((c) => c.count), 1);
-
   return (
     <div className="flex items-end gap-2 h-32">
       {counts.map((b) => (
@@ -83,23 +86,97 @@ function DimensionAvgBar({ label, scores }: { label: string; scores: number[] })
 
 export default function CohortAnalytics() {
   const { toast } = useToast();
+  const qc = useQueryClient();
+
+  const [selectedCohortId, setSelectedCohortId] = useState<string | null>(null);
   const [narrative, setNarrative] = useState<string | null>(null);
   const [isGeneratingNarrative, setIsGeneratingNarrative] = useState(false);
+  const [showCreateCohort, setShowCreateCohort] = useState(false);
+  const [newCohortName, setNewCohortName] = useState("");
+  const [newCohortYear, setNewCohortYear] = useState("");
 
-  const { data, isLoading } = useQuery<CohortData>({
-    queryKey: ["/api/admin/cohort-analytics"],
+  const analyticsKey = ["/api/admin/cohort-analytics", selectedCohortId ?? "all"];
+
+  const { data, isLoading, refetch, isFetching } = useQuery<CohortData>({
+    queryKey: analyticsKey,
+    queryFn: async () => {
+      const url = selectedCohortId
+        ? `/api/admin/cohort-analytics?cohortId=${encodeURIComponent(selectedCohortId)}`
+        : "/api/admin/cohort-analytics";
+      const res = await apiRequest("GET", url);
+      return res.json();
+    },
   });
 
+  const cohorts = data?.cohorts ?? [];
   const applications = data?.applications ?? [];
-  const evaluations = data?.evaluations ?? [];
+  const allEvals = data?.evaluations ?? [];
 
-  const evalMap = new Map(evaluations.map((e) => [e.applicationId, e]));
-  const appMap = new Map(applications.map((a) => [a.id, a]));
+  const appIds = new Set(applications.map((a) => a.id));
+  const evaluations = allEvals.filter((e) => appIds.has(e.applicationId));
+  const evalAppIds = new Set(evaluations.map((e) => e.applicationId));
+  const submittedApps = applications.filter((a) => a.status !== "draft");
+  const unevaluatedCount = submittedApps.filter((a) => !evalAppIds.has(a.id)).length;
+
+  const createCohortMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/cohorts", {
+        name: newCohortName.trim(),
+        year: newCohortYear ? parseInt(newCohortYear) : undefined,
+      });
+      if (!res.ok) throw new Error("Failed to create cohort");
+      return res.json();
+    },
+    onSuccess: (cohort: Cohort) => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/cohort-analytics"] });
+      setShowCreateCohort(false);
+      setNewCohortName("");
+      setNewCohortYear("");
+      setSelectedCohortId(cohort.id);
+      setNarrative(null);
+      toast({ title: `Cohort "${cohort.name}" created` });
+    },
+    onError: () => toast({ title: "Failed to create cohort", variant: "destructive" }),
+  });
+
+  const deleteCohortMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/admin/cohorts/${id}`);
+      if (!res.ok) throw new Error("Failed to delete cohort");
+    },
+    onSuccess: (_, id) => {
+      if (selectedCohortId === id) {
+        setSelectedCohortId(null);
+        setNarrative(null);
+      }
+      qc.invalidateQueries({ queryKey: ["/api/admin/cohort-analytics"] });
+      toast({ title: "Cohort deleted" });
+    },
+    onError: () => toast({ title: "Failed to delete cohort", variant: "destructive" }),
+  });
+
+  const evaluateAllMutation = useMutation({
+    mutationFn: async () => {
+      const body = selectedCohortId ? { cohortId: selectedCohortId } : {};
+      const res = await apiRequest("POST", "/api/admin/cohort-analytics/evaluate-all", body);
+      if (!res.ok) throw new Error("Batch evaluation failed");
+      return res.json();
+    },
+    onSuccess: (result: { evaluated: number; total: number; errors?: string[] }) => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/cohort-analytics"] });
+      const msg = result.evaluated === 0
+        ? "All applications already evaluated"
+        : `Evaluated ${result.evaluated} of ${result.total} application${result.total !== 1 ? "s" : ""}`;
+      toast({
+        title: msg,
+        description: result.errors?.length ? `${result.errors.length} failed — check server logs` : undefined,
+      });
+    },
+    onError: (err: Error) => toast({ title: "Evaluation failed", description: err.message, variant: "destructive" }),
+  });
 
   const evaluated = evaluations.length;
-  const avgScore = evaluated > 0
-    ? Math.round(evaluations.reduce((sum, e) => sum + e.overallScore, 0) / evaluated)
-    : 0;
+  const avgScore = evaluated > 0 ? Math.round(evaluations.reduce((sum, e) => sum + e.overallScore, 0) / evaluated) : 0;
 
   const recCounts = {
     strong_yes: evaluations.filter((e) => e.recommendation === "strong_yes").length,
@@ -107,18 +184,17 @@ export default function CohortAnalytics() {
     maybe: evaluations.filter((e) => e.recommendation === "maybe").length,
     no: evaluations.filter((e) => e.recommendation === "no").length,
   };
-
   const shortlistCount = recCounts.strong_yes + recCounts.yes;
 
   const ranked = evaluations
     .slice()
     .sort((a, b) => b.overallScore - a.overallScore)
-    .map((e) => ({ eval: e, app: appMap.get(e.applicationId) }))
+    .map((e) => ({ eval: e, app: applications.find((a) => a.id === e.applicationId) }))
     .filter((item) => item.app);
 
   const sectorGroups: Record<string, ApplicationEvaluation[]> = {};
   evaluations.forEach((e) => {
-    const app = appMap.get(e.applicationId);
+    const app = applications.find((a) => a.id === e.applicationId);
     const sector = app?.primarySector || "Unknown";
     if (!sectorGroups[sector]) sectorGroups[sector] = [];
     sectorGroups[sector].push(e);
@@ -133,20 +209,18 @@ export default function CohortAnalytics() {
 
   const countryGroups: Record<string, number> = {};
   evaluations.forEach((e) => {
-    const app = appMap.get(e.applicationId);
+    const app = applications.find((a) => a.id === e.applicationId);
     const country = app?.countryOfOperation || app?.companyCountry || "Unknown";
     countryGroups[country] = (countryGroups[country] || 0) + 1;
   });
-  const countryStats = Object.entries(countryGroups)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10);
+  const countryStats = Object.entries(countryGroups).sort((a, b) => b[1] - a[1]).slice(0, 10);
 
   const handleGenerateNarrative = async () => {
     if (evaluated === 0) return;
     setIsGeneratingNarrative(true);
     try {
       const payload = evaluations.map((e) => {
-        const app = appMap.get(e.applicationId);
+        const app = applications.find((a) => a.id === e.applicationId);
         return {
           applicantName: app ? `${app.firstName} ${app.lastName}` : "Unknown",
           company: app?.companyName || app?.companyLegalName || "N/A",
@@ -158,29 +232,174 @@ export default function CohortAnalytics() {
       });
       const res = await apiRequest("POST", "/api/admin/cohort-narrative", { evaluations: payload });
       if (!res.ok) throw new Error("Failed to generate narrative");
-      const data = await res.json();
-      setNarrative(data.narrative);
-    } catch (err: any) {
-      toast({ title: "Error", description: err?.message || "Failed to generate cohort narrative", variant: "destructive" });
+      const json = await res.json();
+      setNarrative(json.narrative);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to generate cohort narrative";
+      toast({ title: "Error", description: msg, variant: "destructive" });
     } finally {
       setIsGeneratingNarrative(false);
     }
   };
+
+  const selectedCohort = cohorts.find((c) => c.id === selectedCohortId);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen">
       <AdminSidebar />
       <main className="flex-1 p-6 bg-background overflow-auto">
         <div className="max-w-6xl mx-auto space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
-              <BarChart2 className="h-7 w-7 text-primary" />
-              Cohort Analytics
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              AI-powered insights across all evaluated applications
-            </p>
+
+          {/* Page header */}
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
+                <BarChart2 className="h-7 w-7 text-primary" />
+                Cohort Analytics
+              </h1>
+              <p className="text-muted-foreground mt-1">
+                {selectedCohort ? `Viewing: ${selectedCohort.name}` : "AI-powered insights across all evaluated applications"}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {unevaluatedCount > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => evaluateAllMutation.mutate()}
+                  disabled={evaluateAllMutation.isPending}
+                  className="gap-1.5"
+                  data-testid="button-evaluate-all"
+                >
+                  {evaluateAllMutation.isPending ? (
+                    <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Evaluating…</>
+                  ) : (
+                    <><PlayCircle className="h-3.5 w-3.5" /> Evaluate {unevaluatedCount} Unevaluated</>
+                  )}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => refetch()}
+                disabled={isFetching}
+                className="gap-1.5"
+                data-testid="button-refresh"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
+            </div>
           </div>
+
+          {/* Cohort selector */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <FolderOpen className="h-4 w-4 text-primary" />
+                Cohorts
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant={selectedCohortId === null ? "default" : "outline"}
+                  onClick={() => { setSelectedCohortId(null); setNarrative(null); }}
+                  data-testid="button-cohort-all"
+                >
+                  All Applications
+                </Button>
+
+                {cohorts.map((c) => (
+                  <div key={c.id} className="flex items-center gap-0.5">
+                    <Button
+                      size="sm"
+                      variant={selectedCohortId === c.id ? "default" : "outline"}
+                      onClick={() => { setSelectedCohortId(c.id); setNarrative(null); }}
+                      data-testid={`button-cohort-${c.id}`}
+                      className="gap-1"
+                    >
+                      {c.name}
+                      {c.year && <span className="opacity-60 text-xs">{c.year}</span>}
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-muted-foreground"
+                      onClick={() => {
+                        if (window.confirm(`Delete cohort "${c.name}"? Applications in this cohort will become unassigned.`)) {
+                          deleteCohortMutation.mutate(c.id);
+                        }
+                      }}
+                      disabled={deleteCohortMutation.isPending}
+                      data-testid={`button-delete-cohort-${c.id}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+
+                {showCreateCohort ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                      placeholder="Cohort name (e.g. Cohort 1)"
+                      value={newCohortName}
+                      onChange={(e) => setNewCohortName(e.target.value)}
+                      className="h-8 text-sm w-44"
+                      autoFocus
+                      data-testid="input-cohort-name"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && newCohortName.trim()) createCohortMutation.mutate();
+                        if (e.key === "Escape") setShowCreateCohort(false);
+                      }}
+                    />
+                    <Input
+                      placeholder="Year"
+                      value={newCohortYear}
+                      onChange={(e) => setNewCohortYear(e.target.value)}
+                      className="h-8 text-sm w-20"
+                      type="number"
+                      data-testid="input-cohort-year"
+                    />
+                    <Button
+                      size="sm"
+                      disabled={!newCohortName.trim() || createCohortMutation.isPending}
+                      onClick={() => createCohortMutation.mutate()}
+                      data-testid="button-save-cohort"
+                    >
+                      {createCohortMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-8 w-8"
+                      onClick={() => { setShowCreateCohort(false); setNewCohortName(""); setNewCohortYear(""); }}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowCreateCohort(true)}
+                    className="gap-1.5"
+                    data-testid="button-new-cohort"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    New Cohort
+                  </Button>
+                )}
+              </div>
+
+              {cohorts.length === 0 && !showCreateCohort && (
+                <p className="text-xs text-muted-foreground mt-3">
+                  Create cohorts to organise applications by intake cycle (e.g. "Cohort 1 2024"). Assign applications from the Applications table.
+                </p>
+              )}
+            </CardContent>
+          </Card>
 
           {isLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -192,12 +411,14 @@ export default function CohortAnalytics() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Applications</CardTitle>
+                    <CardTitle className="text-sm font-medium">Applications</CardTitle>
                     <Users className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold" data-testid="text-total-apps">{applications.length}</div>
-                    <p className="text-xs text-muted-foreground mt-0.5">{evaluated} evaluated</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {evaluated} evaluated{unevaluatedCount > 0 ? `, ${unevaluatedCount} pending` : ""}
+                    </p>
                   </CardContent>
                 </Card>
                 <Card>
@@ -234,13 +455,44 @@ export default function CohortAnalytics() {
                 </Card>
               </div>
 
+              {/* Pending evaluation notice */}
+              {unevaluatedCount > 0 && (
+                <Card className="border-dashed">
+                  <CardContent className="py-4 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <Brain className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium">
+                          {unevaluatedCount} application{unevaluatedCount !== 1 ? "s" : ""} not yet evaluated
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          New submissions are evaluated automatically. Click to evaluate any that were missed.
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => evaluateAllMutation.mutate()}
+                      disabled={evaluateAllMutation.isPending}
+                      className="gap-1.5"
+                    >
+                      {evaluateAllMutation.isPending ? (
+                        <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Evaluating…</>
+                      ) : (
+                        <><PlayCircle className="h-3.5 w-3.5" /> Evaluate Now</>
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
               {evaluated === 0 ? (
                 <Card>
                   <CardContent className="py-16 text-center space-y-3">
                     <Brain className="h-10 w-10 text-muted-foreground mx-auto" />
                     <p className="text-muted-foreground font-medium">No evaluations yet</p>
                     <p className="text-sm text-muted-foreground">
-                      Open any submitted application and click "Run AI Evaluation" to begin building cohort insights.
+                      Applications are evaluated automatically when submitted. You can also evaluate existing applications using the button above.
                     </p>
                   </CardContent>
                 </Card>
@@ -328,7 +580,7 @@ export default function CohortAnalytics() {
                                   {app!.companyName || app!.companyLegalName || "—"} · {app!.countryOfOperation || app!.companyCountry || "—"}
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-shrink-0">
                                 <span className="text-lg font-bold text-primary">{e.overallScore}</span>
                                 {rec && <Badge variant={rec.variant} className="text-xs">{rec.label}</Badge>}
                               </div>
@@ -355,9 +607,7 @@ export default function CohortAnalytics() {
                             <div className="text-sm font-semibold text-primary">{avgScore} avg</div>
                           </div>
                         ))}
-                        {sectorStats.length === 0 && (
-                          <p className="text-sm text-muted-foreground italic">No sector data</p>
-                        )}
+                        {sectorStats.length === 0 && <p className="text-sm text-muted-foreground italic">No sector data</p>}
                       </CardContent>
                     </Card>
 
@@ -383,9 +633,7 @@ export default function CohortAnalytics() {
                             </div>
                           );
                         })}
-                        {countryStats.length === 0 && (
-                          <p className="text-sm text-muted-foreground italic">No country data</p>
-                        )}
+                        {countryStats.length === 0 && <p className="text-sm text-muted-foreground italic">No country data</p>}
                       </CardContent>
                     </Card>
                   </div>
@@ -421,7 +669,7 @@ export default function CohortAnalytics() {
                         <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{narrative}</p>
                       ) : (
                         <p className="text-sm text-muted-foreground italic">
-                          Generate an AI-written strategic summary of the current applicant cohort for the selection committee.
+                          Generate an AI-written strategic summary of this cohort for the selection committee.
                         </p>
                       )}
                     </CardContent>

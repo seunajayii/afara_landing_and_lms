@@ -1777,6 +1777,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch (innerError) {
           console.error("Failed to send application confirmation email:", innerError);
         }
+        triggerAutoEvaluate(application.id);
       }
 
       res.status(201).json(application);
@@ -1985,6 +1986,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch (innerError) {
           console.error("Failed to send application confirmation email:", innerError);
         }
+        triggerAutoEvaluate(application.id);
       }
 
       res.json(application);
@@ -2141,14 +2143,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Fire-and-forget AI evaluation triggered automatically on submission
+  function triggerAutoEvaluate(applicationId: string): void {
+    Promise.resolve().then(async () => {
+      try {
+        const { evaluateApplication, EVAL_MODEL } = await import("./ai-evaluation");
+        const application = await storage.getApplication(applicationId);
+        if (!application) return;
+        const result = await evaluateApplication(application);
+        await storage.upsertApplicationEvaluation({
+          applicationId,
+          ...result,
+          evaluatedByModel: EVAL_MODEL,
+        });
+        console.log(`[auto-eval] ${applicationId} scored ${result.overallScore}`);
+      } catch (err) {
+        console.error(`[auto-eval] Failed for ${applicationId}:`, err instanceof Error ? err.message : err);
+      }
+    });
+  }
+
   // AI Evaluation: cohort analytics data
   app.get("/api/admin/cohort-analytics", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
-      const [applications, evaluations] = await Promise.all([
+      const cohortId = typeof req.query.cohortId === "string" ? req.query.cohortId : undefined;
+      const [allApps, evaluations, cohortsList] = await Promise.all([
         storage.getAllApplications(),
         storage.getAllApplicationEvaluations(),
+        storage.getAllCohorts(),
       ]);
-      res.json({ applications, evaluations });
+      const applications = cohortId ? allApps.filter((a) => a.cohortId === cohortId) : allApps;
+      res.json({ applications, evaluations, cohorts: cohortsList });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch cohort analytics" });
     }
@@ -2167,6 +2192,107 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Cohort narrative error:", error instanceof Error ? error.message : error);
       res.status(500).json({ error: "Failed to generate cohort narrative" });
+    }
+  });
+
+  // Cohort CRUD
+  app.get("/api/admin/cohorts", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const list = await storage.getAllCohorts();
+      res.json(list);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch cohorts" });
+    }
+  });
+
+  app.post("/api/admin/cohorts", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const { name, description, year, isActive } = req.body;
+      if (!name) return res.status(400).json({ error: "name is required" });
+      const cohort = await storage.createCohort({ name, description, year: year ? Number(year) : undefined, isActive: isActive ?? true });
+      res.status(201).json(cohort);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create cohort" });
+    }
+  });
+
+  app.patch("/api/admin/cohorts/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const cohort = await storage.updateCohort(req.params.id, req.body);
+      if (!cohort) return res.status(404).json({ error: "Cohort not found" });
+      res.json(cohort);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update cohort" });
+    }
+  });
+
+  app.delete("/api/admin/cohorts/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      await storage.deleteCohort(req.params.id);
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete cohort" });
+    }
+  });
+
+  // Assign an application to a cohort (or remove it)
+  app.patch("/api/admin/applications/:id/cohort", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const application = await storage.getApplication(req.params.id);
+      if (!application) return res.status(404).json({ error: "Application not found" });
+      const cohortId = req.body.cohortId || null;
+      await storage.assignApplicationToCohort(req.params.id, cohortId);
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to assign cohort" });
+    }
+  });
+
+  // Batch evaluate all unevaluated submitted applications (optionally scoped to a cohort)
+  app.post("/api/admin/cohort-analytics/evaluate-all", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const { cohortId } = req.body;
+      const submittedStatuses = ["submitted", "under_review", "accepted", "rejected", "waitlisted", "disqualified"];
+      let allApps = (await storage.getAllApplications()).filter((a) => submittedStatuses.includes(a.status));
+      if (cohortId) {
+        allApps = allApps.filter((a) => a.cohortId === cohortId);
+      }
+      const allEvals = await storage.getAllApplicationEvaluations();
+      const evaluatedIds = new Set(allEvals.map((e) => e.applicationId));
+      const toEvaluate = allApps.filter((a) => !evaluatedIds.has(a.id));
+
+      if (toEvaluate.length === 0) {
+        return res.json({ evaluated: 0, total: 0, message: "All applications already evaluated" });
+      }
+
+      const { evaluateApplication, EVAL_MODEL } = await import("./ai-evaluation");
+      const pLimit = (await import("p-limit")).default;
+      const limit = pLimit(3);
+
+      let evaluated = 0;
+      const errors: string[] = [];
+      await Promise.all(
+        toEvaluate.map((app) =>
+          limit(async () => {
+            try {
+              const result = await evaluateApplication(app);
+              await storage.upsertApplicationEvaluation({
+                applicationId: app.id,
+                ...result,
+                evaluatedByModel: EVAL_MODEL,
+              });
+              evaluated++;
+            } catch (err) {
+              errors.push(`${app.id}: ${err instanceof Error ? err.message : "unknown"}`);
+            }
+          })
+        )
+      );
+
+      res.json({ evaluated, total: toEvaluate.length, errors: errors.length > 0 ? errors : undefined });
+    } catch (error) {
+      console.error("Batch evaluation error:", error instanceof Error ? error.message : error);
+      res.status(500).json({ error: "Batch evaluation failed" });
     }
   });
 

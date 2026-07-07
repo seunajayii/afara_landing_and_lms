@@ -301,6 +301,15 @@ export const newsletterCampaigns = pgTable("newsletter_campaigns", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const cohorts = pgTable("cohorts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  year: integer("year"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const applications = pgTable("applications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   
@@ -412,6 +421,7 @@ export const applications = pgTable("applications", {
   updatedAt: timestamp("updated_at"),
   submittedAt: timestamp("submitted_at"),
   lastDraftEmailSentAt: timestamp("last_draft_email_sent_at"),
+  cohortId: varchar("cohort_id").references(() => cohorts.id),
   resumeToken: text("resume_token").default(sql`gen_random_uuid()`),
 });
 
@@ -516,3 +526,7 @@ export type InsertApplication = z.infer<typeof insertApplicationSchema>;
 export type Application = typeof applications.$inferSelect;
 export type InsertApplicationEvaluation = z.infer<typeof insertApplicationEvaluationSchema>;
 export type ApplicationEvaluation = typeof applicationEvaluations.$inferSelect;
+
+export const insertCohortSchema = createInsertSchema(cohorts).omit({ id: true, createdAt: true });
+export type InsertCohort = z.infer<typeof insertCohortSchema>;
+export type Cohort = typeof cohorts.$inferSelect;

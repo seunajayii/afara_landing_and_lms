@@ -22,6 +22,7 @@ import {
   type NewsletterCampaign, type InsertNewsletterCampaign,
   type Application, type InsertApplication,
   type ApplicationEvaluation, type InsertApplicationEvaluation,
+  type Cohort, type InsertCohort,
   users, profiles, mentorProfiles, facilitatorProfiles,
   courses, modules, lessons, enrollments, lessonProgress,
   mentorshipRequests, mentorshipSessions,
@@ -29,7 +30,7 @@ import {
   discussionThreads, discussionPosts, postLikes,
   certificates, achievements, userAchievements, notifications,
   newsletterSubscribers, newsletterCampaigns,
-  applications, applicationEvaluations
+  applications, applicationEvaluations, cohorts
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, ne, desc, asc, sql, or, inArray } from "drizzle-orm";
@@ -160,6 +161,13 @@ export interface IStorage {
   getApplicationEvaluation(applicationId: string): Promise<ApplicationEvaluation | undefined>;
   upsertApplicationEvaluation(data: InsertApplicationEvaluation): Promise<ApplicationEvaluation>;
   getAllApplicationEvaluations(): Promise<ApplicationEvaluation[]>;
+
+  getCohort(id: string): Promise<Cohort | undefined>;
+  getAllCohorts(): Promise<Cohort[]>;
+  createCohort(data: InsertCohort): Promise<Cohort>;
+  updateCohort(id: string, data: Partial<InsertCohort>): Promise<Cohort | undefined>;
+  deleteCohort(id: string): Promise<void>;
+  assignApplicationToCohort(applicationId: string, cohortId: string | null): Promise<void>;
 
   getNewsletterSubscriber(id: string): Promise<NewsletterSubscriber | undefined>;
   getNewsletterSubscriberByEmail(email: string): Promise<NewsletterSubscriber | undefined>;
@@ -789,6 +797,33 @@ export class DatabaseStorage implements IStorage {
 
   async getAllApplicationEvaluations(): Promise<ApplicationEvaluation[]> {
     return db.select().from(applicationEvaluations);
+  }
+
+  async getCohort(id: string): Promise<Cohort | undefined> {
+    const [cohort] = await db.select().from(cohorts).where(eq(cohorts.id, id));
+    return cohort;
+  }
+
+  async getAllCohorts(): Promise<Cohort[]> {
+    return db.select().from(cohorts).orderBy(desc(cohorts.createdAt));
+  }
+
+  async createCohort(data: InsertCohort): Promise<Cohort> {
+    const [cohort] = await db.insert(cohorts).values({ ...data, id: randomUUID() }).returning();
+    return cohort;
+  }
+
+  async updateCohort(id: string, data: Partial<InsertCohort>): Promise<Cohort | undefined> {
+    const [cohort] = await db.update(cohorts).set(data).where(eq(cohorts.id, id)).returning();
+    return cohort;
+  }
+
+  async deleteCohort(id: string): Promise<void> {
+    await db.delete(cohorts).where(eq(cohorts.id, id));
+  }
+
+  async assignApplicationToCohort(applicationId: string, cohortId: string | null): Promise<void> {
+    await db.update(applications).set({ cohortId }).where(eq(applications.id, applicationId));
   }
 
   async getNewsletterSubscriber(id: string): Promise<NewsletterSubscriber | undefined> {

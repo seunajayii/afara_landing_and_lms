@@ -76,7 +76,7 @@ import {
   Sparkles,
   AlertCircle,
 } from "lucide-react";
-import type { Application, ApplicationEvaluation } from "@shared/schema";
+import type { Application, ApplicationEvaluation, Cohort } from "@shared/schema";
 import { format } from "date-fns";
 
 function TableSkeleton() {
@@ -484,6 +484,22 @@ function ApplicationPreviewSheet({
               <Badge variant={statusConfig[app.status]?.variant || "secondary"}>
                 {statusConfig[app.status]?.label || app.status}
               </Badge>
+              {cohortsData.length > 0 && (
+                <Select
+                  value={app.cohortId ?? ""}
+                  onValueChange={(val) => assignCohortMutation.mutate({ appId: app.id, cohortId: val || null })}
+                >
+                  <SelectTrigger className="h-7 text-xs w-36" data-testid="select-cohort-assign">
+                    <SelectValue placeholder="Assign cohort…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">No cohort</SelectItem>
+                    {cohortsData.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <div className="text-xs text-muted-foreground space-y-0.5 text-right">
                 {app.createdAt && (
                   <div>Started: {format(new Date(app.createdAt), "d MMM yyyy, h:mm a")}</div>
@@ -819,6 +835,28 @@ export default function ApplicationManagement() {
     },
   });
 
+  const { data: cohortsData = [] } = useQuery<Cohort[]>({
+    queryKey: ["/api/admin/cohorts"],
+  });
+
+  const assignCohortMutation = useMutation({
+    mutationFn: async ({ appId, cohortId }: { appId: string; cohortId: string | null }) => {
+      const response = await apiRequest("PATCH", `/api/admin/applications/${appId}/cohort`, { cohortId });
+      if (!response.ok) throw new Error("Failed to assign cohort");
+      return response.json();
+    },
+    onSuccess: (_data, { appId, cohortId }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/cohort-analytics"] });
+      if (selectedApplication?.id === appId) {
+        setSelectedApplication({ ...selectedApplication, cohortId: cohortId ?? undefined } as any);
+      }
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to assign cohort.", variant: "destructive" });
+    },
+  });
+
   const filteredApplications = applications.filter((app) => {
     const matchesSearch =
       app.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1028,9 +1066,16 @@ export default function ApplicationManagement() {
                                 {app.submittedAt ? format(new Date(app.submittedAt), "MMM d, yyyy") : "—"}
                               </TableCell>
                               <TableCell>
-                                <Badge variant={statusConfig[app.status]?.variant || "secondary"}>
-                                  {statusConfig[app.status]?.label || app.status}
-                                </Badge>
+                                <div className="flex flex-col gap-1 items-start">
+                                  <Badge variant={statusConfig[app.status]?.variant || "secondary"}>
+                                    {statusConfig[app.status]?.label || app.status}
+                                  </Badge>
+                                  {app.cohortId && (
+                                    <span className="text-xs text-muted-foreground">
+                                      {cohortsData.find((c) => c.id === app.cohortId)?.name ?? ""}
+                                    </span>
+                                  )}
+                                </div>
                               </TableCell>
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-2">
