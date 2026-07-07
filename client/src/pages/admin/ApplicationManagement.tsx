@@ -492,14 +492,14 @@ function ApplicationPreviewSheet({
               </Badge>
               {cohortsData.length > 0 && (
                 <Select
-                  value={app.cohortId ?? ""}
-                  onValueChange={(val) => assignCohortMutation.mutate({ appId: app.id, cohortId: val || null })}
+                  value={app.cohortId ?? "none"}
+                  onValueChange={(val) => assignCohortMutation.mutate({ appId: app.id, cohortId: val === "none" ? null : val })}
                 >
                   <SelectTrigger className="h-7 text-xs w-36" data-testid="select-cohort-assign">
                     <SelectValue placeholder="Assign cohort…" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No cohort</SelectItem>
+                    <SelectItem value="none">No cohort</SelectItem>
                     {cohortsData.map((c) => (
                       <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                     ))}
