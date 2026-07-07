@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   BarChart2,
   Brain,
@@ -23,7 +24,8 @@ import {
   PlayCircle,
   X,
   FolderOpen,
-  Trash2,
+  Download,
+  ListFilter,
 } from "lucide-react";
 import type { Application, ApplicationEvaluation, Cohort } from "@shared/schema";
 
@@ -81,6 +83,183 @@ function DimensionAvgBar({ label, scores }: { label: string; scores: number[] })
         <div className="h-full rounded-full bg-primary/70 transition-all" style={{ width: `${avg}%` }} />
       </div>
     </div>
+  );
+}
+
+type RankedItem = { eval: ApplicationEvaluation; app: Application };
+
+function exportCSV(items: RankedItem[], filename: string) {
+  const headers = [
+    "Rank", "Name", "Email", "Company", "Country", "Sector",
+    "Overall Score", "Recommendation",
+    "Leadership", "Business Viability", "Market & Scale", "Energy & Infra", "Program Readiness",
+  ];
+  const rows = items.map((item, idx) => [
+    idx + 1,
+    `${item.app.firstName} ${item.app.lastName}`,
+    item.app.email ?? "",
+    item.app.companyName || item.app.companyLegalName || "",
+    item.app.countryOfOperation || item.app.companyCountry || "",
+    item.app.primarySector || "",
+    item.eval.overallScore,
+    RECOMMENDATION_CONFIG[item.eval.recommendation]?.label || item.eval.recommendation,
+    item.eval.leadershipScore,
+    item.eval.businessViabilityScore,
+    item.eval.marketScaleScore,
+    item.eval.energyInfraImpactScore,
+    item.eval.programReadinessScore,
+  ]);
+  const csv = [headers, ...rows]
+    .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function CandidateRow({ item, rank }: { item: RankedItem; rank: number }) {
+  const rec = RECOMMENDATION_CONFIG[item.eval.recommendation];
+  return (
+    <div
+      className="flex flex-wrap items-center gap-3 p-3 rounded-md bg-muted/30"
+      data-testid={`row-candidate-${item.eval.id}`}
+    >
+      <span className="text-sm font-mono text-muted-foreground w-6 text-right flex-shrink-0">
+        {rank}.
+      </span>
+      <div className="flex-1 min-w-0">
+        <div className="font-medium text-sm">
+          {item.app.firstName} {item.app.lastName}
+        </div>
+        <div className="text-xs text-muted-foreground truncate">
+          {item.app.companyName || item.app.companyLegalName || "—"} ·{" "}
+          {item.app.countryOfOperation || item.app.companyCountry || "—"} ·{" "}
+          {item.app.primarySector || "—"}
+        </div>
+      </div>
+      <div className="flex items-center gap-3 flex-shrink-0 text-xs text-muted-foreground">
+        <span title="Leadership">L:{item.eval.leadershipScore}</span>
+        <span title="Business Viability">B:{item.eval.businessViabilityScore}</span>
+        <span title="Market & Scale">M:{item.eval.marketScaleScore}</span>
+        <span title="Energy & Infra">E:{item.eval.energyInfraImpactScore}</span>
+        <span title="Program Readiness">P:{item.eval.programReadinessScore}</span>
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <span className="text-lg font-bold text-primary">{item.eval.overallScore}</span>
+        {rec && <Badge variant={rec.variant} className="text-xs">{rec.label}</Badge>}
+      </div>
+    </div>
+  );
+}
+
+function CandidateListTab({
+  items,
+  exportName,
+  emptyText,
+}: {
+  items: RankedItem[];
+  exportName: string;
+  emptyText: string;
+}) {
+  if (items.length === 0) {
+    return (
+      <div className="py-10 text-center text-sm text-muted-foreground italic">{emptyText}</div>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-between items-center mb-3">
+        <span className="text-xs text-muted-foreground">{items.length} candidate{items.length !== 1 ? "s" : ""}</span>
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5"
+          onClick={() => exportCSV(items, exportName)}
+          data-testid={`button-export-${exportName}`}
+        >
+          <Download className="h-3.5 w-3.5" />
+          Export CSV
+        </Button>
+      </div>
+      {items.map((item, idx) => (
+        <CandidateRow key={item.eval.id} item={item} rank={idx + 1} />
+      ))}
+    </div>
+  );
+}
+
+function CandidateLists({
+  ranked,
+  cohortLabel,
+}: {
+  ranked: RankedItem[];
+  cohortLabel: string;
+}) {
+  const bestFits = ranked.filter((r) => r.eval.recommendation === "strong_yes" || r.eval.recommendation === "yes");
+  const eligible = ranked.filter((r) => r.eval.recommendation !== "no");
+  const noGo = ranked.filter((r) => r.eval.recommendation === "no");
+  const slug = cohortLabel.toLowerCase().replace(/\s+/g, "-");
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
+          <ListFilter className="h-4 w-4 text-primary" />
+          Candidate Lists
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Tabs defaultValue="all">
+          <TabsList className="mb-4">
+            <TabsTrigger value="all" data-testid="tab-all-ranked">
+              Top Ranked <Badge variant="secondary" className="ml-1.5 text-xs">{ranked.length}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="best" data-testid="tab-best-fits">
+              Best Fits <Badge variant="secondary" className="ml-1.5 text-xs">{bestFits.length}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="eligible" data-testid="tab-eligible">
+              Eligible Pool <Badge variant="secondary" className="ml-1.5 text-xs">{eligible.length}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="nogo" data-testid="tab-nogo">
+              No Go <Badge variant="secondary" className="ml-1.5 text-xs">{noGo.length}</Badge>
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="all">
+            <CandidateListTab
+              items={ranked}
+              exportName={`${slug}-top-ranked.csv`}
+              emptyText="No evaluated candidates yet."
+            />
+          </TabsContent>
+          <TabsContent value="best">
+            <CandidateListTab
+              items={bestFits}
+              exportName={`${slug}-best-fits.csv`}
+              emptyText="No Strong Yes or Yes recommendations yet."
+            />
+          </TabsContent>
+          <TabsContent value="eligible">
+            <CandidateListTab
+              items={eligible}
+              exportName={`${slug}-eligible-pool.csv`}
+              emptyText="No eligible candidates (Strong Yes, Yes, or Maybe) yet."
+            />
+          </TabsContent>
+          <TabsContent value="nogo">
+            <CandidateListTab
+              items={noGo}
+              exportName={`${slug}-no-go.csv`}
+              emptyText="No No recommendations yet."
+            />
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -186,11 +365,11 @@ export default function CohortAnalytics() {
   };
   const shortlistCount = recCounts.strong_yes + recCounts.yes;
 
-  const ranked = evaluations
+  const ranked: RankedItem[] = evaluations
     .slice()
     .sort((a, b) => b.overallScore - a.overallScore)
     .map((e) => ({ eval: e, app: applications.find((a) => a.id === e.applicationId) }))
-    .filter((item) => item.app);
+    .filter((item): item is RankedItem => !!item.app);
 
   const sectorGroups: Record<string, ApplicationEvaluation[]> = {};
   evaluations.forEach((e) => {
@@ -520,45 +699,8 @@ export default function CohortAnalytics() {
                     </CardContent>
                   </Card>
 
-                  {/* Top ranked candidates */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-sm font-medium flex items-center gap-2">
-                        <TrendingUp className="h-4 w-4 text-primary" />
-                        Ranked Candidates
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        {ranked.map(({ eval: e, app }, idx) => {
-                          const rec = RECOMMENDATION_CONFIG[e.recommendation];
-                          return (
-                            <div
-                              key={e.id}
-                              className="flex flex-wrap items-center gap-3 p-3 rounded-md bg-muted/30"
-                              data-testid={`row-candidate-${e.id}`}
-                            >
-                              <span className="text-sm font-mono text-muted-foreground w-6 text-right flex-shrink-0">
-                                {idx + 1}.
-                              </span>
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium text-sm truncate">
-                                  {app!.firstName} {app!.lastName}
-                                </div>
-                                <div className="text-xs text-muted-foreground truncate">
-                                  {app!.companyName || app!.companyLegalName || "—"} · {app!.countryOfOperation || app!.companyCountry || "—"}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2 flex-shrink-0">
-                                <span className="text-lg font-bold text-primary">{e.overallScore}</span>
-                                {rec && <Badge variant={rec.variant} className="text-xs">{rec.label}</Badge>}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </CardContent>
-                  </Card>
+                  {/* Candidate Lists */}
+                  <CandidateLists ranked={ranked} cohortLabel={selectedCohort?.name ?? "All"} />
 
                   {/* Sector and country breakdown */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
