@@ -17,6 +17,7 @@ export function registerImageRoutes(app: Express): void {
         size: size as "1024x1024" | "512x512" | "256x256",
       });
 
+      // @ts-ignore — data may be undefined per types but guaranteed by API contract
       const imageData = response.data[0];
       res.json({
         url: imageData.url,

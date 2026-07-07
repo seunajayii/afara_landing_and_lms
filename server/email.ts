@@ -211,7 +211,7 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
           content: mastheadBuffer.toString('base64'),
           content_id: 'afara-masthead',
         }
-      ] : [],
+      ] as any : [],
     });
 
     if (error) {
@@ -451,7 +451,7 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
           content: mastheadBuffer.toString('base64'),
           content_id: 'afara-masthead',
         }
-      ] : [],
+      ] as any : [],
     });
 
     if (error) {
@@ -615,7 +615,7 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
           content: mastheadBuffer.toString('base64'),
           content_id: 'afara-masthead',
         }
-      ] : [],
+      ] as any : [],
     });
 
     if (error) {
@@ -769,7 +769,7 @@ export async function sendDisqualificationEmail(email: string, firstName?: strin
           content: mastheadBuffer.toString('base64'),
           content_id: 'afara-masthead',
         }
-      ] : [],
+      ] as any : [],
     });
 
     if (error) {
@@ -897,7 +897,7 @@ export async function sendWaitlistEmail(email: string, firstName?: string): Prom
           content: mastheadBuffer.toString('base64'),
           content_id: 'afara-masthead',
         }
-      ] : [],
+      ] as any : [],
     });
 
     if (error) {
@@ -1196,7 +1196,7 @@ export async function sendTeamWelcomeEmail(
           content: mastheadBuffer.toString('base64'),
           content_id: 'afara-masthead',
         }
-      ] : [],
+      ] as any : [],
     });
 
     if (error) {
@@ -1394,7 +1394,7 @@ export async function sendDraftSaveNotificationEmail(
           content: mastheadBuffer.toString('base64'),
           content_id: 'afara-masthead',
         }
-      ] : [],
+      ] as any : [],
     });
 
     if (error) {

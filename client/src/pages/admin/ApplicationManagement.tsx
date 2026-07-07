@@ -412,11 +412,15 @@ function ApplicationPreviewSheet({
   open,
   onClose,
   onUpdateStatus,
+  cohortsData,
+  assignCohortMutation,
 }: {
   app: Application | null;
   open: boolean;
   onClose: () => void;
   onUpdateStatus: (app: Application) => void;
+  cohortsData: Cohort[];
+  assignCohortMutation: { mutate: (args: { appId: string; cohortId: string | null }) => void };
 }) {
   const [translatedApp, setTranslatedApp] = useState<Application | null>(null);
   const [showTranslated, setShowTranslated] = useState(false);
@@ -1220,6 +1224,8 @@ export default function ApplicationManagement() {
           setIsPreviewOpen(false);
           openStatusDialog(app);
         }}
+        cohortsData={cohortsData}
+        assignCohortMutation={assignCohortMutation}
       />
 
       {/* Update status dialog */}

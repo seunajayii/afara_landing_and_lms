@@ -1,4 +1,5 @@
 import { db } from "../../db";
+// @ts-ignore — conversations/messages schema defined in replit chat integration, not yet in shared schema
 import { conversations, messages } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 

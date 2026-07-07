@@ -1739,7 +1739,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const normalized = normalizeApplicationBody(req.body);
       const raw = insertApplicationSchema.parse(normalized);
-      const data: typeof raw & { submittedAt?: Date } = { ...raw, email: raw.email.toLowerCase().trim() };
+      const data: typeof raw & { submittedAt?: Date | null } = { ...raw, email: raw.email.toLowerCase().trim() };
       if (data.status === "submitted") {
         data.submittedAt = new Date();
       }
