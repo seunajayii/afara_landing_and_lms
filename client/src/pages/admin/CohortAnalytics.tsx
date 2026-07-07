@@ -26,6 +26,8 @@ import {
   FolderOpen,
   Download,
   ListFilter,
+  LockOpen,
+  LockKeyhole,
 } from "lucide-react";
 import type { Application, ApplicationEvaluation, Cohort } from "@shared/schema";
 
@@ -334,6 +336,23 @@ export default function CohortAnalytics() {
     onError: () => toast({ title: "Failed to delete cohort", variant: "destructive" }),
   });
 
+  const toggleOpenMutation = useMutation({
+    mutationFn: async ({ id, open }: { id: string; open: boolean }) => {
+      const res = await apiRequest("POST", `/api/admin/cohorts/${id}/set-open`, { open });
+      if (!res.ok) throw new Error("Failed to update cohort");
+      return res.json() as Promise<Cohort>;
+    },
+    onSuccess: (cohort: Cohort) => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/cohort-analytics"] });
+      toast({
+        title: cohort.isOpen
+          ? `Applications opened for "${cohort.name}"`
+          : `Applications closed for "${cohort.name}"`,
+      });
+    },
+    onError: () => toast({ title: "Failed to update cohort status", variant: "destructive" }),
+  });
+
   const evaluateAllMutation = useMutation({
     mutationFn: async () => {
       const body = { force: true, ...(selectedCohortId ? { cohortId: selectedCohortId } : {}) };
@@ -497,10 +516,28 @@ export default function CohortAnalytics() {
                       variant={selectedCohortId === c.id ? "default" : "outline"}
                       onClick={() => { setSelectedCohortId(c.id); setNarrative(null); }}
                       data-testid={`button-cohort-${c.id}`}
-                      className="gap-1"
+                      className="gap-1.5"
                     >
+                      {c.isOpen
+                        ? <LockOpen className="h-3 w-3 text-green-600" />
+                        : <LockKeyhole className="h-3 w-3 opacity-40" />
+                      }
                       {c.name}
                       {c.year && <span className="opacity-60 text-xs">{c.year}</span>}
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      title={c.isOpen ? "Close applications" : "Open applications"}
+                      onClick={() => toggleOpenMutation.mutate({ id: c.id, open: !c.isOpen })}
+                      disabled={toggleOpenMutation.isPending}
+                      data-testid={`button-toggle-open-${c.id}`}
+                    >
+                      {c.isOpen
+                        ? <LockKeyhole className="h-3 w-3 text-amber-600" />
+                        : <LockOpen className="h-3 w-3 text-green-600" />
+                      }
                     </Button>
                     <Button
                       size="icon"

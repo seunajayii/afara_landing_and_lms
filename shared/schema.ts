@@ -307,6 +307,7 @@ export const cohorts = pgTable("cohorts", {
   description: text("description"),
   year: integer("year"),
   isActive: boolean("is_active").notNull().default(true),
+  isOpen: boolean("is_open").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

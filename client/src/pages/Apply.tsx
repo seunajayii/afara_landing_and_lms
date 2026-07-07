@@ -59,6 +59,7 @@ import {
   ClipboardList,
   Pencil,
   ExternalLink,
+  LockKeyhole,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -321,6 +322,16 @@ export default function Apply() {
   const [appMode, setAppMode] = useState<"select" | "form">("select");
   const [resumeEmail, setResumeEmail] = useState("");
   const [isCheckingDraft, setIsCheckingDraft] = useState(false);
+
+  const { data: openCohortData, isLoading: isLoadingCohort } = useQuery<{ cohort: { id: string; name: string; year: number | null } | null }>({
+    queryKey: ["/api/cohorts/open"],
+    queryFn: async () => {
+      const res = await fetch("/api/cohorts/open");
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+  const applicationsOpen = !isLoadingCohort && openCohortData?.cohort != null;
   const [draftLookupError, setDraftLookupError] = useState("");
   const [draftNeedsEmailLink, setDraftNeedsEmailLink] = useState(false);
   const [statusEmail, setStatusEmail] = useState("");
@@ -795,31 +806,55 @@ export default function Apply() {
               </p>
             </div>
 
+            {/* Applications closed banner */}
+            {!isLoadingCohort && !applicationsOpen && (
+              <div
+                className="mb-6 flex items-start gap-3 rounded-md border border-muted-foreground/20 bg-muted/50 px-4 py-3 text-sm text-muted-foreground"
+                data-testid="banner-applications-closed"
+              >
+                <LockKeyhole className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                <div>
+                  <span className="font-medium text-foreground">Applications are currently closed.</span>
+                  {" "}New applications for this cohort are not being accepted at this time. You may still check your application status or complete a previously saved draft below.
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Start New Application */}
               <Card
-                className="hover-elevate cursor-pointer flex flex-col"
+                className={`flex flex-col ${applicationsOpen ? "hover-elevate cursor-pointer" : "opacity-60"}`}
                 data-testid="card-start-new"
-                onClick={() => setAppMode("form")}
+                onClick={() => applicationsOpen && setAppMode("form")}
               >
                 <CardHeader className="flex flex-col items-center text-center gap-3 pb-4">
                   <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
-                    <FileText className="w-7 h-7 text-primary" />
+                    {applicationsOpen
+                      ? <FileText className="w-7 h-7 text-primary" />
+                      : <LockKeyhole className="w-7 h-7 text-muted-foreground" />
+                    }
                   </div>
                   <div>
                     <CardTitle className="text-xl">Start a New Application</CardTitle>
                     <CardDescription className="mt-1">
-                      Begin a fresh application for the AFÁRA programme. You can save your progress at any time and return later.
+                      {applicationsOpen
+                        ? "Begin a fresh application for the AFÁRA programme. You can save your progress at any time and return later."
+                        : "Applications are currently closed. Please check back when the next cohort opens."
+                      }
                     </CardDescription>
                   </div>
                 </CardHeader>
                 <CardContent className="mt-auto pt-0 flex justify-center pb-6">
                   <Button
-                    onClick={(e) => { e.stopPropagation(); setAppMode("form"); }}
+                    onClick={(e) => { e.stopPropagation(); if (applicationsOpen) setAppMode("form"); }}
+                    disabled={!applicationsOpen}
                     data-testid="button-start-new-application"
                   >
-                    Start Application
-                    <ArrowRight className="w-4 h-4 ml-2" />
+                    {applicationsOpen ? (
+                      <>Start Application <ArrowRight className="w-4 h-4 ml-2" /></>
+                    ) : (
+                      <>Applications Closed <LockKeyhole className="w-4 h-4 ml-2" /></>
+                    )}
                   </Button>
                 </CardContent>
               </Card>

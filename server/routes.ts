@@ -1751,6 +1751,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Auto-assign to the currently open cohort
+      const openCohort = await storage.getOpenCohort();
+      if (openCohort) {
+        (data as any).cohortId = openCohort.id;
+      }
+
       const application = await storage.createApplication(data);
 
       if (data.status === "draft") {
@@ -2192,6 +2198,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Cohort narrative error:", error instanceof Error ? error.message : error);
       res.status(500).json({ error: "Failed to generate cohort narrative" });
+    }
+  });
+
+  // Public: check if applications are open
+  app.get("/api/cohorts/open", async (req: Request, res: Response) => {
+    try {
+      const cohort = await storage.getOpenCohort();
+      res.json({ cohort: cohort ?? null });
+    } catch {
+      res.status(500).json({ error: "Failed to check open cohort" });
+    }
+  });
+
+  // Admin: open or close a cohort (only one open at a time)
+  app.post("/api/admin/cohorts/:id/set-open", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const { open } = req.body;
+      await storage.setOpenCohort(open ? req.params.id : null);
+      const cohort = await storage.getCohort(req.params.id);
+      res.json(cohort);
+    } catch {
+      res.status(500).json({ error: "Failed to update cohort open status" });
     }
   });
 

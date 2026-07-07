@@ -163,9 +163,11 @@ export interface IStorage {
   getAllApplicationEvaluations(): Promise<ApplicationEvaluation[]>;
 
   getCohort(id: string): Promise<Cohort | undefined>;
+  getOpenCohort(): Promise<Cohort | undefined>;
   getAllCohorts(): Promise<Cohort[]>;
   createCohort(data: InsertCohort): Promise<Cohort>;
   updateCohort(id: string, data: Partial<InsertCohort>): Promise<Cohort | undefined>;
+  setOpenCohort(id: string | null): Promise<void>;
   deleteCohort(id: string): Promise<void>;
   assignApplicationToCohort(applicationId: string, cohortId: string | null): Promise<void>;
 
@@ -804,6 +806,11 @@ export class DatabaseStorage implements IStorage {
     return cohort;
   }
 
+  async getOpenCohort(): Promise<Cohort | undefined> {
+    const [cohort] = await db.select().from(cohorts).where(eq(cohorts.isOpen, true));
+    return cohort;
+  }
+
   async getAllCohorts(): Promise<Cohort[]> {
     return db.select().from(cohorts).orderBy(desc(cohorts.createdAt));
   }
@@ -816,6 +823,13 @@ export class DatabaseStorage implements IStorage {
   async updateCohort(id: string, data: Partial<InsertCohort>): Promise<Cohort | undefined> {
     const [cohort] = await db.update(cohorts).set(data).where(eq(cohorts.id, id)).returning();
     return cohort;
+  }
+
+  async setOpenCohort(id: string | null): Promise<void> {
+    await db.update(cohorts).set({ isOpen: false });
+    if (id) {
+      await db.update(cohorts).set({ isOpen: true }).where(eq(cohorts.id, id));
+    }
   }
 
   async deleteCohort(id: string): Promise<void> {
