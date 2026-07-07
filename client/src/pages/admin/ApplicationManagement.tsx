@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -75,6 +75,8 @@ import {
   RefreshCw,
   Sparkles,
   AlertCircle,
+  LockOpen,
+  LockKeyhole,
 } from "lucide-react";
 import type { Application, ApplicationEvaluation, Cohort } from "@shared/schema";
 import { format } from "date-fns";
@@ -857,6 +859,26 @@ export default function ApplicationManagement() {
     },
   });
 
+  const toggleOpenMutation = useMutation({
+    mutationFn: async ({ id, open }: { id: string; open: boolean }) => {
+      const res = await apiRequest("POST", `/api/admin/cohorts/${id}/set-open`, { open });
+      if (!res.ok) throw new Error("Failed to update");
+      return res.json() as Promise<Cohort>;
+    },
+    onSuccess: (cohort: Cohort) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/cohorts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/cohort-analytics"] });
+      toast({
+        title: cohort.isOpen
+          ? `Applications opened — ${cohort.name}`
+          : `Applications closed — ${cohort.name}`,
+      });
+    },
+    onError: () => toast({ title: "Failed to update cohort status", variant: "destructive" }),
+  });
+
+  const openCohort = cohortsData.find((c) => c.isOpen) ?? null;
+
   const filteredApplications = applications.filter((app) => {
     const matchesSearch =
       app.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -909,9 +931,74 @@ export default function ApplicationManagement() {
       <AdminSidebar />
       <main className="flex-1 p-6 bg-background overflow-auto">
         <div className="max-w-7xl mx-auto space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Application Management</h1>
-            <p className="text-muted-foreground mt-1">Review and manage program applications</p>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">Application Management</h1>
+              <p className="text-muted-foreground mt-1">Review and manage program applications</p>
+            </div>
+
+            {/* Cohort open/close control */}
+            {cohortsData.length > 0 && (
+              <div
+                className={`flex items-center gap-3 rounded-md border px-4 py-2.5 text-sm ${
+                  openCohort
+                    ? "border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30"
+                    : "border-muted-foreground/20 bg-muted/40"
+                }`}
+                data-testid="banner-cohort-status"
+              >
+                <div className="flex items-center gap-2">
+                  {openCohort
+                    ? <LockOpen className="h-4 w-4 text-green-600 flex-shrink-0" />
+                    : <LockKeyhole className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  }
+                  <div>
+                    <span className={`font-medium ${openCohort ? "text-green-800 dark:text-green-300" : "text-foreground"}`}>
+                      {openCohort ? `Applications open — ${openCohort.name}` : "Applications closed"}
+                    </span>
+                    {!openCohort && cohortsData.length > 0 && (
+                      <span className="text-muted-foreground ml-1">— select a cohort to open below</span>
+                    )}
+                  </div>
+                </div>
+                {openCohort ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 flex-shrink-0"
+                    disabled={toggleOpenMutation.isPending}
+                    onClick={() => toggleOpenMutation.mutate({ id: openCohort.id, open: false })}
+                    data-testid="button-close-applications"
+                  >
+                    {toggleOpenMutation.isPending
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <LockKeyhole className="h-3.5 w-3.5" />
+                    }
+                    Close Applications
+                  </Button>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5 flex-shrink-0">
+                    {cohortsData.map((c) => (
+                      <Button
+                        key={c.id}
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5"
+                        disabled={toggleOpenMutation.isPending}
+                        onClick={() => toggleOpenMutation.mutate({ id: c.id, open: true })}
+                        data-testid={`button-open-cohort-${c.id}`}
+                      >
+                        {toggleOpenMutation.isPending
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <LockOpen className="h-3.5 w-3.5" />
+                        }
+                        Open {c.name}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Stats */}
