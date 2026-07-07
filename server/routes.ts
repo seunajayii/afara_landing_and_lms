@@ -2252,8 +2252,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/cohort-analytics/evaluate-all", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const { cohortId, force } = req.body;
-      const submittedStatuses = ["submitted", "under_review", "accepted", "rejected", "waitlisted", "disqualified"];
-      let allApps = (await storage.getAllApplications()).filter((a) => submittedStatuses.includes(a.status));
+      let allApps = await storage.getAllApplications();
+
+      // When not forcing, only consider submitted (non-draft) applications
+      if (!force) {
+        const submittedStatuses = ["submitted", "under_review", "accepted", "rejected", "waitlisted", "disqualified"];
+        allApps = allApps.filter((a) => submittedStatuses.includes(a.status));
+      }
+
       if (cohortId) {
         allApps = allApps.filter((a) => a.cohortId === cohortId);
       }
