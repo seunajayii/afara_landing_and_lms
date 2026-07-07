@@ -262,22 +262,22 @@ export default function CohortAnalytics() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {unevaluatedCount > 0 && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => evaluateAllMutation.mutate()}
-                  disabled={evaluateAllMutation.isPending}
-                  className="gap-1.5"
-                  data-testid="button-evaluate-all"
-                >
-                  {evaluateAllMutation.isPending ? (
-                    <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Evaluating…</>
-                  ) : (
-                    <><PlayCircle className="h-3.5 w-3.5" /> Evaluate {unevaluatedCount} Unevaluated</>
-                  )}
-                </Button>
-              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => evaluateAllMutation.mutate()}
+                disabled={evaluateAllMutation.isPending}
+                className="gap-1.5"
+                data-testid="button-evaluate-all"
+              >
+                {evaluateAllMutation.isPending ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Evaluating…</>
+                ) : unevaluatedCount > 0 ? (
+                  <><PlayCircle className="h-3.5 w-3.5" /> Evaluate All ({unevaluatedCount} pending)</>
+                ) : (
+                  <><PlayCircle className="h-3.5 w-3.5" /> Evaluate All</>
+                )}
+              </Button>
               <Button
                 size="sm"
                 variant="outline"
@@ -454,37 +454,6 @@ export default function CohortAnalytics() {
                   </CardContent>
                 </Card>
               </div>
-
-              {/* Pending evaluation notice */}
-              {unevaluatedCount > 0 && (
-                <Card className="border-dashed">
-                  <CardContent className="py-4 flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <Brain className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium">
-                          {unevaluatedCount} application{unevaluatedCount !== 1 ? "s" : ""} not yet evaluated
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          New submissions are evaluated automatically. Click to evaluate any that were missed.
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={() => evaluateAllMutation.mutate()}
-                      disabled={evaluateAllMutation.isPending}
-                      className="gap-1.5"
-                    >
-                      {evaluateAllMutation.isPending ? (
-                        <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Evaluating…</>
-                      ) : (
-                        <><PlayCircle className="h-3.5 w-3.5" /> Evaluate Now</>
-                      )}
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
 
               {evaluated === 0 ? (
                 <Card>
