@@ -2251,18 +2251,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Batch evaluate all unevaluated submitted applications (optionally scoped to a cohort)
   app.post("/api/admin/cohort-analytics/evaluate-all", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
-      const { cohortId } = req.body;
+      const { cohortId, force } = req.body;
       const submittedStatuses = ["submitted", "under_review", "accepted", "rejected", "waitlisted", "disqualified"];
       let allApps = (await storage.getAllApplications()).filter((a) => submittedStatuses.includes(a.status));
       if (cohortId) {
         allApps = allApps.filter((a) => a.cohortId === cohortId);
       }
-      const allEvals = await storage.getAllApplicationEvaluations();
-      const evaluatedIds = new Set(allEvals.map((e) => e.applicationId));
-      const toEvaluate = allApps.filter((a) => !evaluatedIds.has(a.id));
+
+      let toEvaluate = allApps;
+      if (!force) {
+        const allEvals = await storage.getAllApplicationEvaluations();
+        const evaluatedIds = new Set(allEvals.map((e) => e.applicationId));
+        toEvaluate = allApps.filter((a) => !evaluatedIds.has(a.id));
+      }
 
       if (toEvaluate.length === 0) {
-        return res.json({ evaluated: 0, total: 0, message: "All applications already evaluated" });
+        return res.json({ evaluated: 0, total: 0, message: "No submitted applications found" });
       }
 
       const { evaluateApplication, EVAL_MODEL } = await import("./ai-evaluation");

@@ -157,7 +157,7 @@ export default function CohortAnalytics() {
 
   const evaluateAllMutation = useMutation({
     mutationFn: async () => {
-      const body = selectedCohortId ? { cohortId: selectedCohortId } : {};
+      const body = { force: true, ...(selectedCohortId ? { cohortId: selectedCohortId } : {}) };
       const res = await apiRequest("POST", "/api/admin/cohort-analytics/evaluate-all", body);
       if (!res.ok) throw new Error("Batch evaluation failed");
       return res.json();
