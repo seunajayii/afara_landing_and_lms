@@ -335,8 +335,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         firstName: z.string().min(1),
         lastName: z.string().min(1),
         role: z.enum(["community_member", "participant", "mentor", "facilitator", "admin", "superadmin"]),
+        sendLoginEmail: z.boolean().optional(),
       });
-      const { email, password, firstName, lastName, role } = schema.parse(req.body);
+      const { email, password, firstName, lastName, role, sendLoginEmail } = schema.parse(req.body);
 
       const existing = await storage.getUserByEmail(email.toLowerCase().trim());
       if (existing) {
@@ -353,11 +354,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         teamRoles.includes(role) // mustChangePassword = true for team members
       );
 
-      // Send welcome email with credentials for team roles (fire-and-forget)
-      if (teamRoles.includes(role)) {
+      // Send welcome email with credentials when requested (fire-and-forget)
+      if (sendLoginEmail) {
         import("./email").then(({ sendTeamWelcomeEmail }) => {
           sendTeamWelcomeEmail(user.email, firstName, role, password).catch(err => {
-            console.error("Team welcome email failed:", err);
+            console.error("Welcome email failed:", err);
           });
         }).catch(err => console.error("Failed to import email module:", err));
       }

@@ -73,7 +73,9 @@ import {
   Trash2,
   KeyRound,
   AlertTriangle,
+  Mail,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { User } from "@shared/schema";
 
 const userFormSchema = z.object({
@@ -82,6 +84,7 @@ const userFormSchema = z.object({
   lastName: z.string().min(1, "Last name is required"),
   role: z.enum(["community_member", "participant", "mentor", "facilitator", "admin", "superadmin"]),
   password: z.string().min(6, "Password must be at least 6 characters").optional(),
+  sendLoginEmail: z.boolean().default(true),
 });
 
 type UserFormData = z.infer<typeof userFormSchema>;
@@ -120,6 +123,7 @@ export default function UserManagement() {
       lastName: "",
       role: "participant",
       password: "",
+      sendLoginEmail: true,
     },
   });
 
@@ -145,19 +149,18 @@ export default function UserManagement() {
         firstName: data.firstName,
         lastName: data.lastName,
         role: data.role,
+        sendLoginEmail: data.sendLoginEmail,
       });
       return res.json();
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       setIsCreateDialogOpen(false);
-      createForm.reset();
-      const teamRoles = ["mentor", "facilitator", "admin", "superadmin"];
-      const sentEmail = teamRoles.includes(variables.role);
+      createForm.reset({ sendLoginEmail: true });
       toast({
         title: "User Created",
-        description: sentEmail
-          ? `Account created and login credentials emailed to ${variables.email}.`
+        description: variables.sendLoginEmail
+          ? `Account created and login details emailed to ${variables.email}.`
           : "The user account has been created successfully.",
       });
     },
@@ -654,6 +657,32 @@ export default function UserManagement() {
                       </SelectContent>
                     </Select>
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={createForm.control}
+                name="sendLoginEmail"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center gap-3 rounded-md border p-3 bg-muted/30">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="checkbox-send-login-email"
+                        />
+                      </FormControl>
+                      <div className="flex-1 min-w-0">
+                        <FormLabel className="cursor-pointer flex items-center gap-1.5 mb-0">
+                          <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                          Send login details by email
+                        </FormLabel>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Sends the email address and password to the user
+                        </p>
+                      </div>
+                    </div>
                   </FormItem>
                 )}
               />
