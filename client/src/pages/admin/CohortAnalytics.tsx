@@ -28,6 +28,7 @@ import {
   ListFilter,
   LockOpen,
   LockKeyhole,
+  FileDown,
 } from "lucide-react";
 import type { Application, ApplicationEvaluation, Cohort } from "@shared/schema";
 
@@ -486,6 +487,23 @@ export default function CohortAnalytics() {
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
                 Refresh
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                data-testid="button-pdf-report"
+                onClick={() => {
+                  if (narrative) sessionStorage.setItem("cohort-report-narrative", narrative);
+                  else sessionStorage.removeItem("cohort-report-narrative");
+                  const url = selectedCohortId
+                    ? `/admin/cohort-report?cohortId=${selectedCohortId}`
+                    : "/admin/cohort-report";
+                  window.open(url, "_blank");
+                }}
+              >
+                <FileDown className="h-3.5 w-3.5" />
+                PDF Report
               </Button>
             </div>
           </div>
