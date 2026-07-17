@@ -55,7 +55,7 @@ export async function seedSuperAdmin(): Promise<void> {
   const resetPassword = process.env.RESET_SUPERADMIN_PASSWORD;
   if (resetPassword && existingAdmin) {
     const passwordHash = await hashPassword(resetPassword);
-    await storage.updateUser(existingAdmin.id, { passwordHash, mustChangePassword: true });
+    await storage.updateUser(existingAdmin.id, { passwordHash, mustChangePassword: false });
     console.log("Superadmin password has been reset via RESET_SUPERADMIN_PASSWORD env var. Please remove this variable after logging in.");
     return;
   }
