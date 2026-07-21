@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { seedSuperAdmin } from "./auth";
@@ -18,14 +19,18 @@ app.set("trust proxy", 1);
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: false, limit: "50mb" }));
 
+const PgSession = connectPgSimple(session);
 app.use(session({
+  store: process.env.DATABASE_URL
+    ? new PgSession({ conString: process.env.DATABASE_URL, createTableIfMissing: true })
+    : undefined,
   secret: process.env.SESSION_SECRET || "afara-accelerator-secret-key-2024",
   resave: false,
   saveUninitialized: false,
   cookie: {
     secure: process.env.NODE_ENV === "production",
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000
+    maxAge: 7 * 24 * 60 * 60 * 1000
   }
 }));
 

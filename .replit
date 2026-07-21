@@ -48,4 +48,3 @@ timeoutMs = 20000
 [userenv]
 
 [userenv.production]
-RESET_SUPERADMIN_PASSWORD = "Admin123!"

@@ -49,17 +49,6 @@ export async function createUserWithPassword(
 
 export async function seedSuperAdmin(): Promise<void> {
   const existingAdmin = await storage.getUserByEmail("admin@afaraaccelerator.org");
-
-  // One-time emergency password reset: if RESET_SUPERADMIN_PASSWORD is set,
-  // overwrite the superadmin's password on startup then log a reminder to remove the var.
-  const resetPassword = process.env.RESET_SUPERADMIN_PASSWORD;
-  if (resetPassword && existingAdmin) {
-    const passwordHash = await hashPassword(resetPassword);
-    await storage.updateUser(existingAdmin.id, { passwordHash, mustChangePassword: false });
-    console.log("Superadmin password has been reset via RESET_SUPERADMIN_PASSWORD env var. Please remove this variable after logging in.");
-    return;
-  }
-
   if (existingAdmin) {
     console.log("Super admin already exists");
     return;
