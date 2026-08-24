@@ -10,7 +10,6 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import About from "@/pages/About";
 import Program from "@/pages/Program";
-import Programs from "@/pages/Programs";
 import Contact from "@/pages/Contact";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/lms/Dashboard";
@@ -34,7 +33,6 @@ import NewsletterManagement from "@/pages/admin/NewsletterManagement";
 import CohortAnalytics from "@/pages/admin/CohortAnalytics";
 import CohortReport from "@/pages/admin/CohortReport";
 import Apply from "@/pages/Apply";
-import DorewaApply from "@/pages/DorewaApply";
 import Profile from "@/pages/lms/Profile";
 import ChangePassword from "@/pages/ChangePassword";
 import ForgotPassword from "@/pages/ForgotPassword";
@@ -109,10 +107,8 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/about" component={About} />
       <Route path="/program" component={Program} />
-      <Route path="/programs" component={Programs} />
       <Route path="/contact" component={Contact} />
       <Route path="/apply" component={Apply} />
-      <Route path="/dorewa/apply" component={DorewaApply} />
       <Route path="/login" component={Login} />
       <Route path="/change-password" component={ChangePassword} />
       <Route path="/forgot-password" component={ForgotPassword} />

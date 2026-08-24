@@ -71,7 +71,7 @@ export default function Program() {
       <section className="relative py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h1 className="text-5xl font-bold mb-4">AFÁRÁ Africa Accelerator</h1>
+            <h1 className="text-5xl font-bold mb-4">The AFÁRÁ Program</h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
               A comprehensive accelerator designed to support female infrapreneurs building transformative energy and infrastructure ventures across Africa.
             </p>
@@ -90,7 +90,7 @@ export default function Program() {
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-card">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold mb-4">AFÁRÁ accelerator pillars</h2>
+            <h2 className="text-4xl font-bold mb-4">Program Pillars</h2>
             <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
               Our holistic approach combines training, mentorship, funding access, and business development to give you everything you need to succeed.
             </p>
@@ -128,7 +128,7 @@ export default function Program() {
         <div className="max-w-7xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-12 items-start">
             <div>
-              <h2 className="text-4xl font-bold mb-6">What the accelerator offers</h2>
+              <h2 className="text-4xl font-bold mb-6">Program Benefits</h2>
               <p className="text-lg text-muted-foreground mb-8">
                 As an AFÁRÁ participant, you'll gain access to a comprehensive support system designed to help you build, fund, and scale your venture.
               </p>
@@ -143,7 +143,7 @@ export default function Program() {
             </div>
 
             <div>
-              <h2 className="text-4xl font-bold mb-6">Programme milestones</h2>
+              <h2 className="text-4xl font-bold mb-6">Program Milestones</h2>
               <div className="space-y-4">
                 {timeline.map((item, i) => (
                   <div key={i} className="flex items-start gap-4 p-4 bg-card rounded-md border">
@@ -199,17 +199,17 @@ export default function Program() {
             Are you a female infrapreneur building or scaling a venture in Africa's energy or infrastructure sectors? Apply to join the next AFÁRÁ cohort and access the support you need to succeed.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
-            <Button asChild size="lg" data-testid="button-apply-now">
-              <Link href="/apply">
+            <Link href="/apply">
+              <Button size="lg" data-testid="button-apply-now">
                 Apply Now
                 <ArrowRight className="w-4 h-4 ml-2" />
-              </Link>
-            </Button>
-            <Button asChild size="lg" variant="outline" data-testid="button-existing-member">
-              <Link href="/lms/dashboard">
+              </Button>
+            </Link>
+            <Link href="/lms/dashboard">
+              <Button size="lg" variant="outline" data-testid="button-existing-member">
                 Existing Member Login
-              </Link>
-            </Button>
+              </Button>
+            </Link>
           </div>
         </div>
       </section>

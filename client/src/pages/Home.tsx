@@ -42,7 +42,7 @@ export default function Home() {
     <div className="min-h-screen flex flex-col">
       <Navbar />
       <Hero />
-
+      
       <section className="py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
@@ -213,12 +213,12 @@ export default function Home() {
                   </div>
                 </li>
               </ul>
-              <Button asChild size="lg" data-testid="button-learn-more">
-                <Link href="/programs">
-                  Explore Programs
+              <Link href="/program">
+                <Button size="lg" data-testid="button-learn-more">
+                  Learn More About the Program
                   <ArrowRight className="w-4 h-4 ml-2" />
-                </Link>
-              </Button>
+                </Button>
+              </Link>
             </div>
           </div>
         </div>
@@ -231,16 +231,16 @@ export default function Home() {
             Join a community of ambitious women infrapreneurs transforming Africa's energy and infrastructure landscape. Access training, mentorship, and funding opportunities.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
-            <Button asChild size="lg" data-testid="button-apply-now">
-              <Link href="/apply">
+            <Link href="/apply">
+              <Button size="lg" data-testid="button-apply-now">
                 Apply Now
-              </Link>
-            </Button>
-            <Button asChild size="lg" variant="outline" data-testid="button-member-login">
-              <Link href="/lms/dashboard">
+              </Button>
+            </Link>
+            <Link href="/lms/dashboard">
+              <Button size="lg" variant="outline" data-testid="button-member-login">
                 Member Login
-              </Link>
-            </Button>
+              </Button>
+            </Link>
           </div>
         </div>
       </section>

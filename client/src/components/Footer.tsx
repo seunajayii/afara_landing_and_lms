@@ -56,8 +56,8 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/programs" className="text-muted-foreground hover:text-foreground transition-colors">
-                  Programs
+                <Link href="/program" className="text-muted-foreground hover:text-foreground transition-colors">
+                  Program
                 </Link>
               </li>
               <li>

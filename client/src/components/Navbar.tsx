@@ -9,14 +9,12 @@ export function Navbar() {
   const [location] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const isActive = (path: string) =>
-    location === path ||
-    (path === "/programs" && (location === "/program" || location.startsWith("/dorewa")));
+  const isActive = (path: string) => location === path;
 
   const navLinks = [
     { path: "/", label: "Home" },
     { path: "/about", label: "About" },
-    { path: "/programs", label: "Programs" },
+    { path: "/program", label: "Program" },
     { path: "/faq", label: "FAQ" },
     { path: "/contact", label: "Contact" },
   ];
@@ -33,26 +31,24 @@ export function Navbar() {
 
           <div className="hidden md:flex items-center gap-1">
             {navLinks.map((link) => (
-              <Button
-                key={link.path}
-                asChild
-                variant="ghost"
-                className={isActive(link.path) ? "bg-accent" : ""}
-                data-testid={`link-${link.label.toLowerCase()}`}
-              >
-                <Link href={link.path}>
+              <Link key={link.path} href={link.path}>
+                <Button
+                  variant="ghost"
+                  className={isActive(link.path) ? "bg-accent" : ""}
+                  data-testid={`link-${link.label.toLowerCase()}`}
+                >
                   {link.label}
-                </Link>
-              </Button>
+                </Button>
+              </Link>
             ))}
           </div>
 
           <div className="flex items-center gap-2">
-            <Button asChild variant="default" size="sm" data-testid="button-access-lms">
-              <Link href="/lms/dashboard">
+            <Link href="/lms/dashboard">
+              <Button variant="default" size="sm" data-testid="button-access-lms">
                 Access LMS
-              </Link>
-            </Button>
+              </Button>
+            </Link>
             <ThemeToggle />
             <Button
               variant="ghost"
@@ -60,9 +56,6 @@ export function Navbar() {
               className="md:hidden"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               data-testid="button-mobile-menu"
-              aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
-              aria-expanded={mobileMenuOpen}
-              aria-controls="mobile-navigation"
             >
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>
@@ -70,25 +63,28 @@ export function Navbar() {
         </div>
 
         {mobileMenuOpen && (
-          <div id="mobile-navigation" className="md:hidden pb-4 pt-2 border-t">
+          <div className="md:hidden pb-4 pt-2 border-t">
             <div className="flex flex-col gap-1">
               {navLinks.map((link) => (
-                <Button
-                  key={link.path}
-                  asChild
-                  variant="ghost"
-                  className={`w-full justify-start ${isActive(link.path) ? "bg-accent" : ""}`}
-                >
-                  <Link href={link.path} onClick={() => setMobileMenuOpen(false)}>
+                <Link key={link.path} href={link.path}>
+                  <Button
+                    variant="ghost"
+                    className={`w-full justify-start ${isActive(link.path) ? "bg-accent" : ""}`}
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
                     {link.label}
-                  </Link>
-                </Button>
-              ))}
-              <Button asChild variant="default" className="w-full mt-2">
-                <Link href="/lms/dashboard" onClick={() => setMobileMenuOpen(false)}>
-                  Access LMS
+                  </Button>
                 </Link>
-              </Button>
+              ))}
+              <Link href="/lms/dashboard">
+                <Button
+                  variant="default"
+                  className="w-full mt-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Access LMS
+                </Button>
+              </Link>
             </div>
           </div>
         )}
