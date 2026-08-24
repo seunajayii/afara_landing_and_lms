@@ -4,10 +4,11 @@ import { Footer } from "@/components/Footer";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { GraduationCap, Users, Briefcase, TrendingUp, Lightbulb, Flame, Leaf, Truck, Wifi, ArrowRight, CalendarDays, MapPin, Sprout, SunMedium, Network, Banknote, LineChart, Presentation, Handshake } from "lucide-react";
+import { GraduationCap, Users, Briefcase, TrendingUp, Lightbulb, Flame, Leaf, Truck, Wifi, ArrowRight, CalendarDays, MapPin, SunMedium, Network, Banknote, LineChart, Presentation, Handshake } from "lucide-react";
 import solarImage from "@assets/generated_images/African_solar_farm_infrastructure_d819497d.png";
 import dorewaFounderImage from "@assets/generated_images/African_woman_entrepreneur_portrait_f0a967a8.png";
-import afaraMark from "@assets/Afara_Logo_Mark__1775330139762.png";
+import dorewaLogo from "@assets/0_Logos_(1)_1787573268326.png";
+import dorewaPartnerMark from "@assets/0_Logos_1787573273293.png";
 
 export default function Home() {
   const programPillars = [
@@ -71,15 +72,22 @@ export default function Home() {
         />
         <div className="relative mx-auto grid max-w-7xl gap-12 px-4 py-20 sm:px-6 lg:grid-cols-[1.05fr_.95fr] lg:items-center lg:px-8 lg:py-24">
           <div>
-            <div className="mb-8 flex flex-wrap items-center gap-4">
-              <div className="flex items-center gap-2 rounded-full bg-[#173c35] px-4 py-2 text-xs font-bold tracking-[0.18em] text-[#f3eadb]">
-                <span className="text-base leading-none">DOREWA</span>
-                <span className="h-4 w-px bg-[#d5a13c]" />
-                <Sprout className="h-4 w-4 text-[#e8ad50]" aria-hidden="true" />
+            <div className="mb-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+              <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl border border-[#173c35]/15 bg-[#004d26] shadow-sm">
+                <img
+                  src={dorewaLogo}
+                  alt="DOREWA"
+                  className="h-full w-full object-contain"
+                  data-testid="img-dorewa-logo-home"
+                />
               </div>
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#56746a]">
-                <img src={afaraMark} alt="" className="h-7 w-7 object-contain" />
-                <span>Afará × Kingdom of the Netherlands</span>
+              <div className="h-20 w-full max-w-[20rem] overflow-hidden rounded-full border border-[#173c35]/15 bg-[#004d26] shadow-sm sm:w-80">
+                <img
+                  src={dorewaPartnerMark}
+                  alt="An Afará and Kingdom of the Netherlands initiative"
+                  className="h-full w-full object-cover"
+                  data-testid="img-dorewa-partner-mark-home"
+                />
               </div>
             </div>
 

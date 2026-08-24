@@ -1,8 +1,10 @@
 import { Link } from "wouter";
-import { ArrowLeft, ArrowRight, CalendarDays, CheckCircle2, MapPin, Sprout, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, CheckCircle2, MapPin, Users } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
+import dorewaLogo from "@assets/0_Logos_(1)_1787573268326.png";
+import dorewaPartnerMark from "@assets/0_Logos_1787573273293.png";
 
 const applicationSteps = [
   "Review the DOREWA programme focus and eligibility",
@@ -23,9 +25,23 @@ export default function DorewaApply() {
               Back to DOREWA
             </a>
             <div className="mt-12 max-w-3xl">
-              <div className="mb-6 inline-flex items-center gap-3 text-[#e8ad50]">
-                <Sprout className="h-6 w-6" aria-hidden="true" />
-                <span className="text-xl font-bold tracking-[0.16em]">DOREWA</span>
+              <div className="mb-7 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+                <div className="h-28 w-28 shrink-0 overflow-hidden rounded-2xl border border-white/20 bg-[#004d26] shadow-lg">
+                  <img
+                    src={dorewaLogo}
+                    alt="DOREWA"
+                    className="h-full w-full object-contain"
+                    data-testid="img-dorewa-logo-apply"
+                  />
+                </div>
+                <div className="h-20 w-full max-w-[21rem] overflow-hidden rounded-full border border-white/20 bg-[#004d26] shadow-lg sm:w-80">
+                  <img
+                    src={dorewaPartnerMark}
+                    alt="An Afará and Kingdom of the Netherlands initiative"
+                    className="h-full w-full object-cover"
+                    data-testid="img-dorewa-partner-mark-apply"
+                  />
+                </div>
               </div>
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#d87b4a]">The Women-Led Agri-Energy Accelerator</p>
               <h1 className="mt-4 text-4xl font-bold leading-tight sm:text-6xl">Start your DOREWA application.</h1>
@@ -45,6 +61,14 @@ export default function DorewaApply() {
         <section className="mx-auto grid max-w-7xl gap-12 px-4 py-14 sm:px-6 lg:grid-cols-[.72fr_1.28fr] lg:px-8 lg:py-20">
           <aside className="lg:pt-8">
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#c4653b]">A partnership programme</p>
+            <div className="mt-5 h-24 w-full max-w-md overflow-hidden rounded-full border border-[#173c35]/15 bg-[#004d26] shadow-sm">
+              <img
+                src={dorewaPartnerMark}
+                alt="An Afará and Kingdom of the Netherlands initiative"
+                className="h-full w-full object-cover"
+                data-testid="img-dorewa-partner-mark-details"
+              />
+            </div>
             <h2 className="mt-4 text-3xl font-bold leading-tight">Built for Nigeria’s next generation of agri-energy leaders.</h2>
             <p className="mt-5 leading-relaxed text-[#56746a]">
               DOREWA is an Afará x Kingdom of the Netherlands initiative. The programme combines advisory, peer learning, expert sessions, investment readiness, financial modelling, scaling support, Demo Day, and an Investor Showcase.
