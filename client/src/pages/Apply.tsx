@@ -237,6 +237,7 @@ const applicationSchema = z.object({
   // Final Question
   whyAfaraIsRight: z.string().optional(),
   linkedinUrl: z.string().optional(),
+  additionalInfo: z.string().optional(),
 });
 
 type ApplicationFormData = z.infer<typeof applicationSchema>;
@@ -311,6 +312,13 @@ const storeToken = (email: string, token: string): void => {
 
 export default function Apply() {
   const { toast } = useToast();
+  const [isDorewaApplication, setIsDorewaApplication] = useState(
+    () => new URLSearchParams(window.location.search).get("programme") === "dorewa"
+  );
+  const applicationTitle = isDorewaApplication ? "DOREWA Application" : "AFÁRA Accelerator Application";
+  const applicationDescription = isDorewaApplication
+    ? "Apply to the Nigeria-focused accelerator for women-led renewable energy and agri-energy businesses."
+    : "Apply to join Africa's leading accelerator for women-led businesses in energy and infrastructure.";
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [alreadySubmitted, setAlreadySubmitted] = useState(false);
@@ -430,6 +438,9 @@ export default function Apply() {
       peerMentorshipImportance: "",
       whyAfaraIsRight: "",
       linkedinUrl: "",
+      additionalInfo: isDorewaApplication
+        ? "Programme interest: DOREWA — The Women-Led Agri-Energy Accelerator."
+        : "",
     },
   });
 
@@ -507,7 +518,9 @@ export default function Apply() {
       setIsSubmitted(true);
       toast({
         title: "Application Submitted",
-        description: "Thank you for applying to AFARA! We will review your application and get back to you soon.",
+        description: isDorewaApplication
+          ? "Thank you for applying to DOREWA! We will review your application and get back to you soon."
+          : "Thank you for applying to AFARA! We will review your application and get back to you soon.",
       });
     },
     onError: (error: unknown) => {
@@ -563,6 +576,9 @@ export default function Apply() {
   };
 
   const handleResumeDraftFrom = (d: any) => {
+    const isDorewaDraft = typeof d.additionalInfo === "string"
+      && d.additionalInfo.includes("Programme interest: DOREWA");
+    setIsDorewaApplication(isDorewaDraft);
     form.reset({
       firstName: d.firstName || "",
       lastName: d.lastName || "",
@@ -639,6 +655,9 @@ export default function Apply() {
       peerMentorshipImportance: d.peerMentorshipImportance || "",
       whyAfaraIsRight: d.whyAfaraIsRight || "",
       linkedinUrl: d.linkedinUrl || "",
+      additionalInfo: d.additionalInfo || (isDorewaDraft
+        ? "Programme interest: DOREWA — The Women-Led Agri-Energy Accelerator."
+        : ""),
     });
     setDraftId(d.id);
     if (typeof d.currentStep === "number" && d.currentStep > 0 && d.currentStep < 7) {
@@ -775,7 +794,7 @@ export default function Apply() {
                   <>
                     <h1 className="text-3xl font-bold mb-4">Application Submitted!</h1>
                     <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                      Thank you for applying to the AFARA Accelerator program. Our team will review your application and contact you within 2-3 weeks.
+                      Thank you for applying to the {isDorewaApplication ? "DOREWA programme" : "AFARA Accelerator program"}. Our team will review your application and contact you within 2-3 weeks.
                     </p>
                   </>
                 )}
@@ -799,10 +818,10 @@ export default function Apply() {
           <div className="container max-w-3xl mx-auto px-4">
             <div className="text-center mb-10">
               <h1 className="text-4xl font-bold mb-3" data-testid="text-apply-gateway-title">
-                AFÁRA Accelerator Application
+                {applicationTitle}
               </h1>
               <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-                Apply to join Africa's leading accelerator for women-led businesses in energy and infrastructure.
+                {applicationDescription}
               </p>
             </div>
 
@@ -1044,7 +1063,7 @@ export default function Apply() {
         <div className="container max-w-4xl mx-auto px-4">
           <div className="mb-8 text-center">
             <h1 className="text-3xl font-bold mb-2" data-testid="text-apply-title">
-              AFARA Accelerator Application
+              {applicationTitle}
             </h1>
             <p className="text-muted-foreground">
               Complete all sections to submit your application. Your progress is saved automatically.
