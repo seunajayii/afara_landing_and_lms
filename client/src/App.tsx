@@ -10,6 +10,7 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import About from "@/pages/About";
 import Program from "@/pages/Program";
+import Programs from "@/pages/Programs";
 import Contact from "@/pages/Contact";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/lms/Dashboard";
@@ -108,6 +109,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/about" component={About} />
       <Route path="/program" component={Program} />
+      <Route path="/programs" component={Programs} />
       <Route path="/contact" component={Contact} />
       <Route path="/apply" component={Apply} />
       <Route path="/dorewa/apply" component={DorewaApply} />

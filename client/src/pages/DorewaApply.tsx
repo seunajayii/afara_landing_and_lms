@@ -20,10 +20,10 @@ export default function DorewaApply() {
         <section className="relative overflow-hidden bg-[#173c35] px-4 py-16 text-[#f9f3e9] sm:px-6 lg:px-8 lg:py-24">
           <div className="pointer-events-none absolute -right-20 -top-32 h-80 w-80 rounded-full border-[30px] border-[#d87b4a]/30" aria-hidden="true" />
           <div className="relative mx-auto max-w-7xl">
-            <a href="/#dorewa" className="inline-flex items-center gap-2 text-sm font-semibold text-[#dcb77b] hover:text-white">
+            <Link href="/programs" className="inline-flex items-center gap-2 text-sm font-semibold text-[#dcb77b] hover:text-white">
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-              Back to DOREWA
-            </a>
+              Back to Programs
+            </Link>
             <div className="mt-12 max-w-3xl">
               <div className="mb-7 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
                 <div className="h-28 w-28 shrink-0 overflow-hidden rounded-2xl border border-white/20 bg-[#004d26] shadow-lg">
