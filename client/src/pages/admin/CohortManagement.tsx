@@ -44,6 +44,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -57,6 +58,7 @@ import {
   LockKeyhole,
   Loader2,
   FolderOpen,
+  Mail,
 } from "lucide-react";
 import type { Cohort } from "@shared/schema";
 
@@ -597,6 +599,127 @@ function DuplicateCohortDialog({ cohort, onOpenChange }: { cohort: Cohort | null
   );
 }
 
+type EmailPreviewType = "confirmation" | "draft-save";
+
+const EMAIL_PREVIEW_LABELS: Record<EmailPreviewType, string> = {
+  confirmation: "Application received",
+  "draft-save": "Progress saved",
+};
+
+function EmailPreviewDialog({ cohort, onOpenChange }: { cohort: Cohort | null; onOpenChange: (v: boolean) => void }) {
+  const { toast } = useToast();
+  const [type, setType] = useState<EmailPreviewType>("confirmation");
+  const [testEmail, setTestEmail] = useState("");
+
+  const { data, isLoading, isError, error } = useQuery<{ subject: string; html: string }>({
+    queryKey: ["/api/admin/cohorts", cohort?.id, "email-preview", type],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/admin/cohorts/${cohort!.id}/email-preview?type=${type}`);
+      return res.json();
+    },
+    enabled: !!cohort,
+  });
+
+  const sendTestMutation = useMutation({
+    mutationFn: async () => {
+      if (!cohort) throw new Error("No cohort selected");
+      const res = await apiRequest("POST", "/api/admin/test-email", {
+        type,
+        email: testEmail.trim(),
+        firstName: "Jane",
+        cohortId: cohort.id,
+      });
+      return res.json() as Promise<{ success: boolean; error?: string }>;
+    },
+    onSuccess: (result) => {
+      if (!result.success) {
+        toast({ title: "Failed to send test email", description: result.error, variant: "destructive" });
+        return;
+      }
+      toast({ title: `Test email sent to ${testEmail.trim()}` });
+    },
+    onError: (err: Error) => toast({ title: "Failed to send test email", description: err.message, variant: "destructive" }),
+  });
+
+  return (
+    <Dialog
+      open={!!cohort}
+      onOpenChange={(v) => { onOpenChange(v); if (!v) { setType("confirmation"); setTestEmail(""); } }}
+    >
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Preview applicant emails — {cohort?.displayName || cohort?.name}</DialogTitle>
+          <DialogDescription>
+            See exactly what applicants will receive — branded with this cohort's current sponsor and partnership note — before anyone actually gets one.
+          </DialogDescription>
+        </DialogHeader>
+
+        <Tabs value={type} onValueChange={(v) => setType(v as EmailPreviewType)}>
+          <TabsList>
+            <TabsTrigger value="confirmation" data-testid="tab-preview-confirmation">
+              {EMAIL_PREVIEW_LABELS.confirmation}
+            </TabsTrigger>
+            <TabsTrigger value="draft-save" data-testid="tab-preview-draft-save">
+              {EMAIL_PREVIEW_LABELS["draft-save"]}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        <div className="flex-1 min-h-0 flex flex-col gap-3">
+          {isLoading ? (
+            <Skeleton className="flex-1 min-h-[420px]" />
+          ) : isError ? (
+            <div className="text-sm text-destructive py-8 text-center" data-testid="text-preview-error">
+              {(error as Error)?.message || "Failed to load preview."}
+            </div>
+          ) : data ? (
+            <>
+              <div className="text-sm">
+                <span className="text-muted-foreground">Subject: </span>
+                <span className="font-medium" data-testid="text-preview-subject">{data.subject}</span>
+              </div>
+              <iframe
+                title={`${EMAIL_PREVIEW_LABELS[type]} email preview`}
+                srcDoc={data.html}
+                className="flex-1 w-full border rounded-md bg-white min-h-[420px]"
+                sandbox=""
+                data-testid="iframe-email-preview"
+              />
+            </>
+          ) : null}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
+          <Input
+            type="email"
+            placeholder="Send a live test to…"
+            value={testEmail}
+            onChange={(e) => setTestEmail(e.target.value)}
+            className="max-w-xs"
+            data-testid="input-test-email-recipient"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={!testEmail.trim() || sendTestMutation.isPending}
+            onClick={() => sendTestMutation.mutate()}
+            data-testid="button-send-test-email"
+          >
+            {sendTestMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+            Send test email
+          </Button>
+        </div>
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function CohortManagement() {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -604,6 +727,7 @@ export default function CohortManagement() {
   const [editCohort, setEditCohort] = useState<Cohort | null>(null);
   const [duplicateCohort, setDuplicateCohort] = useState<Cohort | null>(null);
   const [deleteCohort, setDeleteCohort] = useState<Cohort | null>(null);
+  const [previewCohort, setPreviewCohort] = useState<Cohort | null>(null);
 
   const { data: cohorts = [], isLoading } = useQuery<Cohort[]>({
     queryKey: ["/api/admin/cohorts"],
@@ -720,6 +844,10 @@ export default function CohortManagement() {
                         <Copy className="h-3.5 w-3.5" />
                         Duplicate
                       </Button>
+                      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setPreviewCohort(c)} data-testid={`button-preview-emails-${c.id}`}>
+                        <Mail className="h-3.5 w-3.5" />
+                        Preview emails
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline"
@@ -741,6 +869,7 @@ export default function CohortManagement() {
       <CreateCohortDialog open={createOpen} onOpenChange={setCreateOpen} />
       <EditCohortDialog cohort={editCohort} onOpenChange={(v) => !v && setEditCohort(null)} />
       <DuplicateCohortDialog cohort={duplicateCohort} onOpenChange={(v) => !v && setDuplicateCohort(null)} />
+      <EmailPreviewDialog cohort={previewCohort} onOpenChange={(v) => !v && setPreviewCohort(null)} />
 
       <AlertDialog open={!!deleteCohort} onOpenChange={(v) => !v && setDeleteCohort(null)}>
         <AlertDialogContent>

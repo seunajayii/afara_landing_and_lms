@@ -104,15 +104,20 @@ export async function sendNewsletter(
   }
 }
 
-export async function sendApplicationConfirmationEmail(email: string, firstName?: string, cohort?: CohortEmailInfo): Promise<{ success: boolean; error?: string }> {
-  try {
-    const { client, fromEmail } = await getResendClient();
-    const name = firstName || 'there';
-    const branding = getCohortBranding(cohort);
-    const { accentColor, programLabel, partnershipBannerHtml, isSponsored, sponsor } = branding;
-    const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
-    const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
-    const mastheadSrc = 'cid:afara-masthead';
+// Builds the confirmation email's subject/HTML without sending it. Shared by
+// the real send path and the admin preview endpoint. When `inlineImages` is
+// set (preview-only), the masthead is embedded as a base64 data URI instead
+// of a `cid:` reference, since preview HTML is rendered directly in a
+// browser iframe rather than as an email with attachments.
+function buildApplicationConfirmationEmail(firstName: string | undefined, cohort: CohortEmailInfo | undefined, opts: { inlineImages?: boolean } = {}) {
+  const name = firstName || 'there';
+  const branding = getCohortBranding(cohort);
+  const { accentColor, programLabel, partnershipBannerHtml, isSponsored, sponsor } = branding;
+  const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
+  const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
+  const mastheadSrc = opts.inlineImages && mastheadBuffer
+    ? `data:image/jpeg;base64,${mastheadBuffer.toString('base64')}`
+    : 'cid:afara-masthead';
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -241,11 +246,19 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
 </body>
 </html>`;
 
-    const subject = isSponsored
-      ? `We\u2019ve received your ${programLabel} application \u2013 with ${sponsor}`
-      : "We\u2019ve received your application \u2013 AF\u00C1R\u00C1 Accelerator";
+  const subject = isSponsored
+    ? `We\u2019ve received your ${programLabel} application \u2013 with ${sponsor}`
+    : "We\u2019ve received your application \u2013 AF\u00C1R\u00C1 Accelerator";
 
-    const { data, error } = await client.emails.send({
+  return { subject, html, mastheadBuffer };
+}
+
+export async function sendApplicationConfirmationEmail(email: string, firstName?: string, cohort?: CohortEmailInfo): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const { subject, html, mastheadBuffer } = buildApplicationConfirmationEmail(firstName, cohort);
+
+    const { error } = await client.emails.send({
       from: fromEmail,
       to: email,
       subject,
@@ -269,6 +282,14 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
     console.error('Application confirmation email failed:', error);
     return { success: false, error: error.message };
   }
+}
+
+// Renders the confirmation email's subject/HTML for an admin preview,
+// without sending anything. Uses a placeholder first name since no real
+// applicant is involved.
+export function renderApplicationConfirmationEmailPreview(cohort?: CohortEmailInfo): { subject: string; html: string } {
+  const { subject, html } = buildApplicationConfirmationEmail('Jane Applicant', cohort, { inlineImages: true });
+  return { subject, html };
 }
 
 export async function sendAcceptanceEmail(email: string, firstName?: string, reviewNotes?: string): Promise<{ success: boolean; error?: string }> {
@@ -1267,23 +1288,26 @@ const APPLICATION_STEPS = [
   { id: 7, title: "Preview",     description: "Review & submit" },
 ];
 
-export async function sendDraftSaveNotificationEmail(
-  email: string,
+// Builds the draft-save email's subject/HTML without sending it. Shared by
+// the real send path and the admin preview endpoint (see
+// buildApplicationConfirmationEmail above for why `inlineImages` exists).
+function buildDraftSaveNotificationEmail(
   firstName: string | undefined,
   currentStep: number,
   totalSteps: number,
-  resumeUrl?: string,
-  cohort?: CohortEmailInfo
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    const { client, fromEmail } = await getResendClient();
+  resumeUrl: string | undefined,
+  cohort: CohortEmailInfo | undefined,
+  opts: { inlineImages?: boolean } = {}
+) {
     const name = firstName && firstName.trim() ? firstName.trim() : 'there';
     const branding = getCohortBranding(cohort);
     const { accentColor, partnershipBannerHtml, isSponsored, sponsor } = branding;
     const programLabel = branding.name ? `${branding.name} application` : 'AFÁRÁ Accelerator application';
     const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
     const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
-    const mastheadSrc = 'cid:afara-masthead';
+    const mastheadSrc = opts.inlineImages && mastheadBuffer
+      ? `data:image/jpeg;base64,${mastheadBuffer.toString('base64')}`
+      : 'cid:afara-masthead';
 
     const safeStep = Math.max(0, Math.min(currentStep, APPLICATION_STEPS.length - 1));
     const currentStepInfo = APPLICATION_STEPS[safeStep];
@@ -1434,9 +1458,24 @@ export async function sendDraftSaveNotificationEmail(
 </body>
 </html>`;
 
-    const subject = isSponsored
-      ? `Your ${branding.name || 'AFÁRÁ'} application progress has been saved`
-      : 'Your AFÁRÁ application progress has been saved';
+  const subject = isSponsored
+    ? `Your ${branding.name || 'AFÁRÁ'} application progress has been saved`
+    : 'Your AFÁRÁ application progress has been saved';
+
+  return { subject, html, mastheadBuffer };
+}
+
+export async function sendDraftSaveNotificationEmail(
+  email: string,
+  firstName: string | undefined,
+  currentStep: number,
+  totalSteps: number,
+  resumeUrl?: string,
+  cohort?: CohortEmailInfo
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const { subject, html, mastheadBuffer } = buildDraftSaveNotificationEmail(firstName, currentStep, totalSteps, resumeUrl, cohort);
 
     const { error } = await client.emails.send({
       from: fromEmail,
@@ -1462,6 +1501,22 @@ export async function sendDraftSaveNotificationEmail(
     console.error('Draft save notification email failed:', error);
     return { success: false, error: error.message };
   }
+}
+
+// Renders the draft-save email's subject/HTML for an admin preview, without
+// sending anything. Uses placeholder step progress since no real applicant
+// draft is involved.
+export function renderDraftSaveNotificationEmailPreview(cohort?: CohortEmailInfo): { subject: string; html: string } {
+  const previewStep = Math.min(2, APPLICATION_STEPS.length - 1);
+  const { subject, html } = buildDraftSaveNotificationEmail(
+    'Jane Applicant',
+    previewStep,
+    APPLICATION_STEPS.length,
+    undefined,
+    cohort,
+    { inlineImages: true }
+  );
+  return { subject, html };
 }
 
 export async function sendPasswordResetEmail(

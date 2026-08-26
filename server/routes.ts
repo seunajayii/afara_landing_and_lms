@@ -1572,13 +1572,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/test-email", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
-      const { type, email, firstName } = req.body;
-      const { sendApplicationConfirmationEmail, sendWelcomeEmail, sendAcceptanceEmail } = await import("./email");
+      const { type, email, firstName, cohortId } = req.body;
+      const { sendApplicationConfirmationEmail, sendWelcomeEmail, sendAcceptanceEmail, sendDraftSaveNotificationEmail } = await import("./email");
+      const cohort = cohortId ? await storage.getCohort(cohortId) : undefined;
+      if (cohortId && !cohort) return res.status(404).json({ error: "Cohort not found" });
       let result;
-      if (type === "application") result = await sendApplicationConfirmationEmail(email, firstName);
+      if (type === "application") result = await sendApplicationConfirmationEmail(email, firstName, cohort);
       else if (type === "welcome") result = await sendWelcomeEmail(email, firstName);
       else if (type === "acceptance") result = await sendAcceptanceEmail(email, firstName);
-      else return res.status(400).json({ error: "Unknown type. Use: application | welcome | acceptance" });
+      else if (type === "draft-save") result = await sendDraftSaveNotificationEmail(email, firstName, 2, 8, undefined, cohort);
+      else return res.status(400).json({ error: "Unknown type. Use: application | welcome | acceptance | draft-save" });
       res.json(result);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -2420,6 +2423,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(cohort);
     } catch (error) {
       res.status(500).json({ error: "Failed to duplicate cohort" });
+    }
+  });
+
+  // Preview how a cohort's sponsor/partnershipNote branding renders in the
+  // confirmation and draft-save applicant emails, without sending anything —
+  // lets an admin catch a typo or awkward partnership note before applicants
+  // ever receive it.
+  app.get("/api/admin/cohorts/:id/email-preview", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const cohort = await storage.getCohort(req.params.id);
+      if (!cohort) return res.status(404).json({ error: "Cohort not found" });
+      const type = typeof req.query.type === "string" ? req.query.type : "confirmation";
+      const { renderApplicationConfirmationEmailPreview, renderDraftSaveNotificationEmailPreview } = await import("./email");
+      let preview: { subject: string; html: string };
+      if (type === "confirmation") preview = renderApplicationConfirmationEmailPreview(cohort);
+      else if (type === "draft-save") preview = renderDraftSaveNotificationEmailPreview(cohort);
+      else return res.status(400).json({ error: "Unknown type. Use: confirmation | draft-save" });
+      res.json(preview);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to render email preview" });
     }
   });
 

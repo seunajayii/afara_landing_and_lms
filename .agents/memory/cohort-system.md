@@ -36,3 +36,10 @@ Public (unauthenticated) cohort access uses three purpose-built endpoints rather
 **Why:** Sponsored cohorts (e.g. DOREWA, delivered with the Kingdom of the Netherlands) need their own subject line and sponsor mention; cohorts without a `sponsor` (or no resolved cohort — legacy/unassigned applications) must fall back to the generic AFÁRÁ green template untouched.
 
 **How to apply:** Only the confirmation and draft-save emails read this branding today. If acceptance/rejection or other cohort-aware emails are added, reuse the same `CohortEmailInfo`-shaped param and accent-color derivation for consistency rather than inventing a new pattern.
+
+## Email HTML/subject building is split from sending, for admin previews
+`server/email.ts` has private `build*Email(...)` functions (e.g. `buildApplicationConfirmationEmail`, `buildDraftSaveNotificationEmail`) that return `{ subject, html, mastheadBuffer }` without sending; the exported `send*` functions call them then hit Resend. Exported `render*EmailPreview(cohort)` wrappers call the same builders with `{ inlineImages: true }` so the masthead becomes a base64 data URI (real sends use `cid:` + an attachment, which doesn't render in a plain browser iframe).
+
+**Why:** `GET /api/admin/cohorts/:id/email-preview?type=confirmation|draft-save` needs to return raw HTML an admin can view in an iframe before any applicant gets the real email — reusing the exact HTML-building code (not a re-implementation) is what guarantees the preview matches what actually gets sent.
+
+**How to apply:** Any new cohort-branded email should follow this same split (build function + thin send wrapper + preview wrapper) rather than inlining HTML generation directly in the `send*` function, so it stays previewable the same way.
