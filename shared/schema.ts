@@ -308,7 +308,10 @@ export const cohorts = pgTable("cohorts", {
   // Identity
   name: text("name").notNull(),
   displayName: text("display_name"),
-  slug: text("slug").notNull().unique(),
+  // Default is a safety net for the publish-time migration only (so an
+  // existing production row without a slug doesn't block the NOT NULL UNIQUE
+  // backfill) — the app always supplies an explicit slug on create.
+  slug: text("slug").notNull().unique().default(sql`gen_random_uuid()::text`),
   version: text("version"),
   seriesKey: text("series_key"),
   cohortType: cohortTypeEnum("cohort_type").notNull().default("core"),
