@@ -40,6 +40,43 @@ export async function getResendClient() {
   };
 }
 
+// Minimal cohort branding info needed for per-cohort email content. Callers
+// pass through whatever fields are available on their Cohort record; only
+// `name`/`sponsor`/`partnershipNote` are read here so this stays decoupled
+// from the full Cohort schema type.
+export interface CohortEmailInfo {
+  name?: string | null;
+  sponsor?: string | null;
+  partnershipNote?: string | null;
+}
+
+// Sponsored cohorts (cohorts with a `sponsor` set, e.g. DOREWA delivered with
+// the Kingdom of the Netherlands) get their own accent color and an explicit
+// partnership mention woven through the email; cohorts without a sponsor (or
+// no resolved cohort at all, e.g. legacy/unassigned applications) fall back
+// to the generic AFÁRÁ green template.
+function getCohortBranding(cohort?: CohortEmailInfo | null) {
+  const name = cohort?.name || undefined;
+  const sponsor = cohort?.sponsor || undefined;
+  const partnershipNote = cohort?.partnershipNote || undefined;
+  const isSponsored = !!sponsor;
+  const accentColor = isSponsored ? '#1a3c6e' : '#034a21';
+  const programLabel = name ? `${name} programme` : 'AFÁRÁ Accelerator Program';
+  const partnershipBannerHtml = sponsor ? `
+              <!-- Partnership banner -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 28px 0;background-color:#eef2f7;border-left:4px solid ${accentColor};border-radius:4px;">
+                <tr>
+                  <td style="padding:18px 24px;">
+                    <p style="margin:0;font-size:13px;font-weight:600;letter-spacing:0.04em;color:${accentColor};">
+                      ${name ? `${name} is delivered in partnership with ${sponsor}.` : `Delivered in partnership with ${sponsor}.`}
+                    </p>
+                    ${partnershipNote ? `<p style="margin:8px 0 0 0;font-size:14px;line-height:1.6;color:#2d2d2d;">${partnershipNote}</p>` : ''}
+                  </td>
+                </tr>
+              </table>` : '';
+  return { name, sponsor, partnershipNote, isSponsored, accentColor, programLabel, partnershipBannerHtml };
+}
+
 export async function sendNewsletter(
   subject: string,
   htmlContent: string,
@@ -67,11 +104,12 @@ export async function sendNewsletter(
   }
 }
 
-export async function sendApplicationConfirmationEmail(email: string, firstName?: string, cohortName?: string): Promise<{ success: boolean; error?: string }> {
+export async function sendApplicationConfirmationEmail(email: string, firstName?: string, cohort?: CohortEmailInfo): Promise<{ success: boolean; error?: string }> {
   try {
     const { client, fromEmail } = await getResendClient();
     const name = firstName || 'there';
-    const programLabel = cohortName ? `${cohortName} programme` : 'AFÁRÁ Accelerator Program';
+    const branding = getCohortBranding(cohort);
+    const { accentColor, programLabel, partnershipBannerHtml, isSponsored, sponsor } = branding;
     const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
     const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
     const mastheadSrc = 'cid:afara-masthead';
@@ -97,16 +135,16 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
             </td>
           </tr>
 
-          <!-- Green accent line -->
+          <!-- Accent line -->
           <tr>
-            <td style="background-color:#034a21;height:4px;font-size:0;line-height:0;">&nbsp;</td>
+            <td style="background-color:${accentColor};height:4px;font-size:0;line-height:0;">&nbsp;</td>
           </tr>
 
           <!-- Main content -->
           <tr>
             <td style="padding:48px 48px 32px 48px;">
 
-              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;font-style:normal;color:#034a21;line-height:1.3;">
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;font-style:normal;color:${accentColor};line-height:1.3;">
                 We've received your application
               </h1>
 
@@ -118,8 +156,10 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
                 Thank you for applying to the ${programLabel}. We're glad you took this step, and we want you to know your application is in good hands.
               </p>
 
+              ${partnershipBannerHtml}
+
               <p style="margin:0 0 32px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
-                Our team will review your submission carefully. You can expect to hear from us within <strong style="color:#034a21;">2–4 weeks</strong> with an update on the next steps.
+                Our team will review your submission carefully. You can expect to hear from us within <strong style="color:${accentColor};">2–4 weeks</strong> with an update on the next steps.
               </p>
 
               <!-- Divider -->
@@ -130,14 +170,14 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
               </table>
 
               <!-- What happens next -->
-              <h2 style="margin:32px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;font-style:normal;color:#034a21;">
+              <h2 style="margin:32px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;font-style:normal;color:${accentColor};">
                 What happens next
               </h2>
 
               <table width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                   <td style="padding:10px 0;vertical-align:top;width:24px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#034a21;margin-top:6px;">&nbsp;</span>
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:${accentColor};margin-top:6px;">&nbsp;</span>
                   </td>
                   <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">
                     Our team reviews all applications against the program criteria
@@ -145,7 +185,7 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
                 </tr>
                 <tr>
                   <td style="padding:10px 0;vertical-align:top;width:24px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#034a21;margin-top:6px;">&nbsp;</span>
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:${accentColor};margin-top:6px;">&nbsp;</span>
                   </td>
                   <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">
                     Shortlisted applicants will be invited to a brief interview or pitch session
@@ -153,7 +193,7 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
                 </tr>
                 <tr>
                   <td style="padding:10px 0;vertical-align:top;width:24px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#034a21;margin-top:6px;">&nbsp;</span>
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:${accentColor};margin-top:6px;">&nbsp;</span>
                   </td>
                   <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">
                     Final decisions will be communicated to all applicants within the review window
@@ -163,7 +203,7 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
 
               <p style="margin:32px 0 0 0;font-size:15px;line-height:1.7;color:#555555;">
                 If you have any questions in the meantime, please reach out to us at
-                <a href="mailto:hello@afaraaccelerator.org" style="color:#034a21;text-decoration:underline;">hello@afaraaccelerator.org</a>.
+                <a href="mailto:hello@afaraaccelerator.org" style="color:${accentColor};text-decoration:underline;">hello@afaraaccelerator.org</a>.
               </p>
 
             </td>
@@ -175,7 +215,7 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
               <p style="margin:32px 0 4px 0;font-size:15px;line-height:1.6;color:#2d2d2d;">
                 Warm regards,
               </p>
-              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;font-style:normal;color:#034a21;">
+              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;font-style:normal;color:${accentColor};">
                 The AFÁRÁ Team
               </p>
             </td>
@@ -183,10 +223,10 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
 
           <!-- Footer -->
           <tr>
-            <td style="background-color:#034a21;padding:24px 48px;">
+            <td style="background-color:${accentColor};padding:24px 48px;">
               <p style="margin:0 0 6px 0;font-size:13px;line-height:1.6;color:#a8c4c4;">
                 AFÁRÁ is an initiative of
-                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces & Bridges Advisory (OPSB)</a>
+                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces & Bridges Advisory (OPSB)</a>${isSponsored ? `, delivered in partnership with ${sponsor}` : ''}
               </p>
               <p style="margin:0;font-size:12px;color:#6a9090;">
                 &copy; ${new Date().getFullYear()} AFÁRÁ. All rights reserved.
@@ -201,10 +241,14 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
 </body>
 </html>`;
 
+    const subject = isSponsored
+      ? `We\u2019ve received your ${programLabel} application \u2013 with ${sponsor}`
+      : "We\u2019ve received your application \u2013 AF\u00C1R\u00C1 Accelerator";
+
     const { data, error } = await client.emails.send({
       from: fromEmail,
       to: email,
-      subject: "We\u2019ve received your application \u2013 AF\u00C1R\u00C1 Accelerator",
+      subject,
       html,
       attachments: mastheadBuffer ? [
         {
@@ -1229,12 +1273,14 @@ export async function sendDraftSaveNotificationEmail(
   currentStep: number,
   totalSteps: number,
   resumeUrl?: string,
-  cohortName?: string
+  cohort?: CohortEmailInfo
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const { client, fromEmail } = await getResendClient();
     const name = firstName && firstName.trim() ? firstName.trim() : 'there';
-    const programLabel = cohortName ? `${cohortName} application` : 'AFÁRÁ Accelerator application';
+    const branding = getCohortBranding(cohort);
+    const { accentColor, partnershipBannerHtml, isSponsored, sponsor } = branding;
+    const programLabel = branding.name ? `${branding.name} application` : 'AFÁRÁ Accelerator application';
     const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
     const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
     const mastheadSrc = 'cid:afara-masthead';
@@ -1277,16 +1323,16 @@ export async function sendDraftSaveNotificationEmail(
             </td>
           </tr>
 
-          <!-- Green accent line -->
+          <!-- Accent line -->
           <tr>
-            <td style="background-color:#034a21;height:4px;font-size:0;line-height:0;">&nbsp;</td>
+            <td style="background-color:${accentColor};height:4px;font-size:0;line-height:0;">&nbsp;</td>
           </tr>
 
           <!-- Main content -->
           <tr>
             <td style="padding:48px 48px 32px 48px;">
 
-              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#034a21;line-height:1.3;">
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:${accentColor};line-height:1.3;">
                 Your progress has been saved
               </h1>
 
@@ -1298,12 +1344,14 @@ export async function sendDraftSaveNotificationEmail(
                 Good news — your ${programLabel} has been saved. You can return at any time to pick up exactly where you left off.
               </p>
 
+              ${partnershipBannerHtml}
+
               <!-- Current step highlight -->
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;background-color:#f0f5f5;border-radius:4px;">
                 <tr>
                   <td style="padding:20px 24px;">
-                    <p style="margin:0 0 4px 0;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#034a21;">Last saved at</p>
-                    <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:20px;font-weight:600;color:#034a21;">
+                    <p style="margin:0 0 4px 0;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:${accentColor};">Last saved at</p>
+                    <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:20px;font-weight:600;color:${accentColor};">
                       Step ${safeStep + 1} of ${totalSteps} &mdash; ${currentStepInfo.title}
                     </p>
                     <p style="margin:4px 0 0 0;font-size:14px;color:#555555;">${currentStepInfo.description}</p>
@@ -1320,7 +1368,7 @@ export async function sendDraftSaveNotificationEmail(
 
               ${remainingSteps.length > 0 ? `
               <!-- Remaining sections -->
-              <h2 style="margin:28px 0 12px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;color:#034a21;">
+              <h2 style="margin:28px 0 12px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;color:${accentColor};">
                 Still to complete
               </h2>
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 28px 0;">
@@ -1333,7 +1381,7 @@ export async function sendDraftSaveNotificationEmail(
               <!-- CTA Button -->
               <table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;">
                 <tr>
-                  <td style="border-radius:4px;background-color:#034a21;">
+                  <td style="border-radius:4px;background-color:${accentColor};">
                     <a href="${applyUrl}" style="display:inline-block;padding:14px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:4px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
                       Continue My Application
                     </a>
@@ -1350,7 +1398,7 @@ export async function sendDraftSaveNotificationEmail(
 
               <p style="margin:24px 0 0 0;font-size:15px;line-height:1.7;color:#555555;">
                 If you have any questions, reach out to us at
-                <a href="mailto:hello@afaraaccelerator.org" style="color:#034a21;text-decoration:underline;">hello@afaraaccelerator.org</a>.
+                <a href="mailto:hello@afaraaccelerator.org" style="color:${accentColor};text-decoration:underline;">hello@afaraaccelerator.org</a>.
               </p>
 
             </td>
@@ -1360,7 +1408,7 @@ export async function sendDraftSaveNotificationEmail(
           <tr>
             <td style="padding:0 48px 48px 48px;">
               <p style="margin:32px 0 4px 0;font-size:15px;line-height:1.6;color:#2d2d2d;">Warm regards,</p>
-              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#034a21;">
+              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:${accentColor};">
                 The AFÁRÁ Team
               </p>
             </td>
@@ -1368,10 +1416,10 @@ export async function sendDraftSaveNotificationEmail(
 
           <!-- Footer -->
           <tr>
-            <td style="background-color:#034a21;padding:24px 48px;">
+            <td style="background-color:${accentColor};padding:24px 48px;">
               <p style="margin:0 0 6px 0;font-size:13px;line-height:1.6;color:#a8c4c4;">
                 AFÁRÁ is an initiative of
-                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>
+                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>${isSponsored ? `, delivered in partnership with ${sponsor}` : ''}
               </p>
               <p style="margin:0;font-size:12px;color:#6a9090;">
                 &copy; ${new Date().getFullYear()} AFÁRÁ. All rights reserved.
@@ -1386,10 +1434,14 @@ export async function sendDraftSaveNotificationEmail(
 </body>
 </html>`;
 
+    const subject = isSponsored
+      ? `Your ${branding.name || 'AFÁRÁ'} application progress has been saved`
+      : 'Your AFÁRÁ application progress has been saved';
+
     const { error } = await client.emails.send({
       from: fromEmail,
       to: email,
-      subject: 'Your AFÁRÁ application progress has been saved',
+      subject,
       html,
       attachments: mastheadBuffer ? [
         {

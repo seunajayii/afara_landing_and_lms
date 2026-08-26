@@ -1781,7 +1781,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const application = await storage.createApplication(data);
-      const cohortName = resolvedCohort ? (resolvedCohort.displayName || resolvedCohort.name) : undefined;
+      const cohortEmailInfo = resolvedCohort
+        ? { name: resolvedCohort.displayName || resolvedCohort.name, sponsor: resolvedCohort.sponsor, partnershipNote: resolvedCohort.partnershipNote }
+        : undefined;
       const applyPath = resolvedCohort ? `/apply/${resolvedCohort.slug}` : "/apply";
 
       if (data.status === "draft") {
@@ -1793,7 +1795,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? `${baseUrl}${applyPath}?token=${encodeURIComponent(token)}&email=${encodeURIComponent(application.email)}`
           : `${baseUrl}${applyPath}`;
         import("./email").then(({ sendDraftSaveNotificationEmail }) => {
-          sendDraftSaveNotificationEmail(application.email, data.firstName, stepNumber, 8, resumeUrl, cohortName)
+          sendDraftSaveNotificationEmail(application.email, data.firstName, stepNumber, 8, resumeUrl, cohortEmailInfo)
             .catch(err => console.error("Draft save notification email failed:", err));
         }).catch(err => console.error("Failed to import email module:", err));
       }
@@ -1804,7 +1806,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (data.status === "submitted") {
         try {
           const { sendApplicationConfirmationEmail } = await import("./email");
-          await sendApplicationConfirmationEmail(data.email, data.firstName, cohortName);
+          await sendApplicationConfirmationEmail(data.email, data.firstName, cohortEmailInfo);
         } catch (innerError) {
           console.error("Failed to send application confirmation email:", innerError);
         }
@@ -1993,7 +1995,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!application) return res.status(404).json({ error: "Application not found" });
 
       const applicationCohort = application.cohortId ? await storage.getCohort(application.cohortId) : undefined;
-      const cohortName = applicationCohort ? (applicationCohort.displayName || applicationCohort.name) : undefined;
+      const cohortEmailInfo = applicationCohort
+        ? { name: applicationCohort.displayName || applicationCohort.name, sponsor: applicationCohort.sponsor, partnershipNote: applicationCohort.partnershipNote }
+        : undefined;
       const applyPath = applicationCohort ? `/apply/${applicationCohort.slug}` : "/apply";
 
       // When saving a draft, send a progress notification email (fire-and-forget)
@@ -2006,7 +2010,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? `${baseUrl}${applyPath}?token=${encodeURIComponent(token)}&email=${encodeURIComponent(application.email)}`
           : `${baseUrl}${applyPath}`;
         import("./email").then(({ sendDraftSaveNotificationEmail }) => {
-          sendDraftSaveNotificationEmail(application.email, firstName, stepNumber, 8, resumeUrl, cohortName)
+          sendDraftSaveNotificationEmail(application.email, firstName, stepNumber, 8, resumeUrl, cohortEmailInfo)
             .catch(err => console.error("Draft save notification email failed:", err));
         }).catch(err => console.error("Failed to import email module:", err));
       }
@@ -2017,7 +2021,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (newStatus === "submitted") {
         try {
           const { sendApplicationConfirmationEmail } = await import("./email");
-          await sendApplicationConfirmationEmail(application.email, application.firstName, cohortName);
+          await sendApplicationConfirmationEmail(application.email, application.firstName, cohortEmailInfo);
         } catch (innerError) {
           console.error("Failed to send application confirmation email:", innerError);
         }
