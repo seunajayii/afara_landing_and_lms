@@ -15,6 +15,7 @@ export function Navbar() {
     { path: "/", label: "Home" },
     { path: "/about", label: "About" },
     { path: "/program", label: "Program" },
+    { path: "/cohorts", label: "Cohorts" },
     { path: "/faq", label: "FAQ" },
     { path: "/contact", label: "Contact" },
   ];

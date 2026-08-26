@@ -67,10 +67,11 @@ export async function sendNewsletter(
   }
 }
 
-export async function sendApplicationConfirmationEmail(email: string, firstName?: string): Promise<{ success: boolean; error?: string }> {
+export async function sendApplicationConfirmationEmail(email: string, firstName?: string, cohortName?: string): Promise<{ success: boolean; error?: string }> {
   try {
     const { client, fromEmail } = await getResendClient();
     const name = firstName || 'there';
+    const programLabel = cohortName ? `${cohortName} programme` : 'AFÁRÁ Accelerator Program';
     const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
     const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
     const mastheadSrc = 'cid:afara-masthead';
@@ -114,7 +115,7 @@ export async function sendApplicationConfirmationEmail(email: string, firstName?
               </p>
 
               <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
-                Thank you for applying to the AFÁRÁ Accelerator Program. We're glad you took this step, and we want you to know your application is in good hands.
+                Thank you for applying to the ${programLabel}. We're glad you took this step, and we want you to know your application is in good hands.
               </p>
 
               <p style="margin:0 0 32px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
@@ -1227,11 +1228,13 @@ export async function sendDraftSaveNotificationEmail(
   firstName: string | undefined,
   currentStep: number,
   totalSteps: number,
-  resumeUrl?: string
+  resumeUrl?: string,
+  cohortName?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const { client, fromEmail } = await getResendClient();
     const name = firstName && firstName.trim() ? firstName.trim() : 'there';
+    const programLabel = cohortName ? `${cohortName} application` : 'AFÁRÁ Accelerator application';
     const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
     const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
     const mastheadSrc = 'cid:afara-masthead';
@@ -1292,7 +1295,7 @@ export async function sendDraftSaveNotificationEmail(
               </p>
 
               <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
-                Good news — your AFÁRÁ Accelerator application has been saved. You can return at any time to pick up exactly where you left off.
+                Good news — your ${programLabel} has been saved. You can return at any time to pick up exactly where you left off.
               </p>
 
               <!-- Current step highlight -->

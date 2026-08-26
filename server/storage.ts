@@ -167,6 +167,8 @@ export interface IStorage {
   getOpenCohort(): Promise<Cohort | undefined>;
   getOpenCohorts(): Promise<Cohort[]>;
   getAllCohorts(): Promise<Cohort[]>;
+  getPublicCohorts(): Promise<Cohort[]>;
+  getPrimaryCohort(): Promise<Cohort | undefined>;
   createCohort(data: InsertCohort): Promise<Cohort>;
   updateCohort(id: string, data: Partial<InsertCohort>): Promise<Cohort | undefined>;
   duplicateCohort(id: string, overrides: Partial<InsertCohort>): Promise<Cohort | undefined>;
@@ -825,6 +827,22 @@ export class DatabaseStorage implements IStorage {
 
   async getAllCohorts(): Promise<Cohort[]> {
     return db.select().from(cohorts).orderBy(desc(cohorts.createdAt));
+  }
+
+  // Public-facing cohorts: hide drafts (not yet announced), open cohorts first.
+  async getPublicCohorts(): Promise<Cohort[]> {
+    const list = await db.select().from(cohorts).where(ne(cohorts.status, "draft")).orderBy(desc(cohorts.createdAt));
+    const statusPriority: Record<string, number> = { open: 0, closed: 1, archived: 2 };
+    return list.sort((a, b) => (statusPriority[a.status] ?? 9) - (statusPriority[b.status] ?? 9));
+  }
+
+  // The "primary" cohort is the default cohort bare /apply maps to: the core
+  // cohort (as opposed to a sponsored one like DOREWA), preferring whichever
+  // core cohort is currently open, else the most recently created one.
+  async getPrimaryCohort(): Promise<Cohort | undefined> {
+    const coreCohorts = await db.select().from(cohorts).where(eq(cohorts.cohortType, "core")).orderBy(desc(cohorts.createdAt));
+    if (coreCohorts.length === 0) return undefined;
+    return coreCohorts.find((c) => c.status === "open") ?? coreCohorts[0];
   }
 
   async createCohort(data: InsertCohort): Promise<Cohort> {

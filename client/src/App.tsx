@@ -34,6 +34,8 @@ import CohortAnalytics from "@/pages/admin/CohortAnalytics";
 import CohortManagement from "@/pages/admin/CohortManagement";
 import CohortReport from "@/pages/admin/CohortReport";
 import Apply from "@/pages/Apply";
+import Cohorts from "@/pages/Cohorts";
+import CohortDetail from "@/pages/CohortDetail";
 import Profile from "@/pages/lms/Profile";
 import ChangePassword from "@/pages/ChangePassword";
 import ForgotPassword from "@/pages/ForgotPassword";
@@ -110,6 +112,9 @@ function Router() {
       <Route path="/program" component={Program} />
       <Route path="/contact" component={Contact} />
       <Route path="/apply" component={Apply} />
+      <Route path="/apply/:slug" component={Apply} />
+      <Route path="/cohorts" component={Cohorts} />
+      <Route path="/cohorts/:slug" component={CohortDetail} />
       <Route path="/login" component={Login} />
       <Route path="/change-password" component={ChangePassword} />
       <Route path="/forgot-password" component={ForgotPassword} />

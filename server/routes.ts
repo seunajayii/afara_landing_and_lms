@@ -9,7 +9,8 @@ import {
   insertMentorshipRequestSchema, insertMentorshipSessionSchema,
   insertEventSchema, insertEventRegistrationSchema, insertResourceSchema,
   insertDiscussionThreadSchema, insertDiscussionPostSchema, insertCertificateSchema,
-  insertNotificationSchema, insertApplicationSchema, insertCohortSchema
+  insertNotificationSchema, insertApplicationSchema, insertCohortSchema,
+  type Cohort
 } from "@shared/schema";
 import { z } from "zod";
 import { randomUUID } from "crypto";
@@ -1756,18 +1757,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Auto-assign to the currently open cohort. Only do this when exactly one
-      // cohort is open — with concurrent open cohorts (e.g. Core + Dorewa) this
-      // generic endpoint has no way to know which one the applicant intends, so
-      // it leaves the application unassigned for manual admin assignment rather
-      // than guessing. The slug-based /apply/:slug flow (public cohort pages)
-      // is the deterministic replacement for this endpoint going forward.
-      const openCohorts = await storage.getOpenCohorts();
-      if (openCohorts.length === 1) {
-        (data as any).cohortId = openCohorts[0].id;
+      // Explicit cohort assignment: the public apply flow resolves a cohort by
+      // slug (bare /apply resolves to the primary/core cohort client-side) and
+      // sends it as `cohortSlug`. This is looked up server-side rather than
+      // trusting a client-supplied cohortId directly.
+      const requestedSlug = typeof req.body.cohortSlug === "string" ? req.body.cohortSlug.trim() : "";
+      let resolvedCohort = requestedSlug ? await storage.getCohortBySlug(requestedSlug) : undefined;
+      if (requestedSlug && !resolvedCohort) {
+        console.warn(`Application submitted with unknown cohortSlug "${requestedSlug}"; falling back to auto-detection`);
+      }
+      if (resolvedCohort) {
+        (data as any).cohortId = resolvedCohort.id;
+      } else {
+        // Fallback for callers that don't send cohortSlug: only auto-assign when
+        // exactly one cohort is open — with concurrent open cohorts (e.g. Core +
+        // Dorewa) there is no way to know which one the applicant intends, so it
+        // leaves the application unassigned for manual admin assignment rather
+        // than guessing.
+        const openCohorts = await storage.getOpenCohorts();
+        if (openCohorts.length === 1) {
+          (data as any).cohortId = openCohorts[0].id;
+        }
       }
 
       const application = await storage.createApplication(data);
+      const cohortName = resolvedCohort ? (resolvedCohort.displayName || resolvedCohort.name) : undefined;
+      const applyPath = resolvedCohort ? `/apply/${resolvedCohort.slug}` : "/apply";
 
       if (data.status === "draft") {
         // First-time draft save: send progress notification email (fire-and-forget)
@@ -1775,10 +1790,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const token = application.resumeToken;
         const baseUrl = process.env.APP_URL || "https://afaraaccelerator.org";
         const resumeUrl = token
-          ? `${baseUrl}/apply?token=${encodeURIComponent(token)}&email=${encodeURIComponent(application.email)}`
-          : `${baseUrl}/apply`;
+          ? `${baseUrl}${applyPath}?token=${encodeURIComponent(token)}&email=${encodeURIComponent(application.email)}`
+          : `${baseUrl}${applyPath}`;
         import("./email").then(({ sendDraftSaveNotificationEmail }) => {
-          sendDraftSaveNotificationEmail(application.email, data.firstName, stepNumber, 8, resumeUrl)
+          sendDraftSaveNotificationEmail(application.email, data.firstName, stepNumber, 8, resumeUrl, cohortName)
             .catch(err => console.error("Draft save notification email failed:", err));
         }).catch(err => console.error("Failed to import email module:", err));
       }
@@ -1789,7 +1804,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (data.status === "submitted") {
         try {
           const { sendApplicationConfirmationEmail } = await import("./email");
-          await sendApplicationConfirmationEmail(data.email, data.firstName);
+          await sendApplicationConfirmationEmail(data.email, data.firstName, cohortName);
         } catch (innerError) {
           console.error("Failed to send application confirmation email:", innerError);
         }
@@ -1977,6 +1992,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const application = await storage.updateApplication(req.params.id, updatePayload);
       if (!application) return res.status(404).json({ error: "Application not found" });
 
+      const applicationCohort = application.cohortId ? await storage.getCohort(application.cohortId) : undefined;
+      const cohortName = applicationCohort ? (applicationCohort.displayName || applicationCohort.name) : undefined;
+      const applyPath = applicationCohort ? `/apply/${applicationCohort.slug}` : "/apply";
+
       // When saving a draft, send a progress notification email (fire-and-forget)
       if (newStatus === "draft") {
         const stepNumber = typeof req.body.currentStep === "number" ? req.body.currentStep : 0;
@@ -1984,10 +2003,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const token = application.resumeToken || existing.resumeToken;
         const baseUrl = process.env.APP_URL || "https://afaraaccelerator.org";
         const resumeUrl = token
-          ? `${baseUrl}/apply?token=${encodeURIComponent(token)}&email=${encodeURIComponent(application.email)}`
-          : `${baseUrl}/apply`;
+          ? `${baseUrl}${applyPath}?token=${encodeURIComponent(token)}&email=${encodeURIComponent(application.email)}`
+          : `${baseUrl}${applyPath}`;
         import("./email").then(({ sendDraftSaveNotificationEmail }) => {
-          sendDraftSaveNotificationEmail(application.email, firstName, stepNumber, 8, resumeUrl)
+          sendDraftSaveNotificationEmail(application.email, firstName, stepNumber, 8, resumeUrl, cohortName)
             .catch(err => console.error("Draft save notification email failed:", err));
         }).catch(err => console.error("Failed to import email module:", err));
       }
@@ -1998,7 +2017,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (newStatus === "submitted") {
         try {
           const { sendApplicationConfirmationEmail } = await import("./email");
-          await sendApplicationConfirmationEmail(application.email, application.firstName);
+          await sendApplicationConfirmationEmail(application.email, application.firstName, cohortName);
         } catch (innerError) {
           console.error("Failed to send application confirmation email:", innerError);
         }
@@ -2218,6 +2237,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ cohort: cohort ?? null });
     } catch {
       res.status(500).json({ error: "Failed to check open cohort" });
+    }
+  });
+
+  // Public cohort payload: only fields safe/relevant to show visitors and the
+  // apply flow. Internal bookkeeping (createdAt, isActive) is left out.
+  function toPublicCohort(cohort: Cohort) {
+    return {
+      id: cohort.id,
+      slug: cohort.slug,
+      name: cohort.name,
+      displayName: cohort.displayName,
+      version: cohort.version,
+      cohortType: cohort.cohortType,
+      status: cohort.status,
+      isOpen: cohort.isOpen,
+      description: cohort.description,
+      tagline: cohort.tagline,
+      partnershipNote: cohort.partnershipNote,
+      sponsor: cohort.sponsor,
+      geography: cohort.geography,
+      sector: cohort.sector,
+      year: cohort.year,
+      logoUrl: cohort.logoUrl,
+      heroImageUrl: cohort.heroImageUrl,
+      eligibilityCriteria: cohort.eligibilityCriteria,
+      applicationOpenAt: cohort.applicationOpenAt,
+      applicationCloseAt: cohort.applicationCloseAt,
+      programStartAt: cohort.programStartAt,
+      programEndAt: cohort.programEndAt,
+    };
+  }
+
+  // Public: list cohorts for the public "Our Cohorts" page. Drafts (not yet
+  // announced) are excluded; open cohorts are surfaced first.
+  app.get("/api/cohorts", async (req: Request, res: Response) => {
+    try {
+      const list = await storage.getPublicCohorts();
+      res.json(list.map(toPublicCohort));
+    } catch {
+      res.status(500).json({ error: "Failed to fetch cohorts" });
+    }
+  });
+
+  // Public: resolve the default/primary cohort that bare /apply maps to.
+  // Returned regardless of status so /apply can show its own closed/draft
+  // experience rather than a generic one when the core cohort isn't open.
+  app.get("/api/cohorts/primary", async (req: Request, res: Response) => {
+    try {
+      const cohort = await storage.getPrimaryCohort();
+      res.json({ cohort: cohort ? toPublicCohort(cohort) : null });
+    } catch {
+      res.status(500).json({ error: "Failed to fetch primary cohort" });
+    }
+  });
+
+  // Public: resolve a cohort by slug for /cohorts/:slug and /apply/:slug.
+  // Returned regardless of status — the apply flow needs to render a
+  // closed/draft experience for its own slug rather than 404ing, while the
+  // public cohort detail page decides separately whether to show drafts.
+  app.get("/api/cohorts/by-slug/:slug", async (req: Request, res: Response) => {
+    try {
+      const cohort = await storage.getCohortBySlug(req.params.slug);
+      res.json({ cohort: cohort ? toPublicCohort(cohort) : null });
+    } catch {
+      res.status(500).json({ error: "Failed to fetch cohort" });
     }
   });
 

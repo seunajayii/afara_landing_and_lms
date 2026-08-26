@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useParams } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Navbar } from "@/components/Navbar";
@@ -302,6 +303,18 @@ const projectStageOptions = [
   "Operational with scale-up potential",
 ];
 
+type PublicCohort = {
+  id: string;
+  slug: string;
+  name: string;
+  displayName: string | null;
+  cohortType: string;
+  status: string;
+  isOpen: boolean;
+  tagline: string | null;
+  sponsor: string | null;
+};
+
 const getStoredToken = (email: string): string | null => {
   try { return localStorage.getItem(`afara_draft_token:${email.toLowerCase().trim()}`); } catch { return null; }
 };
@@ -311,6 +324,7 @@ const storeToken = (email: string, token: string): void => {
 
 export default function Apply() {
   const { toast } = useToast();
+  const { slug } = useParams<{ slug?: string }>();
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [alreadySubmitted, setAlreadySubmitted] = useState(false);
@@ -323,15 +337,24 @@ export default function Apply() {
   const [resumeEmail, setResumeEmail] = useState("");
   const [isCheckingDraft, setIsCheckingDraft] = useState(false);
 
-  const { data: openCohortData, isLoading: isLoadingCohort } = useQuery<{ cohort: { id: string; name: string; year: number | null } | null }>({
-    queryKey: ["/api/cohorts/open"],
+  // Slug present (/apply/:slug) resolves that specific cohort regardless of its
+  // status, so this page can render the closed/draft experience for it rather
+  // than 404ing. Bare /apply resolves to the primary/core cohort.
+  const { data: cohortData, isLoading: isLoadingCohort } = useQuery<{ cohort: PublicCohort | null }>({
+    queryKey: slug ? ["/api/cohorts/by-slug", slug] : ["/api/cohorts/primary"],
     queryFn: async () => {
-      const res = await fetch("/api/cohorts/open");
+      const res = await fetch(slug ? `/api/cohorts/by-slug/${encodeURIComponent(slug)}` : "/api/cohorts/primary");
       return res.json();
     },
     staleTime: 60_000,
   });
-  const applicationsOpen = !isLoadingCohort && openCohortData?.cohort != null;
+  const cohort = cohortData?.cohort ?? null;
+  const applicationsOpen = !isLoadingCohort && !!cohort?.isOpen;
+  const cohortNotFound = !isLoadingCohort && !!slug && !cohort;
+  const cohortLabel = cohort ? (cohort.displayName || cohort.name) : "AFÁRÁ Accelerator";
+  const cohortIdentityLine = cohort
+    ? `An AFÁRÁ Africa Accelerator Cohort${cohort.sponsor ? ` — in collaboration with ${cohort.sponsor}` : ""}`
+    : undefined;
   const [draftLookupError, setDraftLookupError] = useState("");
   const [draftNeedsEmailLink, setDraftNeedsEmailLink] = useState(false);
   const [statusEmail, setStatusEmail] = useState("");
@@ -453,6 +476,7 @@ export default function Apply() {
         const response = await apiRequest("POST", "/api/applications", {
           ...cleanedData,
           status: "draft",
+          cohortSlug: cohort?.slug,
         });
         return response.json();
       }
@@ -499,6 +523,7 @@ export default function Apply() {
         const response = await apiRequest("POST", "/api/applications", {
           ...cleanedData,
           status: "submitted",
+          cohortSlug: cohort?.slug,
         });
         return response.json();
       }
@@ -775,7 +800,7 @@ export default function Apply() {
                   <>
                     <h1 className="text-3xl font-bold mb-4">Application Submitted!</h1>
                     <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                      Thank you for applying to the AFARA Accelerator program. Our team will review your application and contact you within 2-3 weeks.
+                      Thank you for applying to {cohort ? cohortLabel : "the AFÁRÁ Accelerator program"}. Our team will review your application and contact you within 2-3 weeks.
                     </p>
                   </>
                 )}
@@ -791,6 +816,26 @@ export default function Apply() {
     );
   }
 
+  if (cohortNotFound) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Navbar />
+        <main className="flex-1 py-24 bg-muted/30">
+          <div className="container max-w-xl mx-auto px-4 text-center">
+            <h1 className="text-3xl font-bold mb-4" data-testid="text-apply-cohort-not-found">Cohort not found</h1>
+            <p className="text-muted-foreground mb-8">
+              We couldn't find an application for that link. Please check the link you were given, or view all current AFÁRÁ cohorts.
+            </p>
+            <Button asChild>
+              <a href="/cohorts">View All Cohorts</a>
+            </Button>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   if (appMode === "select") {
     return (
       <div className="min-h-screen flex flex-col">
@@ -798,11 +843,16 @@ export default function Apply() {
         <main className="flex-1 py-16 bg-muted/30">
           <div className="container max-w-3xl mx-auto px-4">
             <div className="text-center mb-10">
+              {cohortIdentityLine && (
+                <p className="text-sm font-semibold tracking-wide uppercase text-primary mb-2" data-testid="text-apply-cohort-identity">
+                  {cohortIdentityLine}
+                </p>
+              )}
               <h1 className="text-4xl font-bold mb-3" data-testid="text-apply-gateway-title">
-                AFÁRA Accelerator Application
+                {cohortLabel} Application
               </h1>
               <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-                Apply to join Africa's leading accelerator for women-led businesses in energy and infrastructure.
+                {cohort?.tagline || "Apply to join Africa's leading accelerator for women-led businesses in energy and infrastructure."}
               </p>
             </div>
 
@@ -815,7 +865,7 @@ export default function Apply() {
                 <LockKeyhole className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
                 <div>
                   <span className="font-medium text-foreground">Applications are currently closed.</span>
-                  {" "}New applications for this cohort are not being accepted at this time. You may still check your application status or complete a previously saved draft below.
+                  {" "}New applications for {cohort ? cohortLabel : "this cohort"} are not being accepted at this time. You may still check your application status or complete a previously saved draft below.
                 </div>
               </div>
             )}
@@ -838,7 +888,7 @@ export default function Apply() {
                     <CardTitle className="text-xl">Start a New Application</CardTitle>
                     <CardDescription className="mt-1">
                       {applicationsOpen
-                        ? "Begin a fresh application for the AFÁRA programme. You can save your progress at any time and return later."
+                        ? `Begin a fresh application for ${cohortLabel}. You can save your progress at any time and return later.`
                         : "Applications are currently closed. Please check back when the next cohort opens."
                       }
                     </CardDescription>
@@ -1043,8 +1093,13 @@ export default function Apply() {
       <main className="flex-1 py-8 bg-muted/30">
         <div className="container max-w-4xl mx-auto px-4">
           <div className="mb-8 text-center">
+            {cohortIdentityLine && (
+              <p className="text-xs font-semibold tracking-wide uppercase text-primary mb-2" data-testid="text-apply-form-cohort-identity">
+                {cohortIdentityLine}
+              </p>
+            )}
             <h1 className="text-3xl font-bold mb-2" data-testid="text-apply-title">
-              AFARA Accelerator Application
+              {cohortLabel} Application
             </h1>
             <p className="text-muted-foreground">
               Complete all sections to submit your application. Your progress is saved automatically.
