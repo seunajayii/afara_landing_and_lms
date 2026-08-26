@@ -1579,7 +1579,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let result;
       if (type === "application") result = await sendApplicationConfirmationEmail(email, firstName, cohort);
       else if (type === "welcome") result = await sendWelcomeEmail(email, firstName);
-      else if (type === "acceptance") result = await sendAcceptanceEmail(email, firstName);
+      else if (type === "acceptance") result = await sendAcceptanceEmail(email, firstName, undefined, cohort);
       else if (type === "draft-save") result = await sendDraftSaveNotificationEmail(email, firstName, 2, 8, undefined, cohort);
       else return res.status(400).json({ error: "Unknown type. Use: application | welcome | acceptance | draft-save" });
       res.json(result);
@@ -2041,6 +2041,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin-only: full application status management (accept, reject, waitlist, etc.)
   async function handleApplicationStatusChange(application: any, newStatus: string, reviewNotes?: string) {
     const { sendAcceptanceEmail, sendRejectionEmail, sendWaitlistEmail, sendDisqualificationEmail } = await import("./email");
+    const applicationCohort = application.cohortId ? await storage.getCohort(application.cohortId) : undefined;
+    const cohortEmailInfo = applicationCohort
+      ? { name: applicationCohort.displayName || applicationCohort.name, sponsor: applicationCohort.sponsor, partnershipNote: applicationCohort.partnershipNote }
+      : undefined;
     if (newStatus === "accepted") {
       try {
         const user = await storage.getUserByEmail(application.email);
@@ -2052,13 +2056,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const tempPassword = randomUUID() + randomUUID();
           await createUserWithPassword(application.email, tempPassword, application.firstName, application.lastName, "participant", true);
         }
-        await sendAcceptanceEmail(application.email, application.firstName, reviewNotes);
+        await sendAcceptanceEmail(application.email, application.firstName, reviewNotes, cohortEmailInfo);
       } catch (err) {
         console.error("Failed to provision account or send acceptance email:", err);
       }
     } else if (newStatus === "rejected") {
       try {
-        await sendRejectionEmail(application.email, application.firstName, reviewNotes);
+        await sendRejectionEmail(application.email, application.firstName, reviewNotes, cohortEmailInfo);
       } catch (err) {
         console.error("Failed to send rejection email:", err);
       }

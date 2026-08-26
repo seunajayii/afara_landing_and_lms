@@ -292,10 +292,12 @@ export function renderApplicationConfirmationEmailPreview(cohort?: CohortEmailIn
   return { subject, html };
 }
 
-export async function sendAcceptanceEmail(email: string, firstName?: string, reviewNotes?: string): Promise<{ success: boolean; error?: string }> {
+export async function sendAcceptanceEmail(email: string, firstName?: string, reviewNotes?: string, cohort?: CohortEmailInfo): Promise<{ success: boolean; error?: string }> {
   try {
     const { client, fromEmail } = await getResendClient();
     const name = firstName || 'there';
+    const branding = getCohortBranding(cohort);
+    const { accentColor, programLabel, partnershipBannerHtml, isSponsored, sponsor } = branding;
     const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
     const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
     const mastheadSrc = 'cid:afara-masthead';
@@ -306,7 +308,7 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;background-color:#f0f5f5;border-radius:4px;">
                 <tr>
                   <td style="padding:24px 28px;">
-                    <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#034a21;">A personal note</p>
+                    <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:${accentColor};">A personal note</p>
                     <p style="margin:0;font-size:15px;line-height:1.7;color:#2d2d2d;font-style:italic;">"${reviewNotes}"</p>
                     <p style="margin:8px 0 0 0;font-size:13px;color:#555555;">— The AFÁRÁ Team</p>
                   </td>
@@ -336,14 +338,14 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
 
           <!-- Green accent line -->
           <tr>
-            <td style="background-color:#034a21;height:4px;font-size:0;line-height:0;">&nbsp;</td>
+            <td style="background-color:${accentColor};height:4px;font-size:0;line-height:0;">&nbsp;</td>
           </tr>
 
           <!-- Main content -->
           <tr>
             <td style="padding:48px 48px 32px 48px;">
 
-              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#034a21;line-height:1.3;">
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:${accentColor};line-height:1.3;">
                 Congratulations — you've been selected
               </h1>
 
@@ -352,8 +354,10 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
               </p>
 
               <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
-                We are delighted to let you know that your application to the <strong style="color:#034a21;">AFÁRÁ Accelerator Program</strong> has been successful. You have been selected as one of <strong style="color:#034a21;">50 Infrapreneurs</strong> joining the <strong style="color:#034a21;">AFÁRÁ Inaugural Cohort</strong>.
+                We are delighted to let you know that your application to the <strong style="color:${accentColor};">${programLabel}</strong> has been successful. You have been selected as one of <strong style="color:${accentColor};">50 Infrapreneurs</strong> joining the <strong style="color:${accentColor};">AFÁRÁ Inaugural Cohort</strong>.
               </p>
+
+              ${partnershipBannerHtml}
 
               ${personalNoteBlock}
 
@@ -367,25 +371,25 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
                 <tr>
                   <td style="padding:28px 28px 24px 28px;">
                     <p style="margin:0 0 4px 0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#a07840;">All 50 Infrapreneurs</p>
-                    <p style="margin:4px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:19px;font-weight:600;color:#034a21;line-height:1.2;">Track 1 &mdash; Venture Access Cohort</p>
+                    <p style="margin:4px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:19px;font-weight:600;color:${accentColor};line-height:1.2;">Track 1 &mdash; Venture Access Cohort</p>
                     <p style="margin:0 0 16px 0;font-size:14px;line-height:1.7;color:#2d2d2d;">
-                      Upon your successful selection to participate, you will take part in the <strong style="color:#034a21;">Venture Access Cohort</strong> — a two-day Immersive event. During the event, a selection process will take place, and shortlisted finalists will pitch their business or project to a panel of jurors.
+                      Upon your successful selection to participate, you will take part in the <strong style="color:${accentColor};">Venture Access Cohort</strong> — a two-day Immersive event. During the event, a selection process will take place, and shortlisted finalists will pitch their business or project to a panel of jurors.
                     </p>
                     <table width="100%" cellpadding="0" cellspacing="0" border="0">
                       <tr>
-                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#034a21;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:${accentColor};margin-top:7px;">&nbsp;</span></td>
                         <td style="padding:5px 0 5px 8px;font-size:14px;color:#2d2d2d;line-height:1.6;">Participate in the 2-day Immersive event</td>
                       </tr>
                       <tr>
-                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#034a21;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:${accentColor};margin-top:7px;">&nbsp;</span></td>
                         <td style="padding:5px 0 5px 8px;font-size:14px;color:#2d2d2d;line-height:1.6;">Access to curated expert-led webinars</td>
                       </tr>
                       <tr>
-                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#034a21;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:${accentColor};margin-top:7px;">&nbsp;</span></td>
                         <td style="padding:5px 0 5px 8px;font-size:14px;color:#2d2d2d;line-height:1.6;">Select ecosystem opportunities</td>
                       </tr>
                       <tr>
-                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#034a21;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:5px 0;vertical-align:top;width:16px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:${accentColor};margin-top:7px;">&nbsp;</span></td>
                         <td style="padding:5px 0 5px 8px;font-size:14px;color:#2d2d2d;line-height:1.6;">Continued inclusion in the founder network</td>
                       </tr>
                     </table>
@@ -394,7 +398,7 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
               </table>
 
               <!-- Track 2 box -->
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;background-color:#034a21;border-radius:4px;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;background-color:${accentColor};border-radius:4px;">
                 <tr>
                   <td style="padding:28px 28px 24px 28px;">
                     <p style="margin:0 0 4px 0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#a8c4c4;">10 selected after the Immersive event</p>
@@ -428,16 +432,16 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;border:1px solid #e8e4dd;border-radius:4px;">
                 <tr>
                   <td style="padding:28px 28px;">
-                    <p style="margin:0 0 4px 0;font-size:12px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#034a21;">Save the dates</p>
-                    <p style="margin:8px 0 0 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:24px;font-weight:600;color:#034a21;line-height:1.2;">19th &amp; 20th May 2026</p>
+                    <p style="margin:0 0 4px 0;font-size:12px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:${accentColor};">Save the dates</p>
+                    <p style="margin:8px 0 0 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:24px;font-weight:600;color:${accentColor};line-height:1.2;">19th &amp; 20th May 2026</p>
                     <p style="margin:8px 0 0 0;font-size:14px;color:#555555;line-height:1.5;">AFÁRÁ Immersive Launch &mdash; Inaugural Cohort</p>
                     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:20px;border-top:1px solid #e8e4dd;padding-top:20px;">
                       <tr>
-                        <td style="padding:6px 0;vertical-align:top;width:20px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#034a21;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:6px 0;vertical-align:top;width:20px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:${accentColor};margin-top:7px;">&nbsp;</span></td>
                         <td style="padding:6px 0 6px 8px;font-size:13px;font-weight:600;color:#2d2d2d;">In person &mdash; J. Randle Center for Yoruba Culture &amp; History, Lagos</td>
                       </tr>
                       <tr>
-                        <td style="padding:6px 0;vertical-align:top;width:20px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#034a21;margin-top:7px;">&nbsp;</span></td>
+                        <td style="padding:6px 0;vertical-align:top;width:20px;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:${accentColor};margin-top:7px;">&nbsp;</span></td>
                         <td style="padding:6px 0 6px 8px;font-size:13px;font-weight:600;color:#2d2d2d;">Online &mdash; for those who cannot attend in person</td>
                       </tr>
                     </table>
@@ -453,7 +457,7 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
               <!-- CTA Button -->
               <table cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;">
                 <tr>
-                  <td style="border-radius:4px;background-color:#034a21;">
+                  <td style="border-radius:4px;background-color:${accentColor};">
                     <a href="${loginUrl}" style="display:inline-block;padding:14px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:4px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
                       Go to your dashboard
                     </a>
@@ -470,7 +474,7 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
 
               <p style="margin:24px 0 0 0;font-size:15px;line-height:1.7;color:#555555;">
                 If you have any questions, please reach out at
-                <a href="mailto:hello@afaraaccelerator.org" style="color:#034a21;text-decoration:underline;">hello@afaraaccelerator.org</a>.
+                <a href="mailto:hello@afaraaccelerator.org" style="color:${accentColor};text-decoration:underline;">hello@afaraaccelerator.org</a>.
               </p>
 
             </td>
@@ -480,7 +484,7 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
           <tr>
             <td style="padding:0 48px 48px 48px;">
               <p style="margin:32px 0 4px 0;font-size:15px;line-height:1.6;color:#2d2d2d;">Warm regards,</p>
-              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#034a21;">
+              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:${accentColor};">
                 The AFÁRÁ Team
               </p>
             </td>
@@ -488,10 +492,10 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
 
           <!-- Footer -->
           <tr>
-            <td style="background-color:#034a21;padding:24px 48px;">
+            <td style="background-color:${accentColor};padding:24px 48px;">
               <p style="margin:0 0 6px 0;font-size:13px;line-height:1.6;color:#a8c4c4;">
                 AFÁRÁ is an initiative of
-                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>
+                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>${isSponsored ? `, delivered in partnership with ${sponsor}` : ''}
               </p>
               <p style="margin:0;font-size:12px;color:#6a9090;">
                 &copy; ${new Date().getFullYear()} AFÁRÁ. All rights reserved.
@@ -506,10 +510,14 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
 </body>
 </html>`;
 
+    const subject = isSponsored
+      ? `Congratulations \u2014 you\u2019ve been accepted to the ${programLabel} \u2013 with ${sponsor}`
+      : "Congratulations \u2014 You\u2019ve been accepted to AF\u00C1R\u00C1";
+
     const { data, error } = await client.emails.send({
       from: fromEmail,
       to: email,
-      subject: "Congratulations \u2014 You\u2019ve been accepted to AF\u00C1R\u00C1",
+      subject,
       html,
       attachments: mastheadBuffer ? [
         {
@@ -532,10 +540,12 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
   }
 }
 
-export async function sendRejectionEmail(email: string, firstName?: string, reviewNotes?: string): Promise<{ success: boolean; error?: string }> {
+export async function sendRejectionEmail(email: string, firstName?: string, reviewNotes?: string, cohort?: CohortEmailInfo): Promise<{ success: boolean; error?: string }> {
   try {
     const { client, fromEmail } = await getResendClient();
     const name = firstName || 'there';
+    const branding = getCohortBranding(cohort);
+    const { accentColor, programLabel, partnershipBannerHtml, isSponsored, sponsor } = branding;
     const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
     const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
     const mastheadSrc = 'cid:afara-masthead';
@@ -545,7 +555,7 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;background-color:#f9f5f0;border-radius:4px;">
                 <tr>
                   <td style="padding:24px 28px;">
-                    <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#034a21;">Feedback from the team</p>
+                    <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:${accentColor};">Feedback from the team</p>
                     <p style="margin:0;font-size:15px;line-height:1.7;color:#2d2d2d;font-style:italic;">"${reviewNotes}"</p>
                     <p style="margin:8px 0 0 0;font-size:13px;color:#555555;">— The AFÁRÁ Team</p>
                   </td>
@@ -575,14 +585,14 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
 
           <!-- Green accent line -->
           <tr>
-            <td style="background-color:#034a21;height:4px;font-size:0;line-height:0;">&nbsp;</td>
+            <td style="background-color:${accentColor};height:4px;font-size:0;line-height:0;">&nbsp;</td>
           </tr>
 
           <!-- Main content -->
           <tr>
             <td style="padding:48px 48px 32px 48px;">
 
-              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:#034a21;line-height:1.3;">
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:${accentColor};line-height:1.3;">
                 An update on your application
               </h1>
 
@@ -591,8 +601,10 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
               </p>
 
               <p style="margin:0 0 20px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
-                Thank you for taking the time to apply to the <strong style="color:#034a21;">AFÁRÁ Accelerator Program</strong>. After careful review of all applications, we regret to inform you that we are unable to offer you a place in the current cohort.
+                Thank you for taking the time to apply to the <strong style="color:${accentColor};">${programLabel}</strong>. After careful review of all applications, we regret to inform you that we are unable to offer you a place in the current cohort.
               </p>
+
+              ${partnershipBannerHtml}
 
               <p style="margin:0 0 32px 0;font-size:16px;line-height:1.7;color:#2d2d2d;">
                 This was a competitive process, and the decision was not easy. We are genuinely grateful for your interest and the effort you put into your application.
@@ -608,28 +620,28 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
               </table>
 
               <!-- Stay connected -->
-              <h2 style="margin:32px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;color:#034a21;">
+              <h2 style="margin:32px 0 16px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;color:${accentColor};">
                 Stay connected with AFÁRÁ
               </h2>
 
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 32px 0;">
                 <tr>
                   <td style="padding:10px 0;vertical-align:top;width:24px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#034a21;margin-top:6px;">&nbsp;</span>
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:${accentColor};margin-top:6px;">&nbsp;</span>
                   </td>
                   <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">We run new cohorts regularly — we encourage you to apply again in a future cycle</td>
                 </tr>
                 <tr>
                   <td style="padding:10px 0;vertical-align:top;width:24px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#034a21;margin-top:6px;">&nbsp;</span>
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:${accentColor};margin-top:6px;">&nbsp;</span>
                   </td>
-                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">Follow our updates and events at <a href="https://afaraaccelerator.org" style="color:#034a21;text-decoration:underline;">afaraaccelerator.org</a></td>
+                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">Follow our updates and events at <a href="https://afaraaccelerator.org" style="color:${accentColor};text-decoration:underline;">afaraaccelerator.org</a></td>
                 </tr>
                 <tr>
                   <td style="padding:10px 0;vertical-align:top;width:24px;">
-                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:#034a21;margin-top:6px;">&nbsp;</span>
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background-color:${accentColor};margin-top:6px;">&nbsp;</span>
                   </td>
-                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">For any questions, reach us at <a href="mailto:hello@afaraaccelerator.org" style="color:#034a21;text-decoration:underline;">hello@afaraaccelerator.org</a></td>
+                  <td style="padding:10px 0 10px 8px;font-size:15px;line-height:1.6;color:#2d2d2d;">For any questions, reach us at <a href="mailto:hello@afaraaccelerator.org" style="color:${accentColor};text-decoration:underline;">hello@afaraaccelerator.org</a></td>
                 </tr>
               </table>
 
@@ -644,7 +656,7 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
           <tr>
             <td style="padding:0 48px 48px 48px;">
               <p style="margin:32px 0 4px 0;font-size:15px;line-height:1.6;color:#2d2d2d;">Warm regards,</p>
-              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:#034a21;">
+              <p style="margin:0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;color:${accentColor};">
                 The AFÁRÁ Team
               </p>
             </td>
@@ -652,10 +664,10 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
 
           <!-- Footer -->
           <tr>
-            <td style="background-color:#034a21;padding:24px 48px;">
+            <td style="background-color:${accentColor};padding:24px 48px;">
               <p style="margin:0 0 6px 0;font-size:13px;line-height:1.6;color:#a8c4c4;">
                 AFÁRÁ is an initiative of
-                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>
+                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>${isSponsored ? `, delivered in partnership with ${sponsor}` : ''}
               </p>
               <p style="margin:0;font-size:12px;color:#6a9090;">
                 &copy; ${new Date().getFullYear()} AFÁRÁ. All rights reserved.
@@ -670,10 +682,14 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
 </body>
 </html>`;
 
+    const subject = isSponsored
+      ? `An update on your ${programLabel} application \u2013 with ${sponsor}`
+      : "An update on your AF\u00C1R\u00C1 application";
+
     const { data, error } = await client.emails.send({
       from: fromEmail,
       to: email,
-      subject: "An update on your AF\u00C1R\u00C1 application",
+      subject,
       html,
       attachments: mastheadBuffer ? [
         {
