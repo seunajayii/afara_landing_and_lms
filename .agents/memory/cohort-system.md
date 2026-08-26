@@ -43,3 +43,10 @@ Public (unauthenticated) cohort access uses three purpose-built endpoints rather
 **Why:** `GET /api/admin/cohorts/:id/email-preview?type=confirmation|draft-save` needs to return raw HTML an admin can view in an iframe before any applicant gets the real email — reusing the exact HTML-building code (not a re-implementation) is what guarantees the preview matches what actually gets sent.
 
 **How to apply:** Any new cohort-branded email should follow this same split (build function + thin send wrapper + preview wrapper) rather than inlining HTML generation directly in the `send*` function, so it stays previewable the same way.
+
+## Per-cohort trimmed application form (DOREWA)
+`client/src/pages/Apply.tsx` supports a cohort-specific trimmed application flow, gated by `isDorewaLite = cohort?.slug === "dorewa"` (a hardcoded slug check, not a schema column/admin toggle).
+
+**Why:** The user explicitly asked to keep this low-cost/low-token — DOREWA was the only cohort needing a different form, so a generic per-cohort form-builder (schema column + admin UI) was skipped in favor of the smallest working change. AFARA CORE's form must stay byte-for-byte the default behavior.
+
+**How to apply:** When `isDorewaLite` is true: the Financial/Project/Support steps (ids 3/4/5) are skipped entirely (`hiddenStepIds`, filtered `visibleSteps`, `handleNext`/`handlePrevious` jump over them); several fields inside Personal/Background/Business are conditionally hidden; `subSectors` uses a 5-option DOREWA-specific list instead of the default 15; and the `whyAfaraIsRight` field is relabeled (not replaced) to ask about DOREWA's value to the applicant. `PreviewSection` mirrors the same hidden-step/hidden-field logic so the review screen doesn't show empty removed sections. If another cohort needs its own custom form later, this ad hoc slug-based branching should likely be generalized (e.g. a real `applicationFormVariant` cohort column) rather than adding a third hardcoded slug check — see project task "Custom application questions per cohort" for the more general version of this problem.

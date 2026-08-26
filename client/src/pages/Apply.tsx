@@ -355,6 +355,11 @@ export default function Apply() {
   const cohortIdentityLine = cohort
     ? `An AFÁRÁ Africa Accelerator Cohort${cohort.sponsor ? ` — in collaboration with ${cohort.sponsor}` : ""}`
     : undefined;
+  // DOREWA uses a trimmed application form. Keyed off the slug so the
+  // AFARA CORE form (and any other cohort) is completely unaffected.
+  const isDorewaLite = cohort?.slug === "dorewa";
+  const hiddenStepIds = isDorewaLite ? [3, 4, 5] : [];
+  const visibleSteps = steps.filter((s) => !hiddenStepIds.includes(s.id));
   const [draftLookupError, setDraftLookupError] = useState("");
   const [draftNeedsEmailLink, setDraftNeedsEmailLink] = useState(false);
   const [statusEmail, setStatusEmail] = useState("");
@@ -753,7 +758,10 @@ export default function Apply() {
 
   const handleNext = () => {
     if (currentStep < 7) {
-      const nextStep = currentStep + 1;
+      let nextStep = currentStep + 1;
+      while (hiddenStepIds.includes(nextStep) && nextStep < 7) {
+        nextStep += 1;
+      }
       setCurrentStep(nextStep);
       window.scrollTo(0, 0);
       const data = form.getValues();
@@ -765,7 +773,11 @@ export default function Apply() {
 
   const handlePrevious = () => {
     if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
+      let prevStep = currentStep - 1;
+      while (hiddenStepIds.includes(prevStep) && prevStep > 0) {
+        prevStep -= 1;
+      }
+      setCurrentStep(prevStep);
       window.scrollTo(0, 0);
     }
   };
@@ -776,7 +788,11 @@ export default function Apply() {
     })();
   };
 
-  const progressPercent = ((currentStep + 1) / steps.length) * 100;
+  const currentVisibleIndex = Math.max(
+    0,
+    visibleSteps.findIndex((s) => s.id === currentStep),
+  );
+  const progressPercent = ((currentVisibleIndex + 1) / visibleSteps.length) * 100;
 
   if (isSubmitted) {
     return (
@@ -1067,11 +1083,11 @@ export default function Apply() {
   const renderStepContent = () => {
     switch (currentStep) {
       case 0:
-        return <PersonalSection form={form} />;
+        return <PersonalSection form={form} isDorewaLite={isDorewaLite} />;
       case 1:
-        return <BackgroundSection form={form} />;
+        return <BackgroundSection form={form} isDorewaLite={isDorewaLite} />;
       case 2:
-        return <BusinessSection form={form} />;
+        return <BusinessSection form={form} isDorewaLite={isDorewaLite} />;
       case 3:
         return <FinancialSection form={form} />;
       case 4:
@@ -1079,9 +1095,16 @@ export default function Apply() {
       case 5:
         return <SupportSection form={form} />;
       case 6:
-        return <CommitmentSection form={form} />;
+        return <CommitmentSection form={form} isDorewaLite={isDorewaLite} />;
       case 7:
-        return <PreviewSection form={form} onEditSection={setCurrentStep} />;
+        return (
+          <PreviewSection
+            form={form}
+            onEditSection={setCurrentStep}
+            hiddenStepIds={hiddenStepIds}
+            isDorewaLite={isDorewaLite}
+          />
+        );
       default:
         return null;
     }
@@ -1109,7 +1132,7 @@ export default function Apply() {
           <div className="mb-6">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium">
-                Step {currentStep + 1} of {steps.length}: {steps[currentStep].title}
+                Step {currentVisibleIndex + 1} of {visibleSteps.length}: {steps[currentStep].title}
               </span>
               {lastSaved && (
                 <span className="text-xs text-muted-foreground">
@@ -1121,16 +1144,16 @@ export default function Apply() {
           </div>
 
           <div className="flex gap-2 overflow-x-auto pb-4 mb-6">
-            {steps.map((step, index) => {
+            {visibleSteps.map((step) => {
               const Icon = step.icon;
-              const isActive = index === currentStep;
-              const isCompleted = index < currentStep;
+              const isActive = step.id === currentStep;
+              const isCompleted = step.id < currentStep;
               
               return (
                 <button
                   type="button"
                   key={step.id}
-                  onClick={() => setCurrentStep(index)}
+                  onClick={() => setCurrentStep(step.id)}
                   className={`flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
                     isActive 
                       ? "bg-primary text-primary-foreground" 
@@ -1138,7 +1161,7 @@ export default function Apply() {
                         ? "bg-primary/10 text-primary" 
                         : "bg-muted text-muted-foreground"
                   }`}
-                  data-testid={`button-step-${index}`}
+                  data-testid={`button-step-${step.id}`}
                 >
                   <Icon className="w-4 h-4" />
                   <span className="hidden sm:inline">{step.title}</span>
@@ -1248,7 +1271,13 @@ export default function Apply() {
   );
 }
 
-function PersonalSection({ form }: { form: ReturnType<typeof useForm<ApplicationFormData>> }) {
+function PersonalSection({
+  form,
+  isDorewaLite = false,
+}: {
+  form: ReturnType<typeof useForm<ApplicationFormData>>;
+  isDorewaLite?: boolean;
+}) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1398,64 +1427,83 @@ function PersonalSection({ form }: { form: ReturnType<typeof useForm<Application
         )}
       />
 
-      <div className="p-4 border rounded-lg bg-muted/50">
-        <div className="flex items-center gap-2 mb-3">
-          <Video className="w-5 h-5 text-primary" />
-          <h4 className="font-medium">Video Essay (Optional)</h4>
+      {!isDorewaLite && (
+        <div className="p-4 border rounded-lg bg-muted/50">
+          <div className="flex items-center gap-2 mb-3">
+            <Video className="w-5 h-5 text-primary" />
+            <h4 className="font-medium">Video Essay (Optional)</h4>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">
+            Share a video about yourself and your business. Upload to YouTube, Vimeo, or any video platform and paste the link below.
+          </p>
+          <FormField
+            control={form.control}
+            name="videoEssayUrl"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Video URL</FormLabel>
+                <FormControl>
+                  <Input 
+                    placeholder="https://youtube.com/watch?v=... or https://vimeo.com/..."
+                    {...field} 
+                    data-testid="input-video-essay"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
-        <p className="text-sm text-muted-foreground mb-4">
-          Share a video about yourself and your business. Upload to YouTube, Vimeo, or any video platform and paste the link below.
-        </p>
+      )}
+    </div>
+  );
+}
+
+const dorewaSubSectorOptions = [
+  "Renewable energy",
+  "Clean cooking solutions",
+  "Agriculture processing",
+  "Agri-energy logistics",
+  "Irrigation",
+];
+
+function BackgroundSection({
+  form,
+  isDorewaLite = false,
+}: {
+  form: ReturnType<typeof useForm<ApplicationFormData>>;
+  isDorewaLite?: boolean;
+}) {
+  const hasProjectExperience = form.watch("hasProjectExperience");
+  const hasLedTeams = form.watch("hasLedTeams");
+  const subSectors = form.watch("subSectors") || [];
+  const activeSubSectorOptions = isDorewaLite ? dorewaSubSectorOptions : subSectorOptions;
+
+  return (
+    <div className="space-y-6">
+      {!isDorewaLite && (
         <FormField
           control={form.control}
-          name="videoEssayUrl"
+          name="professionalBackground"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Video URL</FormLabel>
+              <FormLabel>Professional Journey</FormLabel>
+              <FormDescription>
+                Describe your professional journey in the energy or infrastructure sector.
+              </FormDescription>
               <FormControl>
-                <Input 
-                  placeholder="https://youtube.com/watch?v=... or https://vimeo.com/..."
+                <Textarea 
+                  placeholder="Describe your experience, roles, and professional journey..."
+                  className="min-h-[120px]"
                   {...field} 
-                  data-testid="input-video-essay"
+                  data-testid="input-professional-background"
                 />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-      </div>
-    </div>
-  );
-}
-
-function BackgroundSection({ form }: { form: ReturnType<typeof useForm<ApplicationFormData>> }) {
-  const hasProjectExperience = form.watch("hasProjectExperience");
-  const hasLedTeams = form.watch("hasLedTeams");
-  const subSectors = form.watch("subSectors") || [];
-
-  return (
-    <div className="space-y-6">
-      <FormField
-        control={form.control}
-        name="professionalBackground"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Professional Journey</FormLabel>
-            <FormDescription>
-              Describe your professional journey in the energy or infrastructure sector.
-            </FormDescription>
-            <FormControl>
-              <Textarea 
-                placeholder="Describe your experience, roles, and professional journey..."
-                className="min-h-[120px]"
-                {...field} 
-                data-testid="input-professional-background"
-              />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+      )}
 
       <FormField
         control={form.control}
@@ -1477,27 +1525,29 @@ function BackgroundSection({ form }: { form: ReturnType<typeof useForm<Applicati
         )}
       />
 
-      <FormField
-        control={form.control}
-        name="majorAchievements"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Major Achievements</FormLabel>
-            <FormDescription>
-              Highlight up to 3 major achievements — projects delivered, deals closed, or impact created.
-            </FormDescription>
-            <FormControl>
-              <Textarea 
-                placeholder="1. …&#10;2. …&#10;3. …"
-                className="min-h-[120px]"
-                {...field} 
-                data-testid="input-major-achievements"
-              />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+      {!isDorewaLite && (
+        <FormField
+          control={form.control}
+          name="majorAchievements"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Major Achievements</FormLabel>
+              <FormDescription>
+                Highlight up to 3 major achievements — projects delivered, deals closed, or impact created.
+              </FormDescription>
+              <FormControl>
+                <Textarea 
+                  placeholder="1. …&#10;2. …&#10;3. …"
+                  className="min-h-[120px]"
+                  {...field} 
+                  data-testid="input-major-achievements"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
 
       <FormField
         control={form.control}
@@ -1521,28 +1571,30 @@ function BackgroundSection({ form }: { form: ReturnType<typeof useForm<Applicati
         )}
       />
 
-      <FormField
-        control={form.control}
-        name="hasLedTeams"
-        render={({ field }) => (
-          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-            <FormControl>
-              <Checkbox
-                checked={field.value}
-                onCheckedChange={field.onChange}
-                data-testid="checkbox-has-led-teams"
-              />
-            </FormControl>
-            <div className="space-y-1 leading-none">
-              <FormLabel>
-                Have you led teams or managed large-scale projects?
-              </FormLabel>
-            </div>
-          </FormItem>
-        )}
-      />
+      {!isDorewaLite && (
+        <FormField
+          control={form.control}
+          name="hasLedTeams"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+              <FormControl>
+                <Checkbox
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  data-testid="checkbox-has-led-teams"
+                />
+              </FormControl>
+              <div className="space-y-1 leading-none">
+                <FormLabel>
+                  Have you led teams or managed large-scale projects?
+                </FormLabel>
+              </div>
+            </FormItem>
+          )}
+        />
+      )}
 
-      {hasLedTeams && (
+      {!isDorewaLite && hasLedTeams && (
         <FormField
           control={form.control}
           name="teamLeadershipExperience"
@@ -1566,28 +1618,30 @@ function BackgroundSection({ form }: { form: ReturnType<typeof useForm<Applicati
         />
       )}
 
-      <FormField
-        control={form.control}
-        name="hasProjectExperience"
-        render={({ field }) => (
-          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-            <FormControl>
-              <Checkbox
-                checked={field.value}
-                onCheckedChange={field.onChange}
-                data-testid="checkbox-has-project-experience"
-              />
-            </FormControl>
-            <div className="space-y-1 leading-none">
-              <FormLabel>
-                Have you developed, executed, financed, or managed an energy or infrastructure project?
-              </FormLabel>
-            </div>
-          </FormItem>
-        )}
-      />
+      {!isDorewaLite && (
+        <FormField
+          control={form.control}
+          name="hasProjectExperience"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+              <FormControl>
+                <Checkbox
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  data-testid="checkbox-has-project-experience"
+                />
+              </FormControl>
+              <div className="space-y-1 leading-none">
+                <FormLabel>
+                  Have you developed, executed, financed, or managed an energy or infrastructure project?
+                </FormLabel>
+              </div>
+            </FormItem>
+          )}
+        />
+      )}
 
-      {hasProjectExperience && (
+      {!isDorewaLite && hasProjectExperience && (
         <FormField
           control={form.control}
           name="projectExperience"
@@ -1611,46 +1665,50 @@ function BackgroundSection({ form }: { form: ReturnType<typeof useForm<Applicati
         />
       )}
 
-      <FormField
-        control={form.control}
-        name="primarySector"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Primary Sector</FormLabel>
-            <FormDescription>Which sector best describes your experience and current project?</FormDescription>
-            <Select onValueChange={field.onChange} value={field.value}>
-              <FormControl>
-                <SelectTrigger data-testid="select-primary-sector">
-                  <SelectValue placeholder="Select your primary sector" />
-                </SelectTrigger>
-              </FormControl>
-              <SelectContent>
-                <SelectItem value="energy">Energy</SelectItem>
-                <SelectItem value="infrastructure">Infrastructure</SelectItem>
-              </SelectContent>
-            </Select>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+      {!isDorewaLite && (
+        <FormField
+          control={form.control}
+          name="primarySector"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Primary Sector</FormLabel>
+              <FormDescription>Which sector best describes your experience and current project?</FormDescription>
+              <Select onValueChange={field.onChange} value={field.value}>
+                <FormControl>
+                  <SelectTrigger data-testid="select-primary-sector">
+                    <SelectValue placeholder="Select your primary sector" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="energy">Energy</SelectItem>
+                  <SelectItem value="infrastructure">Infrastructure</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
 
-      <FormField
-        control={form.control}
-        name="sectorSpecification"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Please specify your sector focus</FormLabel>
-            <FormControl>
-              <Input 
-                placeholder="e.g., Solar energy, Road construction..."
-                {...field} 
-                data-testid="input-sector-specification"
-              />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+      {!isDorewaLite && (
+        <FormField
+          control={form.control}
+          name="sectorSpecification"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Please specify your sector focus</FormLabel>
+              <FormControl>
+                <Input 
+                  placeholder="e.g., Solar energy, Road construction..."
+                  {...field} 
+                  data-testid="input-sector-specification"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
 
       <FormField
         control={form.control}
@@ -1660,7 +1718,7 @@ function BackgroundSection({ form }: { form: ReturnType<typeof useForm<Applicati
             <FormLabel>Sub-sectors</FormLabel>
             <FormDescription>Select all that apply to your experience.</FormDescription>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {subSectorOptions.map((option) => (
+              {activeSubSectorOptions.map((option) => (
                 <div key={option} className="flex items-center space-x-2">
                   <Checkbox
                     id={`subsector-${option}`}
@@ -1683,23 +1741,25 @@ function BackgroundSection({ form }: { form: ReturnType<typeof useForm<Applicati
         )}
       />
 
-      <FormField
-        control={form.control}
-        name="otherSubSector"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Other Sub-sector</FormLabel>
-            <FormControl>
-              <Input 
-                placeholder="If other, please specify..."
-                {...field} 
-                data-testid="input-other-subsector"
-              />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+      {!isDorewaLite && (
+        <FormField
+          control={form.control}
+          name="otherSubSector"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Other Sub-sector</FormLabel>
+              <FormControl>
+                <Input 
+                  placeholder="If other, please specify..."
+                  {...field} 
+                  data-testid="input-other-subsector"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
     </div>
   );
 }
@@ -1711,7 +1771,13 @@ const businessStageOptions = [
   "Growth / scaling",
 ];
 
-function BusinessSection({ form }: { form: ReturnType<typeof useForm<ApplicationFormData>> }) {
+function BusinessSection({
+  form,
+  isDorewaLite = false,
+}: {
+  form: ReturnType<typeof useForm<ApplicationFormData>>;
+  isDorewaLite?: boolean;
+}) {
   const isRaisingFunding = form.watch("isRaisingFunding");
 
   return (
@@ -1721,25 +1787,27 @@ function BusinessSection({ form }: { form: ReturnType<typeof useForm<Application
         <p className="text-sm font-medium text-muted-foreground">Business / Project Overview</p>
       </div>
 
-      <FormField
-        control={form.control}
-        name="businessDescription"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Describe Your Business / Project</FormLabel>
-            <FormDescription>What do you do and who do you serve?</FormDescription>
-            <FormControl>
-              <Textarea 
-                placeholder="Describe what your business does and who it serves..."
-                className="min-h-[120px]"
-                {...field} 
-                data-testid="input-business-description"
-              />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+      {!isDorewaLite && (
+        <FormField
+          control={form.control}
+          name="businessDescription"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Describe Your Business / Project</FormLabel>
+              <FormDescription>What do you do and who do you serve?</FormDescription>
+              <FormControl>
+                <Textarea 
+                  placeholder="Describe what your business does and who it serves..."
+                  className="min-h-[120px]"
+                  {...field} 
+                  data-testid="input-business-description"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
 
       <FormField
         control={form.control}
@@ -1783,69 +1851,75 @@ function BusinessSection({ form }: { form: ReturnType<typeof useForm<Application
         )}
       />
 
-      <FormField
-        control={form.control}
-        name="tractionEvidence"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Evidence of Traction</FormLabel>
-            <FormDescription>Share evidence such as revenue figures, number of customers/users, contracts or partnerships.</FormDescription>
-            <FormControl>
-              <Textarea 
-                placeholder="e.g., Revenue: $50k/year, 200 customers, 3 signed contracts..."
-                className="min-h-[100px]"
-                {...field} 
-                data-testid="input-traction-evidence"
-              />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+      {!isDorewaLite && (
+        <FormField
+          control={form.control}
+          name="tractionEvidence"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Evidence of Traction</FormLabel>
+              <FormDescription>Share evidence such as revenue figures, number of customers/users, contracts or partnerships.</FormDescription>
+              <FormControl>
+                <Textarea 
+                  placeholder="e.g., Revenue: $50k/year, 200 customers, 3 signed contracts..."
+                  className="min-h-[100px]"
+                  {...field} 
+                  data-testid="input-traction-evidence"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
 
       {/* Scalability & Growth */}
       <div className="p-4 bg-muted/50 rounded-lg mt-2">
         <p className="text-sm font-medium text-muted-foreground">Scalability &amp; Growth</p>
       </div>
 
-      <FormField
-        control={form.control}
-        name="targetMarket"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Target Market &amp; Its Size</FormLabel>
-            <FormDescription>What is your target market and how large is it?</FormDescription>
-            <FormControl>
-              <Textarea 
-                placeholder="Describe your target market and estimated market size..."
-                className="min-h-[100px]"
-                {...field} 
-                data-testid="input-target-market"
-              />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+      {!isDorewaLite && (
+        <FormField
+          control={form.control}
+          name="targetMarket"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Target Market &amp; Its Size</FormLabel>
+              <FormDescription>What is your target market and how large is it?</FormDescription>
+              <FormControl>
+                <Textarea 
+                  placeholder="Describe your target market and estimated market size..."
+                  className="min-h-[100px]"
+                  {...field} 
+                  data-testid="input-target-market"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
 
-      <FormField
-        control={form.control}
-        name="scalabilityExplanation"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>What Makes Your Solution Scalable?</FormLabel>
-            <FormControl>
-              <Textarea 
-                placeholder="Explain the scalability of your business model or solution..."
-                className="min-h-[100px]"
-                {...field} 
-                data-testid="input-scalability-explanation"
-              />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+      {!isDorewaLite && (
+        <FormField
+          control={form.control}
+          name="scalabilityExplanation"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>What Makes Your Solution Scalable?</FormLabel>
+              <FormControl>
+                <Textarea 
+                  placeholder="Explain the scalability of your business model or solution..."
+                  className="min-h-[100px]"
+                  {...field} 
+                  data-testid="input-scalability-explanation"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
 
       <FormField
         control={form.control}
@@ -1866,26 +1940,28 @@ function BusinessSection({ form }: { form: ReturnType<typeof useForm<Application
         )}
       />
 
-      <FormField
-        control={form.control}
-        name="isRaisingFunding"
-        render={({ field }) => (
-          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-            <FormControl>
-              <Checkbox
-                checked={field.value}
-                onCheckedChange={field.onChange}
-                data-testid="checkbox-is-raising-funding"
-              />
-            </FormControl>
-            <div className="space-y-1 leading-none">
-              <FormLabel>
-                Are you currently raising funding or planning to?
-              </FormLabel>
-            </div>
-          </FormItem>
-        )}
-      />
+      {!isDorewaLite && (
+        <FormField
+          control={form.control}
+          name="isRaisingFunding"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+              <FormControl>
+                <Checkbox
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  data-testid="checkbox-is-raising-funding"
+                />
+              </FormControl>
+              <div className="space-y-1 leading-none">
+                <FormLabel>
+                  Are you currently raising funding or planning to?
+                </FormLabel>
+              </div>
+            </FormItem>
+          )}
+        />
+      )}
 
       {/* Business Ownership */}
       <div className="p-4 bg-muted/50 rounded-lg mt-2">
@@ -2691,7 +2767,13 @@ function SupportSection({ form }: { form: ReturnType<typeof useForm<ApplicationF
   );
 }
 
-function CommitmentSection({ form }: { form: ReturnType<typeof useForm<ApplicationFormData>> }) {
+function CommitmentSection({
+  form,
+  isDorewaLite = false,
+}: {
+  form: ReturnType<typeof useForm<ApplicationFormData>>;
+  isDorewaLite?: boolean;
+}) {
   return (
     <div className="space-y-6">
       <FormField
@@ -2871,13 +2953,19 @@ function CommitmentSection({ form }: { form: ReturnType<typeof useForm<Applicati
         name="whyAfaraIsRight"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Why AFARA?</FormLabel>
+            <FormLabel>{isDorewaLite ? "Why DOREWA?" : "Why AFARA?"}</FormLabel>
             <FormDescription>
-              Why do you believe AFARA is the right program for you and your project at this stage?
+              {isDorewaLite
+                ? "How do you think your participation in DOREWA will bring value to you and your business?"
+                : "Why do you believe AFARA is the right program for you and your project at this stage?"}
             </FormDescription>
             <FormControl>
               <Textarea 
-                placeholder="Explain why AFARA is the right fit for you and your project..."
+                placeholder={
+                  isDorewaLite
+                    ? "Explain how DOREWA will help you and your business grow..."
+                    : "Explain why AFARA is the right fit for you and your project..."
+                }
                 className="min-h-[150px]"
                 {...field} 
                 data-testid="input-why-afara"
@@ -2894,9 +2982,13 @@ function CommitmentSection({ form }: { form: ReturnType<typeof useForm<Applicati
 function PreviewSection({
   form,
   onEditSection,
+  hiddenStepIds = [],
+  isDorewaLite = false,
 }: {
   form: ReturnType<typeof useForm<ApplicationFormData>>;
   onEditSection: (step: number) => void;
+  hiddenStepIds?: number[];
+  isDorewaLite?: boolean;
 }) {
   const values = form.getValues();
 
@@ -3050,7 +3142,7 @@ function PreviewSection({
         <F label="Company / Project Name" value={values.companyName} />
         <F label="Role in Company" value={values.roleInCompany} />
         <TextBlock label="Personal Statement" value={values.personalStatement} />
-        <TextBlock label="Video Essay URL" value={values.videoEssayUrl} />
+        {!isDorewaLite && <TextBlock label="Video Essay URL" value={values.videoEssayUrl} />}
       </SectionCard>
 
       {/* ── Section 2: Background & Sector ──────────────────────────────── */}
@@ -3061,19 +3153,23 @@ function PreviewSection({
             values.yearsOfExperience !== undefined ? `${values.yearsOfExperience} years` : undefined
           }
         />
-        <F label="Primary Sector" value={values.primarySector} />
-        <F label="Sector Specification" value={values.sectorSpecification} />
+        {!isDorewaLite && <F label="Primary Sector" value={values.primarySector} />}
+        {!isDorewaLite && <F label="Sector Specification" value={values.sectorSpecification} />}
         <F label="Sub-sectors" value={values.subSectors} wide />
-        <F label="Other Sub-sector" value={values.otherSubSector} />
-        <F label="Has Led Teams" value={values.hasLedTeams} />
-        <F label="Has Direct Project Experience" value={values.hasProjectExperience} />
-        <TextBlock label="Professional Background" value={values.professionalBackground} />
+        {!isDorewaLite && <F label="Other Sub-sector" value={values.otherSubSector} />}
+        {!isDorewaLite && <F label="Has Led Teams" value={values.hasLedTeams} />}
+        {!isDorewaLite && <F label="Has Direct Project Experience" value={values.hasProjectExperience} />}
+        {!isDorewaLite && (
+          <TextBlock label="Professional Background" value={values.professionalBackground} />
+        )}
         <TextBlock label="Key Responsibilities" value={values.keyResponsibilities} />
-        <TextBlock label="Major Achievements" value={values.majorAchievements} />
-        {values.hasLedTeams && (
+        {!isDorewaLite && (
+          <TextBlock label="Major Achievements" value={values.majorAchievements} />
+        )}
+        {!isDorewaLite && values.hasLedTeams && (
           <TextBlock label="Team Leadership Experience" value={values.teamLeadershipExperience} />
         )}
-        {values.hasProjectExperience && (
+        {!isDorewaLite && values.hasProjectExperience && (
           <TextBlock label="Project Experience Details" value={values.projectExperience} />
         )}
       </SectionCard>
@@ -3081,12 +3177,18 @@ function PreviewSection({
       {/* ── Section 3: Business Overview & Ownership ────────────────────── */}
       <SectionCard step={2} icon={Building2} title="Business Overview & Ownership">
         <F label="Business Stage" value={values.businessStage} />
-        <F label="Target Market" value={values.targetMarket} />
-        <F label="Currently Raising Funding" value={values.isRaisingFunding} />
-        <TextBlock label="Business Description" value={values.businessDescription} />
+        {!isDorewaLite && <F label="Target Market" value={values.targetMarket} />}
+        {!isDorewaLite && <F label="Currently Raising Funding" value={values.isRaisingFunding} />}
+        {!isDorewaLite && (
+          <TextBlock label="Business Description" value={values.businessDescription} />
+        )}
         <TextBlock label="Problem Being Solved" value={values.problemBeingSolved} />
-        <TextBlock label="Traction Evidence" value={values.tractionEvidence} />
-        <TextBlock label="Scalability Explanation" value={values.scalabilityExplanation} />
+        {!isDorewaLite && (
+          <TextBlock label="Traction Evidence" value={values.tractionEvidence} />
+        )}
+        {!isDorewaLite && (
+          <TextBlock label="Scalability Explanation" value={values.scalabilityExplanation} />
+        )}
         <TextBlock label="Growth Plans" value={values.growthPlans} />
 
         <SubHeading label="Ownership & Legal Details" />
@@ -3108,71 +3210,77 @@ function PreviewSection({
       </SectionCard>
 
       {/* ── Section 4: Financial Documentation ──────────────────────────── */}
-      <SectionCard step={3} icon={FileText} title="Financial Documentation">
-        <F label="Business Formally Incorporated" value={values.isIncorporated} />
-        <F label="Keeps Formal Financial Records" value={values.keepsFinancialRecords} />
-        <F
-          label="Can Provide Financial Statements"
-          value={
-            values.canProvideFinancials === "yes"
-              ? true
-              : values.canProvideFinancials === "no"
-              ? false
-              : undefined
-          }
-        />
-        <F
-          label="Registered for Tax"
-          value={
-            values.isTaxRegistered === "yes"
-              ? true
-              : values.isTaxRegistered === "no"
-              ? false
-              : undefined
-          }
-        />
-        <TextBlock label="Revenue Streams / Business Model" value={values.revenueStreams} />
+      {!hiddenStepIds.includes(3) && (
+        <SectionCard step={3} icon={FileText} title="Financial Documentation">
+          <F label="Business Formally Incorporated" value={values.isIncorporated} />
+          <F label="Keeps Formal Financial Records" value={values.keepsFinancialRecords} />
+          <F
+            label="Can Provide Financial Statements"
+            value={
+              values.canProvideFinancials === "yes"
+                ? true
+                : values.canProvideFinancials === "no"
+                ? false
+                : undefined
+            }
+          />
+          <F
+            label="Registered for Tax"
+            value={
+              values.isTaxRegistered === "yes"
+                ? true
+                : values.isTaxRegistered === "no"
+                ? false
+                : undefined
+            }
+          />
+          <TextBlock label="Revenue Streams / Business Model" value={values.revenueStreams} />
 
-        <SubHeading label="Uploaded Documents" />
-        <FileF label="Incorporation Certificate" url={values.incorporationCertificateUrl} />
-        <FileF label="Pitch Deck" url={values.pitchDeckUrl} />
-        <FileF label="Business Plan" url={values.businessPlanUrl} />
-        <FileF label="Financial Statements" url={values.financialStatementsUrl} />
-      </SectionCard>
+          <SubHeading label="Uploaded Documents" />
+          <FileF label="Incorporation Certificate" url={values.incorporationCertificateUrl} />
+          <FileF label="Pitch Deck" url={values.pitchDeckUrl} />
+          <FileF label="Business Plan" url={values.businessPlanUrl} />
+          <FileF label="Financial Statements" url={values.financialStatementsUrl} />
+        </SectionCard>
+      )}
 
       {/* ── Section 5: Project Readiness & Impact ───────────────────────── */}
-      <SectionCard step={4} icon={Target} title="Project Readiness & Impact">
-        <F label="Project Location" value={values.projectLocation} />
-        <F label="Project Sector" value={values.projectSector} />
-        <F label="Project Stage" value={values.projectStage} />
-        <F label="Current Project Status" value={values.projectCurrentStatus} />
-        <F label="Creates Opportunities for Women" value={values.createsWomenOpportunities} />
-        <F label="Supporting Documents" value={values.projectDocuments} wide />
-        <TextBlock label="Project Description" value={values.projectDescription} />
-        <TextBlock label="Projected Impact" value={values.projectedImpact} />
-        <TextBlock label="Business / Social Impact" value={values.businessImpact} />
-        <TextBlock label="Primary Beneficiaries" value={values.primaryBeneficiaries} />
-        <TextBlock
-          label="Contribution to Infrastructure Gap"
-          value={values.infrastructureGapContribution}
-        />
-        {values.createsWomenOpportunities && (
+      {!hiddenStepIds.includes(4) && (
+        <SectionCard step={4} icon={Target} title="Project Readiness & Impact">
+          <F label="Project Location" value={values.projectLocation} />
+          <F label="Project Sector" value={values.projectSector} />
+          <F label="Project Stage" value={values.projectStage} />
+          <F label="Current Project Status" value={values.projectCurrentStatus} />
+          <F label="Creates Opportunities for Women" value={values.createsWomenOpportunities} />
+          <F label="Supporting Documents" value={values.projectDocuments} wide />
+          <TextBlock label="Project Description" value={values.projectDescription} />
+          <TextBlock label="Projected Impact" value={values.projectedImpact} />
+          <TextBlock label="Business / Social Impact" value={values.businessImpact} />
+          <TextBlock label="Primary Beneficiaries" value={values.primaryBeneficiaries} />
           <TextBlock
-            label="Women Opportunities — Details"
-            value={values.womenOpportunitiesDescription}
+            label="Contribution to Infrastructure Gap"
+            value={values.infrastructureGapContribution}
           />
-        )}
-      </SectionCard>
+          {values.createsWomenOpportunities && (
+            <TextBlock
+              label="Women Opportunities — Details"
+              value={values.womenOpportunitiesDescription}
+            />
+          )}
+        </SectionCard>
+      )}
 
       {/* ── Section 6: Support Needs ─────────────────────────────────────── */}
-      <SectionCard step={5} icon={Handshake} title="Support Needs & Programme Fit">
-        <F label="Funding Required" value={values.fundingRequired} />
-        <F label="Expected Timeline" value={values.expectedTimeline} />
-        <F label="Support Areas Needed" value={values.supportAreasNeeded} wide />
-        <F label="Other Support Area" value={values.otherSupportArea} />
-        <TextBlock label="Main Challenges" value={values.mainChallenges} />
-        <TextBlock label="Key Activities for Next Stage" value={values.keyActivitiesForNextStage} />
-      </SectionCard>
+      {!hiddenStepIds.includes(5) && (
+        <SectionCard step={5} icon={Handshake} title="Support Needs & Programme Fit">
+          <F label="Funding Required" value={values.fundingRequired} />
+          <F label="Expected Timeline" value={values.expectedTimeline} />
+          <F label="Support Areas Needed" value={values.supportAreasNeeded} wide />
+          <F label="Other Support Area" value={values.otherSupportArea} />
+          <TextBlock label="Main Challenges" value={values.mainChallenges} />
+          <TextBlock label="Key Activities for Next Stage" value={values.keyActivitiesForNextStage} />
+        </SectionCard>
+      )}
 
       {/* ── Section 7: Founder Commitment ───────────────────────────────── */}
       <SectionCard step={6} icon={HelpCircle} title="Founder Commitment">
@@ -3198,7 +3306,10 @@ function PreviewSection({
           label="Importance of Peer Mentorship"
           value={values.peerMentorshipImportance}
         />
-        <TextBlock label="Why AFÁRA is Right for You" value={values.whyAfaraIsRight} />
+        <TextBlock
+          label={isDorewaLite ? "Value of DOREWA to You & Your Business" : "Why AFÁRA is Right for You"}
+          value={values.whyAfaraIsRight}
+        />
       </SectionCard>
     </div>
   );
