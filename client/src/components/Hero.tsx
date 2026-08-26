@@ -26,8 +26,13 @@ export function Hero() {
             AFÁRÁ is a business accelerator supporting female-owned and led African companies in the Energy and Infrastructure space. From feasibility to funding, we bridge the gap.
           </p>
           <div className="flex flex-wrap gap-4">
+            <Link href="/cohorts">
+              <Button size="lg" data-testid="button-apply-hero">
+                Apply to a Cohort
+              </Button>
+            </Link>
             <Link href="/program">
-              <Button size="lg" data-testid="button-explore-program">
+              <Button size="lg" variant="outline" className="backdrop-blur-sm bg-white/10 text-white border-white/30 hover:bg-white/20" data-testid="button-explore-program">
                 Explore Program
               </Button>
             </Link>

@@ -231,9 +231,9 @@ export default function Home() {
             Join a community of ambitious women infrapreneurs transforming Africa's energy and infrastructure landscape. Access training, mentorship, and funding opportunities.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
-            <Link href="/apply">
+            <Link href="/cohorts">
               <Button size="lg" data-testid="button-apply-now">
-                Apply Now
+                View Open Cohorts
               </Button>
             </Link>
             <Link href="/lms/dashboard">
