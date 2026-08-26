@@ -1,0 +1,388 @@
+Create a reusable COHORT architecture within the existing AFARA AFRICA ACCELERATOR platform.
+
+IMPORTANT CONTEXT
+
+AFARA AFRICA ACCELERATOR is the organisation and master accelerator brand.
+
+We are NOT creating a separate organisation or separate accelerator platform for DOREWA.
+
+We are introducing a reusable cohort structure that allows the Afara Africa Accelerator to run multiple recurring cohorts under one organisation.
+
+The initial structure should support two cohort types:
+
+1. AFARA CORE COHORT
+2. DOREWA COHORT
+
+Both should use the existing AFARA platform, backend, application infrastructure and core design system.
+
+Do not rebuild the existing platform.
+Do not create a separate DOREWA application system.
+Do not duplicate the backend.
+Do not break or alter the existing AFARA functionality unnecessarily.
+
+--------------------------------------------------
+COHORT STRUCTURE
+--------------------------------------------------
+
+AFARA AFRICA ACCELERATOR
+Organisation / Master Brand
+
+    ├── AFARA CORE COHORT
+    │
+    └── DOREWA COHORT
+         Sponsored by the Kingdom of the Netherlands
+
+These cohorts are recurring.
+
+The current cohorts should simply be:
+
+AFARA CORE COHORT
+DOREWA COHORT
+
+When subsequent editions are created, they can become:
+
+AFARA CORE 2.0
+DOREWA 2.0
+
+Then:
+
+AFARA CORE 3.0
+DOREWA 3.0
+
+The version number should NOT be hard-coded into the initial cohort structure.
+
+Build the system so cohort versions can be added later without changing the underlying architecture.
+
+--------------------------------------------------
+COHORT DATA MODEL
+--------------------------------------------------
+
+Create a reusable Cohort entity/configuration.
+
+Each cohort should be able to contain:
+
+- Cohort name
+- Cohort display name
+- Cohort version
+- Cohort type
+- Status
+- Year
+- Sponsor/partner
+- Geography
+- Sector/theme
+- Description
+- Logo
+- Hero image
+- Brand/content settings
+- Application opening date
+- Application closing date
+- Programme start date
+- Programme end date
+- Application configuration
+- Eligibility criteria
+- Application questions
+- Applicants
+- Selected participants
+- Cohort-specific programme information
+
+The system must allow future cohorts to be created from the same structure.
+
+--------------------------------------------------
+COHORT TYPES
+--------------------------------------------------
+
+Initially support:
+
+CORE COHORT
+
+and
+
+SPONSORED COHORT
+
+AFARA CORE COHORT should represent Afara's primary/core accelerator cohort.
+
+DOREWA COHORT should be configured as a SPONSORED COHORT.
+
+DOREWA configuration:
+
+Name:
+DOREWA
+
+Type:
+Sponsored Cohort
+
+Parent organisation:
+AFARA AFRICA ACCELERATOR
+
+Sponsor:
+Kingdom of the Netherlands
+
+Geography:
+Nigeria
+
+Sector:
+Agriculture + Renewable Energy
+
+The DOREWA Terms of Reference should remain the source for DOREWA-specific programme and eligibility information.
+
+--------------------------------------------------
+FRONTEND STRUCTURE
+--------------------------------------------------
+
+Add a COHORTS area to the existing AFARA AFRICA ACCELERATOR website.
+
+Do not redesign the existing website.
+
+The current AFARA design system remains the master design system.
+
+Use the existing:
+
+- AFARA colours
+- AFARA fonts
+- Typography
+- UI components
+- Buttons
+- Navigation
+- Layout system
+- Forms
+- Responsive behaviour
+
+AFARA visibility must remain strong across all cohort experiences.
+
+Each cohort can have a distinct logo, name and content, but should still clearly sit within the AFARA AFRICA ACCELERATOR ecosystem.
+
+For example:
+
+AFARA AFRICA ACCELERATOR
+
+Cohorts
+
+AFARA CORE COHORT
+[View Cohort]
+
+DOREWA COHORT
+[View Cohort]
+
+--------------------------------------------------
+DOREWA BRANDING
+--------------------------------------------------
+
+DOREWA should have its own logo and programme name.
+
+However, do NOT create an entirely separate visual identity system for DOREWA.
+
+DOREWA should inherit the AFARA design system, including:
+
+- Colours
+- Fonts
+- Typography
+- UI components
+- General layout
+- Interaction patterns
+
+The DOREWA logo and programme-specific imagery/content can distinguish the cohort.
+
+The visual hierarchy should make the relationship clear:
+
+DOREWA
+
+The Women-Led Agri-Energy Cohort
+
+An AFARA Africa Accelerator Cohort
+
+In collaboration with the Kingdom of the Netherlands
+
+AFARA should remain visibly present.
+
+--------------------------------------------------
+APPLICATION SYSTEM
+--------------------------------------------------
+
+Extend the EXISTING AFARA application system to support cohorts.
+
+Do not create separate application infrastructure for each cohort.
+
+The application system should determine the cohort from the application route/configuration.
+
+For example:
+
+/apply/core
+
+/apply/dorewa
+
+Both routes should use the same application engine.
+
+The application experience should inherit the existing AFARA application UX, including:
+
+- Multi-step application
+- Progress indicator
+- Validation
+- Save and return
+- Draft applications
+- Submission
+- Confirmation
+- Applicant status
+- Responsive behaviour
+
+The questions and eligibility criteria can vary by cohort through configuration.
+
+For DOREWA, use the DOREWA Terms of Reference as the source for the cohort-specific application requirements.
+
+--------------------------------------------------
+BACKEND / ADMIN
+--------------------------------------------------
+
+Extend the existing admin system with cohort management.
+
+Administrators should be able to:
+
+- Create a cohort
+- Edit a cohort
+- Duplicate a cohort
+- Set cohort status
+- Assign a sponsor
+- Set cohort year
+- Set cohort version
+- Set geography
+- Set sector/theme
+- Set application dates
+- Configure application questions
+- Configure eligibility criteria
+- View applications by cohort
+- Filter applications by cohort
+- View selected participants by cohort
+- Export cohort-specific data
+- Manage cohort content
+
+A future sponsored cohort should be creatable without rebuilding the application.
+
+For example:
+
+AFARA AFRICA ACCELERATOR
+→ Sponsored Cohort
+→ Partner: [Future Partner]
+→ Geography: Ghana
+→ Sector: [Future Sector]
+
+--------------------------------------------------
+DATABASE / APPLICATION RELATIONSHIP
+--------------------------------------------------
+
+Applications should belong to a cohort.
+
+The underlying relationship should be:
+
+AFARA AFRICA ACCELERATOR
+        ↓
+COHORT
+        ↓
+APPLICATION
+        ↓
+APPLICANT
+
+Each application must store its cohort association.
+
+For example:
+
+Organisation:
+AFARA AFRICA ACCELERATOR
+
+Cohort:
+DOREWA
+
+Cohort Type:
+Sponsored
+
+Sponsor:
+Kingdom of the Netherlands
+
+Year:
+2026
+
+This should allow administrators to view AFARA applications across the entire platform while also filtering and reporting by individual cohort.
+
+--------------------------------------------------
+RECURRING COHORTS
+--------------------------------------------------
+
+The architecture must support recurring cohorts without creating new systems.
+
+For example:
+
+AFARA CORE COHORT
+AFARA CORE 2.0
+AFARA CORE 3.0
+
+and:
+
+DOREWA COHORT
+DOREWA 2.0
+DOREWA 3.0
+
+Each edition should have its own:
+
+- Applications
+- Applicants
+- Selection
+- Participants
+- Dates
+- Programme content
+- Sponsor information where applicable
+- Results/data
+
+while retaining the same parent cohort identity.
+
+--------------------------------------------------
+BRAND ARCHITECTURE
+--------------------------------------------------
+
+The hierarchy must remain:
+
+AFARA AFRICA ACCELERATOR
+        ↓
+COHORT
+        ↓
+COHORT-SPECIFIC IDENTITY
+
+AFARA is the master organisation and accelerator brand.
+
+AFARA CORE COHORT is the primary/core cohort.
+
+DOREWA is a sponsored cohort.
+
+DOREWA must not be represented as a separate organisation or separate accelerator platform.
+
+The system should make the following statement true:
+
+"DOREWA is a sponsored cohort of the AFARA Africa Accelerator, delivered in collaboration with the Kingdom of the Netherlands."
+
+--------------------------------------------------
+IMPORTANT IMPLEMENTATION PRINCIPLE
+--------------------------------------------------
+
+Build the COHORT SYSTEM, not a DOREWA system.
+
+The purpose of this work is to make AFARA AFRICA ACCELERATOR capable of running multiple recurring core and sponsored cohorts using one shared:
+
+- Website
+- Application system
+- Backend
+- Database
+- Admin system
+- Design system
+- Applicant management system
+
+while allowing each cohort to have its own:
+
+- Name
+- Logo
+- Sponsor
+- Geography
+- Sector
+- Content
+- Eligibility
+- Application questions
+- Participants
+- Programme information
+
+Preserve all existing AFARA functionality and avoid unnecessary structural changes.
