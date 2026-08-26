@@ -163,11 +163,14 @@ export interface IStorage {
   getAllApplicationEvaluations(): Promise<ApplicationEvaluation[]>;
 
   getCohort(id: string): Promise<Cohort | undefined>;
+  getCohortBySlug(slug: string): Promise<Cohort | undefined>;
   getOpenCohort(): Promise<Cohort | undefined>;
+  getOpenCohorts(): Promise<Cohort[]>;
   getAllCohorts(): Promise<Cohort[]>;
   createCohort(data: InsertCohort): Promise<Cohort>;
   updateCohort(id: string, data: Partial<InsertCohort>): Promise<Cohort | undefined>;
-  setOpenCohort(id: string | null): Promise<void>;
+  duplicateCohort(id: string, overrides: Partial<InsertCohort>): Promise<Cohort | undefined>;
+  setOpenCohort(id: string, open: boolean): Promise<Cohort | undefined>;
   deleteCohort(id: string): Promise<void>;
   assignApplicationToCohort(applicationId: string, cohortId: string | null): Promise<void>;
 
@@ -806,9 +809,18 @@ export class DatabaseStorage implements IStorage {
     return cohort;
   }
 
+  async getCohortBySlug(slug: string): Promise<Cohort | undefined> {
+    const [cohort] = await db.select().from(cohorts).where(eq(cohorts.slug, slug));
+    return cohort;
+  }
+
   async getOpenCohort(): Promise<Cohort | undefined> {
     const [cohort] = await db.select().from(cohorts).where(eq(cohorts.isOpen, true));
     return cohort;
+  }
+
+  async getOpenCohorts(): Promise<Cohort[]> {
+    return db.select().from(cohorts).where(eq(cohorts.isOpen, true)).orderBy(desc(cohorts.createdAt));
   }
 
   async getAllCohorts(): Promise<Cohort[]> {
@@ -816,24 +828,63 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCohort(data: InsertCohort): Promise<Cohort> {
-    const [cohort] = await db.insert(cohorts).values({ ...data, id: randomUUID() }).returning();
+    // Keep isActive/isOpen booleans in sync with the richer `status` field
+    const status = data.status ?? "draft";
+    const [cohort] = await db.insert(cohorts).values({
+      ...data,
+      id: randomUUID(),
+      status,
+      isOpen: status === "open",
+      isActive: status !== "archived",
+    }).returning();
     return cohort;
   }
 
   async updateCohort(id: string, data: Partial<InsertCohort>): Promise<Cohort | undefined> {
-    const [cohort] = await db.update(cohorts).set(data).where(eq(cohorts.id, id)).returning();
+    const patch: Partial<InsertCohort> = { ...data };
+    // Whenever status changes, derive the legacy boolean flags from it so every
+    // existing isOpen/isActive read (analytics, reports, applicant assignment) stays correct.
+    if (patch.status) {
+      patch.isOpen = patch.status === "open";
+      patch.isActive = patch.status !== "archived";
+    }
+    const [cohort] = await db.update(cohorts).set(patch).where(eq(cohorts.id, id)).returning();
     return cohort;
   }
 
-  async setOpenCohort(id: string | null): Promise<void> {
-    await db.update(cohorts).set({ isOpen: false });
-    if (id) {
-      await db.update(cohorts).set({ isOpen: true }).where(eq(cohorts.id, id));
-    }
+  async duplicateCohort(id: string, overrides: Partial<InsertCohort>): Promise<Cohort | undefined> {
+    const source = await this.getCohort(id);
+    if (!source) return undefined;
+    const { id: _id, createdAt: _createdAt, ...rest } = source;
+    const [cohort] = await db.insert(cohorts).values({
+      ...rest,
+      ...overrides,
+      id: randomUUID(),
+      status: "draft",
+      isOpen: false,
+      isActive: true,
+    }).returning();
+    return cohort;
+  }
+
+  async setOpenCohort(id: string, open: boolean): Promise<Cohort | undefined> {
+    // Cohorts open/close independently — multiple cohorts (e.g. Core and Dorewa)
+    // can accept applications at the same time.
+    const [cohort] = await db.update(cohorts)
+      .set({ isOpen: open, status: open ? "open" : "closed" })
+      .where(eq(cohorts.id, id))
+      .returning();
+    return cohort;
   }
 
   async deleteCohort(id: string): Promise<void> {
-    await db.delete(cohorts).where(eq(cohorts.id, id));
+    // Unassign applications first — the FK has no ON DELETE action, and the
+    // admin UI promises assigned applications become unassigned, not that
+    // deletion is blocked or cascades.
+    await db.transaction(async (tx) => {
+      await tx.update(applications).set({ cohortId: null }).where(eq(applications.cohortId, id));
+      await tx.delete(cohorts).where(eq(cohorts.id, id));
+    });
   }
 
   async assignApplicationToCohort(applicationId: string, cohortId: string | null): Promise<void> {

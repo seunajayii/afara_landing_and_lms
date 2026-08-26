@@ -9,7 +9,7 @@ import {
   insertMentorshipRequestSchema, insertMentorshipSessionSchema,
   insertEventSchema, insertEventRegistrationSchema, insertResourceSchema,
   insertDiscussionThreadSchema, insertDiscussionPostSchema, insertCertificateSchema,
-  insertNotificationSchema, insertApplicationSchema
+  insertNotificationSchema, insertApplicationSchema, insertCohortSchema
 } from "@shared/schema";
 import { z } from "zod";
 import { randomUUID } from "crypto";
@@ -1663,9 +1663,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/applications", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const status = req.query.status as string;
-      const allApplications = status 
+      let allApplications = status 
         ? await storage.getApplicationsByStatus(status)
         : await storage.getAllApplications();
+      const cohortId = req.query.cohortId as string | undefined;
+      if (cohortId) {
+        allApplications = allApplications.filter((a) => a.cohortId === cohortId);
+      }
       res.json(allApplications);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch applications" });
@@ -1752,10 +1756,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Auto-assign to the currently open cohort
-      const openCohort = await storage.getOpenCohort();
-      if (openCohort) {
-        (data as any).cohortId = openCohort.id;
+      // Auto-assign to the currently open cohort. Only do this when exactly one
+      // cohort is open — with concurrent open cohorts (e.g. Core + Dorewa) this
+      // generic endpoint has no way to know which one the applicant intends, so
+      // it leaves the application unassigned for manual admin assignment rather
+      // than guessing. The slug-based /apply/:slug flow (public cohort pages)
+      // is the deterministic replacement for this endpoint going forward.
+      const openCohorts = await storage.getOpenCohorts();
+      if (openCohorts.length === 1) {
+        (data as any).cohortId = openCohorts[0].id;
       }
 
       const application = await storage.createApplication(data);
@@ -2212,12 +2221,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin: open or close a cohort (only one open at a time)
+  // Admin: open or close a cohort. Cohorts open/close independently — multiple
+  // cohorts (e.g. AFARA CORE and DOREWA) can be open for applications at once.
   app.post("/api/admin/cohorts/:id/set-open", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const { open } = req.body;
-      await storage.setOpenCohort(open ? req.params.id : null);
-      const cohort = await storage.getCohort(req.params.id);
+      const cohort = await storage.setOpenCohort(req.params.id, !!open);
+      if (!cohort) return res.status(404).json({ error: "Cohort not found" });
       res.json(cohort);
     } catch {
       res.status(500).json({ error: "Failed to update cohort open status" });
@@ -2234,11 +2244,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  function slugify(input: string): string {
+    return input
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-+|-+$)/g, "");
+  }
+
+  const cohortDateFields = ["applicationOpenAt", "applicationCloseAt", "programStartAt", "programEndAt"] as const;
+
+  function coerceCohortBody(body: Record<string, unknown>): Record<string, unknown> {
+    const out: Record<string, unknown> = { ...body };
+    if (typeof out.year === "string" && out.year.trim() !== "") out.year = Number(out.year);
+    if (out.year === "") out.year = undefined;
+    for (const field of cohortDateFields) {
+      const val = out[field];
+      if (typeof val === "string" && val.trim() !== "") out[field] = new Date(val);
+      else if (val === "" || val === null) out[field] = null;
+    }
+    return out;
+  }
+
   app.post("/api/admin/cohorts", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
-      const { name, description, year, isActive } = req.body;
-      if (!name) return res.status(400).json({ error: "name is required" });
-      const cohort = await storage.createCohort({ name, description, year: year ? Number(year) : undefined, isActive: isActive ?? true });
+      const body = coerceCohortBody(req.body);
+      if (!body.slug && typeof body.name === "string") {
+        body.slug = slugify(body.name);
+      }
+      const parsed = insertCohortSchema.safeParse(body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0]?.message || "Invalid cohort data" });
+      }
+      const existing = await storage.getCohortBySlug(parsed.data.slug);
+      if (existing) {
+        return res.status(409).json({ error: `A cohort with slug "${parsed.data.slug}" already exists` });
+      }
+      const cohort = await storage.createCohort(parsed.data);
       res.status(201).json(cohort);
     } catch (error) {
       res.status(500).json({ error: "Failed to create cohort" });
@@ -2247,11 +2289,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/admin/cohorts/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
-      const cohort = await storage.updateCohort(req.params.id, req.body);
+      const body = coerceCohortBody(req.body);
+      const parsed = insertCohortSchema.partial().safeParse(body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0]?.message || "Invalid cohort data" });
+      }
+      if (parsed.data.slug) {
+        const existing = await storage.getCohortBySlug(parsed.data.slug);
+        if (existing && existing.id !== req.params.id) {
+          return res.status(409).json({ error: `A cohort with slug "${parsed.data.slug}" already exists` });
+        }
+      }
+      const cohort = await storage.updateCohort(req.params.id, parsed.data);
       if (!cohort) return res.status(404).json({ error: "Cohort not found" });
       res.json(cohort);
     } catch (error) {
       res.status(500).json({ error: "Failed to update cohort" });
+    }
+  });
+
+  // Duplicate a cohort into a new edition (e.g. "DOREWA" -> "DOREWA 2.0")
+  app.post("/api/admin/cohorts/:id/duplicate", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const body = coerceCohortBody(req.body || {});
+      const overrides: Record<string, unknown> = { ...body };
+      if (!overrides.slug && typeof overrides.name === "string") {
+        overrides.slug = slugify(overrides.name as string);
+      }
+      const parsedOverrides = insertCohortSchema.partial().safeParse(overrides);
+      if (!parsedOverrides.success) {
+        return res.status(400).json({ error: parsedOverrides.error.issues[0]?.message || "Invalid cohort data" });
+      }
+      if (!parsedOverrides.data.slug) {
+        return res.status(400).json({ error: "A new slug is required to duplicate a cohort" });
+      }
+      const slugTaken = await storage.getCohortBySlug(parsedOverrides.data.slug);
+      if (slugTaken) {
+        return res.status(409).json({ error: `A cohort with slug "${parsedOverrides.data.slug}" already exists` });
+      }
+      const cohort = await storage.duplicateCohort(req.params.id, parsedOverrides.data);
+      if (!cohort) return res.status(404).json({ error: "Cohort not found" });
+      res.status(201).json(cohort);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to duplicate cohort" });
     }
   });
 

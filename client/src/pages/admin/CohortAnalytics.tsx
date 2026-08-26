@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -22,7 +21,6 @@ import {
   RefreshCw,
   Plus,
   PlayCircle,
-  X,
   FolderOpen,
   Download,
   ListFilter,
@@ -273,9 +271,6 @@ export default function CohortAnalytics() {
   const [selectedCohortId, setSelectedCohortId] = useState<string | null>(null);
   const [narrative, setNarrative] = useState<string | null>(null);
   const [isGeneratingNarrative, setIsGeneratingNarrative] = useState(false);
-  const [showCreateCohort, setShowCreateCohort] = useState(false);
-  const [newCohortName, setNewCohortName] = useState("");
-  const [newCohortYear, setNewCohortYear] = useState("");
 
   const analyticsKey = ["/api/admin/cohort-analytics", selectedCohortId ?? "all"];
 
@@ -299,43 +294,6 @@ export default function CohortAnalytics() {
   const evalAppIds = new Set(evaluations.map((e) => e.applicationId));
   const submittedApps = applications.filter((a) => a.status !== "draft");
   const unevaluatedCount = submittedApps.filter((a) => !evalAppIds.has(a.id)).length;
-
-  const createCohortMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/admin/cohorts", {
-        name: newCohortName.trim(),
-        year: newCohortYear ? parseInt(newCohortYear) : undefined,
-      });
-      if (!res.ok) throw new Error("Failed to create cohort");
-      return res.json();
-    },
-    onSuccess: (cohort: Cohort) => {
-      qc.invalidateQueries({ queryKey: ["/api/admin/cohort-analytics"] });
-      setShowCreateCohort(false);
-      setNewCohortName("");
-      setNewCohortYear("");
-      setSelectedCohortId(cohort.id);
-      setNarrative(null);
-      toast({ title: `Cohort "${cohort.name}" created` });
-    },
-    onError: () => toast({ title: "Failed to create cohort", variant: "destructive" }),
-  });
-
-  const deleteCohortMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await apiRequest("DELETE", `/api/admin/cohorts/${id}`);
-      if (!res.ok) throw new Error("Failed to delete cohort");
-    },
-    onSuccess: (_, id) => {
-      if (selectedCohortId === id) {
-        setSelectedCohortId(null);
-        setNarrative(null);
-      }
-      qc.invalidateQueries({ queryKey: ["/api/admin/cohort-analytics"] });
-      toast({ title: "Cohort deleted" });
-    },
-    onError: () => toast({ title: "Failed to delete cohort", variant: "destructive" }),
-  });
 
   const toggleOpenMutation = useMutation({
     mutationFn: async ({ id, open }: { id: string; open: boolean }) => {
@@ -510,11 +468,17 @@ export default function CohortAnalytics() {
 
           {/* Cohort selector */}
           <Card>
-            <CardHeader className="pb-2">
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <FolderOpen className="h-4 w-4 text-primary" />
                 Cohorts
               </CardTitle>
+              <a href="/admin/cohorts">
+                <Button size="sm" variant="outline" className="gap-1.5" data-testid="link-manage-cohorts">
+                  <Plus className="h-3.5 w-3.5" />
+                  Manage Cohorts
+                </Button>
+              </a>
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap items-center gap-2">
@@ -540,7 +504,7 @@ export default function CohortAnalytics() {
                         ? <LockOpen className="h-3 w-3 text-green-600" />
                         : <LockKeyhole className="h-3 w-3 opacity-40" />
                       }
-                      {c.name}
+                      {c.displayName || c.name}
                       {c.year && <span className="opacity-60 text-xs">{c.year}</span>}
                     </Button>
                     <Button
@@ -557,79 +521,13 @@ export default function CohortAnalytics() {
                         : <LockOpen className="h-3 w-3 text-green-600" />
                       }
                     </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-muted-foreground"
-                      onClick={() => {
-                        if (window.confirm(`Delete cohort "${c.name}"? Applications in this cohort will become unassigned.`)) {
-                          deleteCohortMutation.mutate(c.id);
-                        }
-                      }}
-                      disabled={deleteCohortMutation.isPending}
-                      data-testid={`button-delete-cohort-${c.id}`}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
                   </div>
                 ))}
-
-                {showCreateCohort ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Input
-                      placeholder="Cohort name (e.g. Cohort 1)"
-                      value={newCohortName}
-                      onChange={(e) => setNewCohortName(e.target.value)}
-                      className="h-8 text-sm w-44"
-                      autoFocus
-                      data-testid="input-cohort-name"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && newCohortName.trim()) createCohortMutation.mutate();
-                        if (e.key === "Escape") setShowCreateCohort(false);
-                      }}
-                    />
-                    <Input
-                      placeholder="Year"
-                      value={newCohortYear}
-                      onChange={(e) => setNewCohortYear(e.target.value)}
-                      className="h-8 text-sm w-20"
-                      type="number"
-                      data-testid="input-cohort-year"
-                    />
-                    <Button
-                      size="sm"
-                      disabled={!newCohortName.trim() || createCohortMutation.isPending}
-                      onClick={() => createCohortMutation.mutate()}
-                      data-testid="button-save-cohort"
-                    >
-                      {createCohortMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      className="h-8 w-8"
-                      onClick={() => { setShowCreateCohort(false); setNewCohortName(""); setNewCohortYear(""); }}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setShowCreateCohort(true)}
-                    className="gap-1.5"
-                    data-testid="button-new-cohort"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    New Cohort
-                  </Button>
-                )}
               </div>
 
-              {cohorts.length === 0 && !showCreateCohort && (
+              {cohorts.length === 0 && (
                 <p className="text-xs text-muted-foreground mt-3">
-                  Create cohorts to organise applications by intake cycle (e.g. "Cohort 1 2024"). Assign applications from the Applications table.
+                  No cohorts yet. Use "Manage Cohorts" to create AFARA's recurring cohorts (e.g. AFARA CORE, DOREWA).
                 </p>
               )}
             </CardContent>

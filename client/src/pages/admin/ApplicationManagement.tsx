@@ -77,6 +77,7 @@ import {
   AlertCircle,
   LockOpen,
   LockKeyhole,
+  FolderOpen,
 } from "lucide-react";
 import type { Application, ApplicationEvaluation, Cohort } from "@shared/schema";
 import { format } from "date-fns";
@@ -789,6 +790,7 @@ export default function ApplicationManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [langFilter, setLangFilter] = useState("all");
+  const [cohortFilter, setCohortFilter] = useState("all");
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
@@ -881,7 +883,7 @@ export default function ApplicationManagement() {
     onError: () => toast({ title: "Failed to update cohort status", variant: "destructive" }),
   });
 
-  const openCohort = cohortsData.find((c) => c.isOpen) ?? null;
+  const openCohorts = cohortsData.filter((c) => c.isOpen);
 
   const filteredApplications = applications.filter((app) => {
     const matchesSearch =
@@ -899,9 +901,14 @@ export default function ApplicationManagement() {
       (langFilter === "non-en" && appLang !== "en") ||
       langFilter === appLang;
 
-    if (activeTab === "all") return matchesSearch && matchesLang;
-    if (activeTab === "pending") return matchesSearch && matchesLang && (app.status === "submitted" || app.status === "under_review");
-    return matchesSearch && matchesLang && app.status === activeTab;
+    const matchesCohort =
+      cohortFilter === "all" ||
+      (cohortFilter === "unassigned" && !app.cohortId) ||
+      app.cohortId === cohortFilter;
+
+    if (activeTab === "all") return matchesSearch && matchesLang && matchesCohort;
+    if (activeTab === "pending") return matchesSearch && matchesLang && matchesCohort && (app.status === "submitted" || app.status === "under_review");
+    return matchesSearch && matchesLang && matchesCohort && app.status === activeTab;
   });
 
   const stats = {
@@ -941,66 +948,46 @@ export default function ApplicationManagement() {
               <p className="text-muted-foreground mt-1">Review and manage program applications</p>
             </div>
 
-            {/* Cohort open/close control */}
+            {/* Cohort open/close control — cohorts can be open concurrently */}
             {cohortsData.length > 0 && (
               <div
-                className={`flex items-center gap-3 rounded-md border px-4 py-2.5 text-sm ${
-                  openCohort
+                className={`flex flex-col gap-2 rounded-md border px-4 py-2.5 text-sm ${
+                  openCohorts.length > 0
                     ? "border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30"
                     : "border-muted-foreground/20 bg-muted/40"
                 }`}
                 data-testid="banner-cohort-status"
               >
                 <div className="flex items-center gap-2">
-                  {openCohort
+                  {openCohorts.length > 0
                     ? <LockOpen className="h-4 w-4 text-green-600 flex-shrink-0" />
                     : <LockKeyhole className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                   }
-                  <div>
-                    <span className={`font-medium ${openCohort ? "text-green-800 dark:text-green-300" : "text-foreground"}`}>
-                      {openCohort ? `Applications open — ${openCohort.name}` : "Applications closed"}
-                    </span>
-                    {!openCohort && cohortsData.length > 0 && (
-                      <span className="text-muted-foreground ml-1">— select a cohort to open below</span>
-                    )}
-                  </div>
+                  <span className={`font-medium ${openCohorts.length > 0 ? "text-green-800 dark:text-green-300" : "text-foreground"}`}>
+                    {openCohorts.length > 0
+                      ? `Applications open — ${openCohorts.map((c) => c.displayName || c.name).join(", ")}`
+                      : "Applications closed"}
+                  </span>
                 </div>
-                {openCohort ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5 flex-shrink-0"
-                    disabled={toggleOpenMutation.isPending}
-                    onClick={() => toggleOpenMutation.mutate({ id: openCohort.id, open: false })}
-                    data-testid="button-close-applications"
-                  >
-                    {toggleOpenMutation.isPending
-                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      : <LockKeyhole className="h-3.5 w-3.5" />
-                    }
-                    Close Applications
-                  </Button>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5 flex-shrink-0">
-                    {cohortsData.map((c) => (
-                      <Button
-                        key={c.id}
-                        size="sm"
-                        variant="outline"
-                        className="gap-1.5"
-                        disabled={toggleOpenMutation.isPending}
-                        onClick={() => toggleOpenMutation.mutate({ id: c.id, open: true })}
-                        data-testid={`button-open-cohort-${c.id}`}
-                      >
-                        {toggleOpenMutation.isPending
-                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          : <LockOpen className="h-3.5 w-3.5" />
-                        }
-                        Open {c.name}
-                      </Button>
-                    ))}
-                  </div>
-                )}
+                <div className="flex flex-wrap gap-1.5">
+                  {cohortsData.map((c) => (
+                    <Button
+                      key={c.id}
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5"
+                      disabled={toggleOpenMutation.isPending}
+                      onClick={() => toggleOpenMutation.mutate({ id: c.id, open: !c.isOpen })}
+                      data-testid={c.isOpen ? `button-close-cohort-${c.id}` : `button-open-cohort-${c.id}`}
+                    >
+                      {toggleOpenMutation.isPending
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : c.isOpen ? <LockKeyhole className="h-3.5 w-3.5 text-amber-600" /> : <LockOpen className="h-3.5 w-3.5 text-green-600" />
+                      }
+                      {c.isOpen ? `Close ${c.displayName || c.name}` : `Open ${c.displayName || c.name}`}
+                    </Button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -1085,6 +1072,21 @@ export default function ApplicationManagement() {
                       <SelectItem value="ar">Arabic</SelectItem>
                     </SelectContent>
                   </Select>
+                  {cohortsData.length > 0 && (
+                    <Select value={cohortFilter} onValueChange={setCohortFilter}>
+                      <SelectTrigger className="w-44 gap-1" data-testid="select-cohort-filter">
+                        <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                        <SelectValue placeholder="Cohort" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All cohorts</SelectItem>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
+                        {cohortsData.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.displayName || c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               </div>
             </CardHeader>

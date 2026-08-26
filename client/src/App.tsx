@@ -31,6 +31,7 @@ import ApplicationManagement from "@/pages/admin/ApplicationManagement";
 import EventManagement from "@/pages/admin/EventManagement";
 import NewsletterManagement from "@/pages/admin/NewsletterManagement";
 import CohortAnalytics from "@/pages/admin/CohortAnalytics";
+import CohortManagement from "@/pages/admin/CohortManagement";
 import CohortReport from "@/pages/admin/CohortReport";
 import Apply from "@/pages/Apply";
 import Profile from "@/pages/lms/Profile";
@@ -138,6 +139,7 @@ function Router() {
       <Route path="/admin/events">{() => <AdminProtectedRoute component={EventManagement} />}</Route>
       <Route path="/admin/newsletter">{() => <AdminProtectedRoute component={NewsletterManagement} />}</Route>
       <Route path="/admin/cohort-analytics">{() => <AdminProtectedRoute component={CohortAnalytics} />}</Route>
+      <Route path="/admin/cohorts">{() => <AdminProtectedRoute component={CohortManagement} />}</Route>
       <Route path="/admin/cohort-report">{() => <AdminProtectedRoute component={CohortReport} />}</Route>
       
       <Route component={NotFound} />

@@ -15,3 +15,10 @@ All cohort routes (`/api/admin/cohorts*`, `/api/admin/applications/:id/cohort`, 
 
 ## Batch eval
 `POST /api/admin/cohort-analytics/evaluate-all` uses `p-limit(3)` concurrency. Only evaluates apps with non-draft statuses. Accepts optional `{ cohortId }` body to scope to a cohort.
+
+## Concurrent open cohorts is an intentional product decision
+Multiple cohorts (e.g. AFARA CORE and DOREWA) can be open for applications at the same time — AFARA runs several recurring, independently-scheduled cohorts under one platform, not a single global intake.
+
+**Why:** Reflects the real product model; the old "opening one cohort auto-closes all others" behavior didn't fit it.
+
+**How to apply:** Because of this, any endpoint that auto-assigns an application to "the" open cohort is ambiguous once more than one cohort is open — check current code for how each such endpoint resolves that ambiguity (e.g. requiring an explicit cohort/slug, or refusing to guess) rather than assuming a single global open cohort still exists.

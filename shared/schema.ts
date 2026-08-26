@@ -12,6 +12,8 @@ export const eventTypeEnum = pgEnum("event_type", ["webinar", "workshop", "live_
 export const resourceTypeEnum = pgEnum("resource_type", ["document", "template", "toolkit", "guide", "resource_partner"]);
 export const contentStatusEnum = pgEnum("content_status", ["draft", "pending_review", "published", "archived"]);
 export const visibilityEnum = pgEnum("content_visibility", ["public", "community", "cohort_only"]);
+export const cohortTypeEnum = pgEnum("cohort_type", ["core", "sponsored"]);
+export const cohortStatusEnum = pgEnum("cohort_status", ["draft", "open", "closed", "archived"]);
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -303,9 +305,33 @@ export const newsletterCampaigns = pgTable("newsletter_campaigns", {
 
 export const cohorts = pgTable("cohorts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  // Identity
   name: text("name").notNull(),
+  displayName: text("display_name"),
+  slug: text("slug").notNull().unique(),
+  version: text("version"),
+  seriesKey: text("series_key"),
+  cohortType: cohortTypeEnum("cohort_type").notNull().default("core"),
+  status: cohortStatusEnum("status").notNull().default("draft"),
+  // Descriptive / partnership content
   description: text("description"),
+  tagline: text("tagline"),
+  partnershipNote: text("partnership_note"),
+  sponsor: text("sponsor"),
+  geography: text("geography"),
+  sector: text("sector"),
   year: integer("year"),
+  // Branding
+  logoUrl: text("logo_url"),
+  heroImageUrl: text("hero_image_url"),
+  // Eligibility / application configuration (shared question set for now)
+  eligibilityCriteria: text("eligibility_criteria"),
+  // Dates
+  applicationOpenAt: timestamp("application_open_at"),
+  applicationCloseAt: timestamp("application_close_at"),
+  programStartAt: timestamp("program_start_at"),
+  programEndAt: timestamp("program_end_at"),
+  // Status flags kept for backward compatibility; kept in sync with `status`
   isActive: boolean("is_active").notNull().default(true),
   isOpen: boolean("is_open").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -528,6 +554,15 @@ export type Application = typeof applications.$inferSelect;
 export type InsertApplicationEvaluation = z.infer<typeof insertApplicationEvaluationSchema>;
 export type ApplicationEvaluation = typeof applicationEvaluations.$inferSelect;
 
-export const insertCohortSchema = createInsertSchema(cohorts).omit({ id: true, createdAt: true });
+export const insertCohortSchema = createInsertSchema(cohorts)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    slug: z
+      .string()
+      .trim()
+      .min(1, "Slug is required")
+      .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Slug must be lowercase letters, numbers, and hyphens only"),
+    name: z.string().trim().min(1, "Name is required"),
+  });
 export type InsertCohort = z.infer<typeof insertCohortSchema>;
 export type Cohort = typeof cohorts.$inferSelect;
