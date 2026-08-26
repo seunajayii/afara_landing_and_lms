@@ -59,6 +59,17 @@ export async function runSchemaMigrations() {
         ADD COLUMN IF NOT EXISTS program_start_at TIMESTAMP,
         ADD COLUMN IF NOT EXISTS program_end_at TIMESTAMP
     `);
+    // Per-cohort custom application questions (admin-defined) and the
+    // applicant's answers to them. Both default to an empty JSON value so
+    // existing rows (and cohorts with no custom questions) are unaffected.
+    await db.execute(sql`
+      ALTER TABLE cohorts
+        ADD COLUMN IF NOT EXISTS extra_questions JSONB NOT NULL DEFAULT '[]'::jsonb
+    `);
+    await db.execute(sql`
+      ALTER TABLE applications
+        ADD COLUMN IF NOT EXISTS extra_answers JSONB NOT NULL DEFAULT '{}'::jsonb
+    `);
     log("Schema migrations applied successfully");
 
     // Data migration: backfill slugs/status for pre-existing cohorts, seed the two

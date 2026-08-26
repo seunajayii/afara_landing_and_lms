@@ -1,7 +1,36 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, boolean, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, timestamp, pgEnum, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// Cohort-specific extra application questions (e.g. DOREWA-only questions),
+// configured by admins per cohort and rendered as an extra step at the end
+// of that cohort's application form. A cohort with none defined (the
+// default) leaves the application form completely unchanged.
+export const extraQuestionTypeEnum = ["short_text", "long_text", "single_select", "yes_no"] as const;
+export const extraQuestionSchema = z
+  .object({
+    id: z.string().min(1),
+    label: z.string().trim().min(1, "Question label is required"),
+    type: z.enum(extraQuestionTypeEnum),
+    required: z.boolean().default(false),
+    options: z.array(z.string().trim().min(1)).optional(),
+  })
+  .superRefine((q, ctx) => {
+    if (q.type === "single_select" && (q.options ?? []).length < 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["options"],
+        message: "A single-select question needs at least 2 options",
+      });
+    }
+  });
+export type ExtraQuestion = z.infer<typeof extraQuestionSchema>;
+export const extraQuestionsListSchema = z.array(extraQuestionSchema).default([]);
+
+// Applicant answers to a cohort's extra questions, keyed by question id.
+export const extraAnswersSchema = z.record(z.union([z.string(), z.boolean()])).default({});
+export type ExtraAnswers = z.infer<typeof extraAnswersSchema>;
 
 export const userRoleEnum = pgEnum("user_role", ["participant", "mentor", "facilitator", "admin", "superadmin", "community_member"]);
 export const lessonTypeEnum = pgEnum("lesson_type", ["video", "text", "quiz", "downloadable"]);
@@ -329,6 +358,10 @@ export const cohorts = pgTable("cohorts", {
   heroImageUrl: text("hero_image_url"),
   // Eligibility / application configuration (shared question set for now)
   eligibilityCriteria: text("eligibility_criteria"),
+  // Cohort-specific extra application questions, appended as an extra step
+  // at the end of the application form. Empty array (the default) means the
+  // form is unchanged from the shared default.
+  extraQuestions: jsonb("extra_questions").$type<ExtraQuestion[]>().notNull().default([]),
   // Dates
   applicationOpenAt: timestamp("application_open_at"),
   applicationCloseAt: timestamp("application_close_at"),
@@ -437,6 +470,9 @@ export const applications = pgTable("applications", {
   // Final Question
   whyAfaraIsRight: text("why_afara_is_right"),
   
+  // Answers to the cohort's extra questions (if any), keyed by question id.
+  extraAnswers: jsonb("extra_answers").$type<ExtraAnswers>().notNull().default({}),
+  
   // Legacy fields for backwards compatibility
   linkedinUrl: text("linkedin_url"),
   additionalInfo: text("additional_info"),
@@ -507,6 +543,8 @@ export const insertApplicationSchema = createInsertSchema(applications).omit({
   reviewedById: true,
   reviewNotes: true,
   resumeToken: true,
+}).extend({
+  extraAnswers: extraAnswersSchema.optional(),
 });
 export const insertApplicationEvaluationSchema = createInsertSchema(applicationEvaluations).omit({ id: true, evaluatedAt: true });
 
@@ -566,6 +604,7 @@ export const insertCohortSchema = createInsertSchema(cohorts)
       .min(1, "Slug is required")
       .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Slug must be lowercase letters, numbers, and hyphens only"),
     name: z.string().trim().min(1, "Name is required"),
+    extraQuestions: extraQuestionsListSchema.optional(),
   });
 export type InsertCohort = z.infer<typeof insertCohortSchema>;
 export type Cohort = typeof cohorts.$inferSelect;

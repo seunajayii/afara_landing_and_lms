@@ -66,6 +66,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import type { ExtraQuestion } from "@shared/schema";
 
 const COUNTRIES = [
   "Afghanistan","Albania","Algeria","Angola","Argentina","Armenia","Australia","Austria","Azerbaijan",
@@ -313,7 +314,19 @@ type PublicCohort = {
   isOpen: boolean;
   tagline: string | null;
   sponsor: string | null;
+  extraQuestions?: ExtraQuestion[];
 };
+
+// Synthetic step id for a cohort's extra questions, inserted just before the
+// Preview step (id 7) whenever the cohort has any defined. Kept out of the
+// fixed 0-7 range used by the shared step components below.
+const EXTRA_QUESTIONS_STEP_ID = 8;
+
+function hasExtraAnswer(value: string | boolean | undefined): boolean {
+  if (value === undefined) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  return true;
+}
 
 const getStoredToken = (email: string): string | null => {
   try { return localStorage.getItem(`afara_draft_token:${email.toLowerCase().trim()}`); } catch { return null; }
@@ -359,7 +372,30 @@ export default function Apply() {
   // AFARA CORE form (and any other cohort) is completely unaffected.
   const isDorewaLite = cohort?.slug === "dorewa";
   const hiddenStepIds = isDorewaLite ? [3, 4, 5] : [];
-  const visibleSteps = steps.filter((s) => !hiddenStepIds.includes(s.id));
+  const extraQuestions: ExtraQuestion[] = cohort?.extraQuestions ?? [];
+  const hasExtraQuestions = extraQuestions.length > 0;
+  const [extraAnswers, setExtraAnswers] = useState<Record<string, string | boolean>>({});
+  const updateExtraAnswer = (id: string, value: string | boolean) =>
+    setExtraAnswers((prev) => ({ ...prev, [id]: value }));
+  let visibleSteps = steps.filter((s) => !hiddenStepIds.includes(s.id));
+  if (hasExtraQuestions) {
+    const extraStep = {
+      id: EXTRA_QUESTIONS_STEP_ID,
+      title: "Additional Questions",
+      description: `${cohortLabel}-specific questions`,
+      icon: HelpCircle,
+    };
+    const previewIndex = visibleSteps.findIndex((s) => s.id === 7);
+    visibleSteps = [
+      ...visibleSteps.slice(0, previewIndex),
+      extraStep,
+      ...visibleSteps.slice(previewIndex),
+    ];
+  }
+  const activeStep =
+    visibleSteps.find((s) => s.id === currentStep) ??
+    steps.find((s) => s.id === currentStep) ??
+    steps[0];
   const [draftLookupError, setDraftLookupError] = useState("");
   const [draftNeedsEmailLink, setDraftNeedsEmailLink] = useState(false);
   const [statusEmail, setStatusEmail] = useState("");
@@ -462,7 +498,7 @@ export default function Apply() {
   });
 
   const saveDraftMutation = useMutation({
-    mutationFn: async (data: ApplicationFormData & { currentStep: number }) => {
+    mutationFn: async (data: ApplicationFormData & { currentStep: number; extraAnswers?: Record<string, string | boolean> }) => {
       const cleanedData = Object.fromEntries(
         Object.entries(data).map(([key, value]) => [
           key,
@@ -508,7 +544,7 @@ export default function Apply() {
   });
 
   const submitMutation = useMutation({
-    mutationFn: async (data: ApplicationFormData) => {
+    mutationFn: async (data: ApplicationFormData & { extraAnswers?: Record<string, string | boolean> }) => {
       const cleanedData = Object.fromEntries(
         Object.entries(data).map(([key, value]) => [
           key,
@@ -565,7 +601,7 @@ export default function Apply() {
 
   const handleSaveDraft = () => {
     const data = form.getValues();
-    saveDraftMutation.mutate({ ...data, currentStep });
+    saveDraftMutation.mutate({ ...data, currentStep, extraAnswers });
   };
 
   const checkForDraft = async (email: string) => {
@@ -670,8 +706,14 @@ export default function Apply() {
       whyAfaraIsRight: d.whyAfaraIsRight || "",
       linkedinUrl: d.linkedinUrl || "",
     });
+    setExtraAnswers(d.extraAnswers && typeof d.extraAnswers === "object" ? d.extraAnswers : {});
     setDraftId(d.id);
-    if (typeof d.currentStep === "number" && d.currentStep > 0 && d.currentStep < 7) {
+    if (
+      typeof d.currentStep === "number" &&
+      d.currentStep > 0 &&
+      d.currentStep !== 7 &&
+      visibleSteps.some((s) => s.id === d.currentStep)
+    ) {
       setCurrentStep(d.currentStep);
     }
     setShowResumeDialog(false);
@@ -757,34 +799,41 @@ export default function Apply() {
   };
 
   const handleNext = () => {
-    if (currentStep < 7) {
-      let nextStep = currentStep + 1;
-      while (hiddenStepIds.includes(nextStep) && nextStep < 7) {
-        nextStep += 1;
-      }
+    const idx = visibleSteps.findIndex((s) => s.id === currentStep);
+    if (idx >= 0 && idx < visibleSteps.length - 1) {
+      const nextStep = visibleSteps[idx + 1].id;
       setCurrentStep(nextStep);
       window.scrollTo(0, 0);
       const data = form.getValues();
       if (data.email && data.firstName && data.lastName) {
-        saveDraftMutation.mutate({ ...data, currentStep: nextStep });
+        saveDraftMutation.mutate({ ...data, currentStep: nextStep, extraAnswers });
       }
     }
   };
 
   const handlePrevious = () => {
-    if (currentStep > 0) {
-      let prevStep = currentStep - 1;
-      while (hiddenStepIds.includes(prevStep) && prevStep > 0) {
-        prevStep -= 1;
-      }
-      setCurrentStep(prevStep);
+    const idx = visibleSteps.findIndex((s) => s.id === currentStep);
+    if (idx > 0) {
+      setCurrentStep(visibleSteps[idx - 1].id);
       window.scrollTo(0, 0);
     }
   };
 
   const handleSubmit = () => {
+    const missingRequired = extraQuestions.filter(
+      (q) => q.required && !hasExtraAnswer(extraAnswers[q.id]),
+    );
+    if (missingRequired.length > 0) {
+      toast({
+        title: "Missing required answers",
+        description: `Please answer: ${missingRequired.map((q) => q.label).join(", ")}`,
+        variant: "destructive",
+      });
+      setCurrentStep(EXTRA_QUESTIONS_STEP_ID);
+      return;
+    }
     form.handleSubmit((data) => {
-      submitMutation.mutate(data);
+      submitMutation.mutate({ ...data, extraAnswers });
     })();
   };
 
@@ -1096,6 +1145,14 @@ export default function Apply() {
         return <SupportSection form={form} />;
       case 6:
         return <CommitmentSection form={form} isDorewaLite={isDorewaLite} />;
+      case EXTRA_QUESTIONS_STEP_ID:
+        return (
+          <ExtraQuestionsSection
+            questions={extraQuestions}
+            answers={extraAnswers}
+            onChange={updateExtraAnswer}
+          />
+        );
       case 7:
         return (
           <PreviewSection
@@ -1103,6 +1160,8 @@ export default function Apply() {
             onEditSection={setCurrentStep}
             hiddenStepIds={hiddenStepIds}
             isDorewaLite={isDorewaLite}
+            extraQuestions={extraQuestions}
+            extraAnswers={extraAnswers}
           />
         );
       default:
@@ -1132,7 +1191,7 @@ export default function Apply() {
           <div className="mb-6">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium">
-                Step {currentVisibleIndex + 1} of {visibleSteps.length}: {steps[currentStep].title}
+                Step {currentVisibleIndex + 1} of {visibleSteps.length}: {activeStep.title}
               </span>
               {lastSaved && (
                 <span className="text-xs text-muted-foreground">
@@ -1147,7 +1206,8 @@ export default function Apply() {
             {visibleSteps.map((step) => {
               const Icon = step.icon;
               const isActive = step.id === currentStep;
-              const isCompleted = step.id < currentStep;
+              const stepIndex = visibleSteps.findIndex((s) => s.id === step.id);
+              const isCompleted = stepIndex < currentVisibleIndex;
               
               return (
                 <button
@@ -1175,10 +1235,10 @@ export default function Apply() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    {(() => { const Icon = steps[currentStep].icon; return <Icon className="w-5 h-5" />; })()}
-                    {steps[currentStep].title}
+                    {(() => { const Icon = activeStep.icon; return <Icon className="w-5 h-5" />; })()}
+                    {activeStep.title}
                   </CardTitle>
-                  <CardDescription>{steps[currentStep].description}</CardDescription>
+                  <CardDescription>{activeStep.description}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   {renderStepContent()}
@@ -2979,16 +3039,98 @@ function CommitmentSection({
   );
 }
 
+// Renders a cohort's custom extra questions (short text, long text, single
+// select, yes/no) and collects answers into a plain id -> value map that
+// lives outside the fixed react-hook-form schema.
+function ExtraQuestionsSection({
+  questions,
+  answers,
+  onChange,
+}: {
+  questions: ExtraQuestion[];
+  answers: Record<string, string | boolean>;
+  onChange: (id: string, value: string | boolean) => void;
+}) {
+  if (questions.length === 0) return null;
+  return (
+    <div className="space-y-6">
+      {questions.map((q) => (
+        <div key={q.id} className="space-y-2">
+          <Label htmlFor={`extra-${q.id}`}>
+            {q.label}
+            {q.required && <span className="text-destructive ml-0.5">*</span>}
+          </Label>
+          {q.type === "short_text" && (
+            <Input
+              id={`extra-${q.id}`}
+              value={(answers[q.id] as string) || ""}
+              onChange={(e) => onChange(q.id, e.target.value)}
+              data-testid={`input-extra-${q.id}`}
+            />
+          )}
+          {q.type === "long_text" && (
+            <Textarea
+              id={`extra-${q.id}`}
+              className="min-h-[120px]"
+              value={(answers[q.id] as string) || ""}
+              onChange={(e) => onChange(q.id, e.target.value)}
+              data-testid={`input-extra-${q.id}`}
+            />
+          )}
+          {q.type === "single_select" && (
+            <Select
+              value={(answers[q.id] as string) || undefined}
+              onValueChange={(v) => onChange(q.id, v)}
+            >
+              <SelectTrigger id={`extra-${q.id}`} data-testid={`select-extra-${q.id}`}>
+                <SelectValue placeholder="Select an option" />
+              </SelectTrigger>
+              <SelectContent>
+                {(q.options || []).map((opt) => (
+                  <SelectItem key={opt} value={opt}>
+                    {opt}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {q.type === "yes_no" && (
+            <RadioGroup
+              value={answers[q.id] === true ? "yes" : answers[q.id] === false ? "no" : ""}
+              onValueChange={(v) => onChange(q.id, v === "yes")}
+              className="flex gap-6"
+              data-testid={`radiogroup-extra-${q.id}`}
+            >
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="yes" id={`extra-${q.id}-yes`} />
+                <Label htmlFor={`extra-${q.id}-yes`} className="font-normal">Yes</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="no" id={`extra-${q.id}-no`} />
+                <Label htmlFor={`extra-${q.id}-no`} className="font-normal">No</Label>
+              </div>
+            </RadioGroup>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PreviewSection({
   form,
   onEditSection,
   hiddenStepIds = [],
   isDorewaLite = false,
+  extraQuestions = [],
+  extraAnswers = {},
 }: {
   form: ReturnType<typeof useForm<ApplicationFormData>>;
   onEditSection: (step: number) => void;
   hiddenStepIds?: number[];
   isDorewaLite?: boolean;
+  extraQuestions?: ExtraQuestion[];
+  extraAnswers?: Record<string, string | boolean>;
 }) {
   const values = form.getValues();
 
@@ -3311,6 +3453,27 @@ function PreviewSection({
           value={values.whyAfaraIsRight}
         />
       </SectionCard>
+
+      {/* ── Section 8: Additional Questions (cohort-specific) ───────────── */}
+      {extraQuestions.length > 0 && (
+        <SectionCard step={EXTRA_QUESTIONS_STEP_ID} icon={HelpCircle} title="Additional Questions">
+          {extraQuestions.map((q) =>
+            q.type === "long_text" ? (
+              <TextBlock key={q.id} label={q.label} value={(extraAnswers[q.id] as string) || ""} />
+            ) : (
+              <F
+                key={q.id}
+                label={q.label}
+                value={
+                  q.type === "yes_no"
+                    ? (extraAnswers[q.id] as boolean | undefined)
+                    : (extraAnswers[q.id] as string | undefined)
+                }
+              />
+            ),
+          )}
+        </SectionCard>
+      )}
     </div>
   );
 }

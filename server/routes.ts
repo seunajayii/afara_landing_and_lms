@@ -10,6 +10,7 @@ import {
   insertEventSchema, insertEventRegistrationSchema, insertResourceSchema,
   insertDiscussionThreadSchema, insertDiscussionPostSchema, insertCertificateSchema,
   insertNotificationSchema, insertApplicationSchema, insertCohortSchema,
+  extraAnswersSchema,
   type Cohort
 } from "@shared/schema";
 import { z } from "zod";
@@ -1783,6 +1784,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      if (data.status === "submitted") {
+        const validationError = validateExtraAnswers(resolvedCohort, (data as any).extraAnswers);
+        if (validationError) {
+          return res.status(400).json({ error: validationError });
+        }
+      }
+
       const application = await storage.createApplication(data);
       const cohortEmailInfo = resolvedCohort
         ? { name: resolvedCohort.displayName || resolvedCohort.name, sponsor: resolvedCohort.sponsor, partnershipNote: resolvedCohort.partnershipNote }
@@ -1854,7 +1862,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "specificProgramOutcomes","hoursPerWeek","openToMentorship",
     "canCommitToProgram","canAttendLagosEvent","commitmentManagementPlan",
     "willingToMentor","peerMentorshipImportance",
-    "whyAfaraIsRight","linkedinUrl","additionalInfo",
+    "whyAfaraIsRight","linkedinUrl","additionalInfo","extraAnswers",
     "currentStep","status","reviewNotes","reviewedById",
     "reviewedAt","updatedAt","submittedAt","lastDraftEmailSentAt",
   ]);
@@ -1887,7 +1895,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "specificProgramOutcomes","hoursPerWeek","openToMentorship",
     "canCommitToProgram","canAttendLagosEvent","commitmentManagementPlan",
     "willingToMentor","peerMentorshipImportance",
-    "whyAfaraIsRight","linkedinUrl","additionalInfo",
+    "whyAfaraIsRight","linkedinUrl","additionalInfo","extraAnswers",
     "currentStep","status",
   ]);
   const YES_NO_BOOLEAN_FIELDS = new Set(["canProvideFinancials","isTaxRegistered"]);
@@ -1919,6 +1927,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         out[key] = new Date(value);
         continue;
       }
+      if (key === "extraAnswers") {
+        out[key] = extraAnswersSchema.parse(value);
+        continue;
+      }
       out[key] = value;
     }
     return out;
@@ -1932,6 +1944,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (YES_NO_BOOLEAN_FIELDS.has(key)) {
         if (value === "yes") { out[key] = true; continue; }
         if (value === "no")  { out[key] = false; continue; }
+      }
+      if (key === "extraAnswers") {
+        // Reject malformed shapes here (e.g. a non-object, or values that
+        // aren't string/boolean) rather than letting them reach storage.
+        out[key] = extraAnswersSchema.parse(value);
+        continue;
       }
       out[key] = value;
     }
@@ -1993,6 +2011,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Set submittedAt server-side when transitioning to submitted
       if (newStatus === "submitted") {
         (updatePayload as Record<string, unknown>).submittedAt = new Date();
+        const applicantCohort = existing.cohortId ? await storage.getCohort(existing.cohortId) : undefined;
+        const finalExtraAnswers = (updatePayload as Record<string, unknown>).extraAnswers ?? existing.extraAnswers;
+        const validationError = validateExtraAnswers(applicantCohort, finalExtraAnswers as Record<string, unknown>);
+        if (validationError) {
+          return res.status(400).json({ error: validationError });
+        }
       }
       const application = await storage.updateApplication(req.params.id, updatePayload);
       if (!application) return res.status(404).json({ error: "Application not found" });
@@ -2033,6 +2057,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(application);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
       console.error("Error in PATCH /api/applications/:id/save:", error);
       res.status(500).json({ error: "Failed to update application" });
     }
@@ -2277,7 +2304,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       applicationCloseAt: cohort.applicationCloseAt,
       programStartAt: cohort.programStartAt,
       programEndAt: cohort.programEndAt,
+      extraQuestions: cohort.extraQuestions ?? [],
     };
+  }
+
+  // Validate an applicant's extra-question answers against a cohort's extra
+  // question definitions before allowing a final ("submitted") save. Checks
+  // both that every required question is answered AND, for any answer that
+  // is present, that it matches the question's type (and — for single_select
+  // — one of its configured options), so a malformed direct API payload
+  // can't be persisted as a "submitted" application.
+  function validateExtraAnswers(cohort: Cohort | undefined, extraAnswers: Record<string, unknown> | undefined | null): string | null {
+    const questions = cohort?.extraQuestions ?? [];
+    if (questions.length === 0) return null;
+    const answers = extraAnswers && typeof extraAnswers === "object" ? extraAnswers : {};
+    for (const q of questions) {
+      const value = (answers as Record<string, unknown>)[q.id];
+      const isMissing =
+        value === undefined || value === null || (typeof value === "string" && value.trim() === "");
+      if (isMissing) {
+        if (q.required) return `Please answer the required question: "${q.label}"`;
+        continue;
+      }
+      if (q.type === "yes_no") {
+        if (typeof value !== "boolean") {
+          return `Invalid answer for "${q.label}": expected yes/no`;
+        }
+      } else if (q.type === "single_select") {
+        if (typeof value !== "string" || !(q.options ?? []).includes(value)) {
+          return `Invalid answer for "${q.label}": must be one of the provided options`;
+        }
+      } else {
+        // short_text / long_text
+        if (typeof value !== "string") {
+          return `Invalid answer for "${q.label}": expected text`;
+        }
+      }
+    }
+    return null;
   }
 
   // Public: list cohorts for the public "Our Cohorts" page. Drafts (not yet

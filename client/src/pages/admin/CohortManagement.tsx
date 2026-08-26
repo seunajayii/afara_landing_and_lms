@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Link } from "wouter";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -54,13 +55,15 @@ import {
   Copy,
   Trash2,
   ArrowLeft,
+  ArrowUp,
+  ArrowDown,
   LockOpen,
   LockKeyhole,
   Loader2,
   FolderOpen,
   Mail,
 } from "lucide-react";
-import type { Cohort } from "@shared/schema";
+import type { Cohort, ExtraQuestion } from "@shared/schema";
 
 const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
   draft: { label: "Draft", variant: "outline" },
@@ -103,9 +106,36 @@ const cohortFormSchema = z.object({
   applicationCloseAt: z.string().optional(),
   programStartAt: z.string().optional(),
   programEndAt: z.string().optional(),
+  extraQuestions: z
+    .array(
+      z
+        .object({
+          id: z.string().min(1),
+          label: z.string().trim().min(1, "Question text is required"),
+          type: z.enum(["short_text", "long_text", "single_select", "yes_no"]),
+          required: z.boolean(),
+          options: z.array(z.string()).optional(),
+        })
+        .superRefine((q, ctx) => {
+          if (q.type === "single_select" && (q.options ?? []).filter((o) => o.trim()).length < 2) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["options"],
+              message: "Add at least 2 options for a single-select question",
+            });
+          }
+        }),
+    )
+    .default([]),
 });
 
 type CohortFormValues = z.infer<typeof cohortFormSchema>;
+
+function newExtraQuestionId(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `q-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 function toDateInputValue(value: string | Date | null | undefined): string {
   if (!value) return "";
@@ -136,6 +166,7 @@ function defaultFormValues(cohort?: Cohort): CohortFormValues {
     applicationCloseAt: toDateInputValue(cohort?.applicationCloseAt as any),
     programStartAt: toDateInputValue(cohort?.programStartAt as any),
     programEndAt: toDateInputValue(cohort?.programEndAt as any),
+    extraQuestions: (cohort?.extraQuestions as ExtraQuestion[] | undefined) ?? [],
   };
 }
 
@@ -158,6 +189,10 @@ function buildPayload(values: CohortFormValues): Record<string, unknown> {
     applicationCloseAt: values.applicationCloseAt || null,
     programStartAt: values.programStartAt || null,
     programEndAt: values.programEndAt || null,
+    extraQuestions: (values.extraQuestions || []).map((q) => ({
+      ...q,
+      options: q.type === "single_select" ? (q.options || []).filter(Boolean) : undefined,
+    })),
   };
 }
 
@@ -414,6 +449,151 @@ function CohortFormFields({ form, isEdit }: { form: ReturnType<typeof useForm<Co
           </FormItem>
         )}
       />
+      <ExtraQuestionsEditor form={form} />
+    </div>
+  );
+}
+
+// Repeatable list editor for a cohort's custom application questions. These
+// render as an extra step near the end of this cohort's public application
+// form; a cohort with no questions leaves the form completely unchanged.
+function ExtraQuestionsEditor({ form }: { form: ReturnType<typeof useForm<CohortFormValues>> }) {
+  const { fields, append, remove, move } = useFieldArray({ control: form.control, name: "extraQuestions" });
+
+  return (
+    <div className="sm:col-span-2 space-y-3 border-t pt-4 mt-1">
+      <div className="flex items-center justify-between">
+        <FormLabel className="text-base">Custom application questions</FormLabel>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            append({ id: newExtraQuestionId(), label: "", type: "short_text", required: false, options: [] })
+          }
+          data-testid="button-add-extra-question"
+        >
+          <Plus className="h-3.5 w-3.5 mr-1" /> Add question
+        </Button>
+      </div>
+      <FormDescription>
+        Optional, cohort-specific questions shown as an extra step near the end of this cohort's application
+        form. Leave empty to keep the standard AFÁRA application form unchanged.
+      </FormDescription>
+      {fields.length === 0 && (
+        <p className="text-sm text-muted-foreground italic">No custom questions added.</p>
+      )}
+      <div className="space-y-3">
+        {fields.map((field, index) => {
+          const type = form.watch(`extraQuestions.${index}.type`);
+          return (
+            <Card key={field.id} className="p-3 bg-muted/30">
+              <div className="flex items-start gap-2">
+                <div className="flex-1 space-y-2 min-w-0">
+                  <FormField
+                    control={form.control}
+                    name={`extraQuestions.${index}.label`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input {...field} placeholder="Question text" data-testid={`input-extra-question-label-${index}`} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="flex flex-wrap gap-3 items-center">
+                    <FormField
+                      control={form.control}
+                      name={`extraQuestions.${index}.type`}
+                      render={({ field }) => (
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <SelectTrigger className="w-40" data-testid={`select-extra-question-type-${index}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="short_text">Short text</SelectItem>
+                            <SelectItem value="long_text">Long text</SelectItem>
+                            <SelectItem value="single_select">Single select</SelectItem>
+                            <SelectItem value="yes_no">Yes / No</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`extraQuestions.${index}.required`}
+                      render={({ field }) => (
+                        <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            data-testid={`checkbox-extra-question-required-${index}`}
+                          />
+                          Required
+                        </label>
+                      )}
+                    />
+                  </div>
+                  {type === "single_select" && (
+                    <FormField
+                      control={form.control}
+                      name={`extraQuestions.${index}.options`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <Input
+                              placeholder="Option A, Option B, Option C"
+                              value={(field.value || []).join(", ")}
+                              onChange={(e) =>
+                                field.onChange(e.target.value.split(",").map((s) => s.trim()).filter(Boolean))
+                              }
+                              data-testid={`input-extra-question-options-${index}`}
+                            />
+                          </FormControl>
+                          <FormDescription>Comma-separated list of options</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
+                <div className="flex flex-col gap-1 flex-shrink-0">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    disabled={index === 0}
+                    onClick={() => move(index, index - 1)}
+                    data-testid={`button-move-up-extra-question-${index}`}
+                  >
+                    <ArrowUp className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    disabled={index === fields.length - 1}
+                    onClick={() => move(index, index + 1)}
+                    data-testid={`button-move-down-extra-question-${index}`}
+                  >
+                    <ArrowDown className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => remove(index)}
+                    data-testid={`button-remove-extra-question-${index}`}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -469,6 +469,9 @@ function ApplicationPreviewSheet({
 
   if (!app) return null;
   const displayApp = showTranslated && translatedApp ? translatedApp : app;
+  const applicationCohort = cohortsData.find((c) => c.id === app.cohortId);
+  const extraQuestions = applicationCohort?.extraQuestions ?? [];
+  const extraAnswers = (app.extraAnswers as Record<string, string | boolean> | null | undefined) ?? {};
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
@@ -767,6 +770,29 @@ function ApplicationPreviewSheet({
           {app.additionalInfo && (
             <SectionCard icon={FileText} title="Additional Information">
               <LongText value={displayApp.additionalInfo} />
+            </SectionCard>
+          )}
+
+          {/* ── Additional Questions (cohort-specific) ── */}
+          {extraQuestions.length > 0 && (
+            <SectionCard icon={FileText} title="Additional Questions">
+              <Grid2>
+                {extraQuestions.map((q) =>
+                  q.type === "long_text" ? (
+                    <Field key={q.id} label={q.label}>
+                      <LongText value={(extraAnswers[q.id] as string) ?? null} />
+                    </Field>
+                  ) : q.type === "yes_no" ? (
+                    <Field key={q.id} label={q.label}>
+                      <YesNoBadge value={extraAnswers[q.id] as boolean | undefined} />
+                    </Field>
+                  ) : (
+                    <Field key={q.id} label={q.label}>
+                      <FieldValue>{extraAnswers[q.id] as string | undefined}</FieldValue>
+                    </Field>
+                  ),
+                )}
+              </Grid2>
             </SectionCard>
           )}
 
