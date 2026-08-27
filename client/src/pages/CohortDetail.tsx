@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRight, Globe, Layers, Sparkles, Handshake, Target } from "lucide-react";
 import coreHeroBanner from "@assets/AFARA_AA_1787817026358.png";
-import dorewaHeroBanner from "@assets/Copy_of_Presentation_-_DOREWA_1787816454760.png";
+import dorewaHeroBanner from "@assets/Copy_of_Presentation_-_DOREWA_(1)_1787820212303.png";
 
 type PublicCohort = {
   id: string;
