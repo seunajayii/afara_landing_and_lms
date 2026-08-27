@@ -127,6 +127,29 @@ export async function runSchemaMigrations() {
     await db.execute(sql`
       ALTER TABLE lessons ALTER COLUMN status SET DEFAULT 'draft';
     `);
+    // Course visibility defaults to all participants so existing published
+    // courses remain available until an admin explicitly selects cohorts.
+    await db.execute(sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'course_audience') THEN
+          CREATE TYPE course_audience AS ENUM ('all', 'selected');
+        END IF;
+      END
+      $$;
+    `);
+    await db.execute(sql`
+      ALTER TABLE courses
+        ADD COLUMN IF NOT EXISTS audience course_audience NOT NULL DEFAULT 'all'
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS course_cohort_assignments (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        course_id VARCHAR NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+        cohort_id VARCHAR NOT NULL REFERENCES cohorts(id) ON DELETE CASCADE,
+        UNIQUE (course_id, cohort_id)
+      )
+    `);
     log("Schema migrations applied successfully");
 
     // Data migration: backfill slugs/status for pre-existing cohorts, seed the two

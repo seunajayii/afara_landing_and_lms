@@ -2,3 +2,4 @@
 - [YouTube learning materials](youtube-learning-materials.md) — YouTube videos are LMS resources; unlisted embeds are app-gated but not share-proof
 - [Resumable provider uploads](resumable-provider-uploads.md) — dropped responses require opaque server sessions and an authoritative provider status check before retrying a chunk
 - [Private video lifecycle](private-video-lifecycle.md) — save resource changes before best-effort deletion of replaced or removed private objects
+- [Course catalogue access](course-catalogue-access.md) — courses default to all participants; selected-course access follows the learner’s accepted application cohort

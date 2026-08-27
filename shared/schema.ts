@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, boolean, timestamp, pgEnum, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, timestamp, pgEnum, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -43,6 +43,7 @@ export const contentStatusEnum = pgEnum("content_status", ["draft", "pending_rev
 export const visibilityEnum = pgEnum("content_visibility", ["public", "community", "cohort_only"]);
 export const cohortTypeEnum = pgEnum("cohort_type", ["core", "sponsored"]);
 export const cohortStatusEnum = pgEnum("cohort_status", ["draft", "open", "closed", "archived"]);
+export const courseAudienceEnum = pgEnum("course_audience", ["all", "selected"]);
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -109,6 +110,9 @@ export const courses = pgTable("courses", {
   // a different advertised duration without losing the curriculum estimate.
   durationOverrideMinutes: integer("duration_override_minutes"),
   status: contentStatusEnum("status").notNull().default("draft"),
+  // Existing courses default to all participants. Admins can switch this to
+  // selected and assign the course through courseCohortAssignments.
+  audience: courseAudienceEnum("audience").notNull().default("all"),
   category: text("category"),
   level: text("level"),
   prerequisites: text("prerequisites").array(),
@@ -393,6 +397,14 @@ export const cohorts = pgTable("cohorts", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const courseCohortAssignments = pgTable("course_cohort_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  courseId: varchar("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+  cohortId: varchar("cohort_id").notNull().references(() => cohorts.id, { onDelete: "cascade" }),
+}, (table) => ({
+  courseCohortUnique: uniqueIndex("course_cohort_assignments_course_cohort_idx").on(table.courseId, table.cohortId),
+}));
+
 export const applications = pgTable("applications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   
@@ -578,6 +590,7 @@ export type InsertFacilitatorProfile = z.infer<typeof insertFacilitatorProfileSc
 export type FacilitatorProfile = typeof facilitatorProfiles.$inferSelect;
 export type InsertCourse = z.infer<typeof insertCourseSchema>;
 export type Course = typeof courses.$inferSelect;
+export type CourseAudience = "all" | "selected";
 export type InsertModule = z.infer<typeof insertModuleSchema>;
 export type Module = typeof modules.$inferSelect;
 export type InsertLesson = z.infer<typeof insertLessonSchema>;

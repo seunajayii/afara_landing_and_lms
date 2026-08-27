@@ -30,7 +30,7 @@ import {
   discussionThreads, discussionPosts, postLikes,
   certificates, achievements, userAchievements, notifications,
   newsletterSubscribers, newsletterCampaigns,
-  applications, applicationEvaluations, cohorts
+  applications, applicationEvaluations, cohorts, courseCohortAssignments
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, ne, desc, asc, sql, or, inArray } from "drizzle-orm";
@@ -63,6 +63,12 @@ export interface IStorage {
   getCourse(id: string): Promise<Course | undefined>;
   getAllCourses(): Promise<Course[]>;
   getPublishedCourses(): Promise<Course[]>;
+  getCourseCohortIds(courseId: string): Promise<string[]>;
+  setCourseCohorts(courseId: string, cohortIds: string[]): Promise<void>;
+  isCourseAssignedToCohort(courseId: string, cohortId: string): Promise<boolean>;
+  getActiveCohortForUser(userId: string): Promise<Cohort | undefined>;
+  getCoursesForResource(resourceId: string): Promise<Course[]>;
+  getCourseForResource(resourceId: string): Promise<Course | undefined>;
   createCourse(course: InsertCourse): Promise<Course>;
   updateCourse(id: string, data: Partial<InsertCourse>): Promise<Course | undefined>;
   deleteCourse(id: string): Promise<void>;
@@ -362,6 +368,65 @@ export class DatabaseStorage implements IStorage {
 
   async getPublishedCourses(): Promise<Course[]> {
     return db.select().from(courses).where(eq(courses.status, "published")).orderBy(desc(courses.createdAt));
+  }
+
+  async getCourseCohortIds(courseId: string): Promise<string[]> {
+    const assignments = await db.select({ cohortId: courseCohortAssignments.cohortId })
+      .from(courseCohortAssignments)
+      .where(eq(courseCohortAssignments.courseId, courseId));
+    return assignments.map((assignment) => assignment.cohortId);
+  }
+
+  async setCourseCohorts(courseId: string, cohortIds: string[]): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.delete(courseCohortAssignments).where(eq(courseCohortAssignments.courseId, courseId));
+      if (cohortIds.length > 0) {
+        await tx.insert(courseCohortAssignments).values(
+          cohortIds.map((cohortId) => ({ courseId, cohortId })),
+        );
+      }
+    });
+  }
+
+  async isCourseAssignedToCohort(courseId: string, cohortId: string): Promise<boolean> {
+    const [assignment] = await db.select({ id: courseCohortAssignments.id })
+      .from(courseCohortAssignments)
+      .where(and(
+        eq(courseCohortAssignments.courseId, courseId),
+        eq(courseCohortAssignments.cohortId, cohortId),
+      ))
+      .limit(1);
+    return Boolean(assignment);
+  }
+
+  async getActiveCohortForUser(userId: string): Promise<Cohort | undefined> {
+    const user = await this.getUser(userId);
+    if (!user) return undefined;
+    const [result] = await db.select({ cohort: cohorts })
+      .from(applications)
+      .innerJoin(cohorts, eq(applications.cohortId, cohorts.id))
+      .where(and(
+        sql`lower(${applications.email}) = ${user.email.toLowerCase()}`,
+        eq(applications.status, "accepted"),
+      ))
+      .orderBy(sql`coalesce(${applications.updatedAt}, ${applications.createdAt}) DESC`)
+      .limit(1);
+    return result?.cohort;
+  }
+
+  async getCourseForResource(resourceId: string): Promise<Course | undefined> {
+    const results = await this.getCoursesForResource(resourceId);
+    return results[0];
+  }
+
+  async getCoursesForResource(resourceId: string): Promise<Course[]> {
+    const results = await db.select({ course: courses })
+      .from(lessons)
+      .innerJoin(modules, eq(lessons.moduleId, modules.id))
+      .innerJoin(courses, eq(modules.courseId, courses.id))
+      .where(eq(lessons.resourceId, resourceId))
+      .orderBy(desc(courses.createdAt));
+    return results.map((result) => result.course);
   }
 
   async createCourse(course: InsertCourse): Promise<Course> {

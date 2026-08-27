@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,7 +18,7 @@ import {
   ArrowDown, ArrowLeft, ArrowUp, BookOpen, Clock, FileText, GripVertical,
   Link as LinkIcon, Pencil, Plus, Search, Settings2, Trash2, Video,
 } from "lucide-react";
-import type { Course, Lesson, Module, Resource } from "@shared/schema";
+import type { Cohort, Course, Lesson, Module, Resource } from "@shared/schema";
 
 type LessonWithResource = Lesson & { resource?: Resource | null };
 type ModuleWithLessons = Module & { lessons: LessonWithResource[] };
@@ -26,10 +27,14 @@ type CourseWithCurriculum = Course & {
   calculatedDurationMinutes: number;
   moduleCount: number;
   lessonCount: number;
+  cohortIds?: string[];
 };
 
 const categories = ["Business Foundations", "Financial Management", "Leadership", "Marketing & Sales", "Operations", "Legal & Compliance", "Technology & Innovation"];
-const initialCourse = { title: "", shortDescription: "", description: "", category: "Business Foundations", level: "beginner", status: "draft", durationOverrideMinutes: null as number | null };
+const initialCourse = {
+  title: "", shortDescription: "", description: "", category: "Business Foundations", level: "beginner",
+  status: "draft", durationOverrideMinutes: null as number | null, audience: "all" as "all" | "selected", cohortIds: [] as string[],
+};
 
 function formatDuration(minutes: number | null | undefined) {
   if (!minutes) return "Self-paced";
@@ -48,6 +53,9 @@ function statusBadge(status: string | null) {
 }
 
 function CourseFields({ value, onChange, showStatus = true }: { value: typeof initialCourse; onChange: (value: typeof initialCourse) => void; showStatus?: boolean }) {
+  const { data: cohorts, isLoading: cohortsLoading } = useQuery<Cohort[]>({ queryKey: ["/api/admin/cohorts"] });
+  const availableCohorts = cohorts || [];
+
   return (
     <div className="space-y-4">
       <div>
@@ -100,6 +108,48 @@ function CourseFields({ value, onChange, showStatus = true }: { value: typeof in
               </SelectContent>
             </Select>
           </div> : <div className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">New courses are created as drafts. You can publish after adding complete modules and lessons.</div>}
+      </div>
+      <div className="rounded-md border p-4">
+        <Label>Course availability</Label>
+        <p className="mt-1 text-xs text-muted-foreground">Choose which participant cohorts can see this course. Existing courses remain available to everyone by default.</p>
+        <Select
+          value={value.audience}
+          onValueChange={(audience: "all" | "selected") => onChange({
+            ...value,
+            audience,
+            cohortIds: audience === "all" ? [] : value.cohortIds,
+          })}
+        >
+          <SelectTrigger className="mt-3"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All participants</SelectItem>
+            <SelectItem value="selected">Selected cohorts only</SelectItem>
+          </SelectContent>
+        </Select>
+        {value.audience === "selected" && (
+          <div className="mt-4 space-y-3">
+            <p className="text-sm font-medium">Assign to cohorts</p>
+            {cohortsLoading ? <p className="text-sm text-muted-foreground">Loading cohorts…</p> :
+              availableCohorts.length === 0 ? <p className="text-sm text-muted-foreground">Create a cohort before restricting this course.</p> :
+              <div className="grid gap-2 sm:grid-cols-2">
+                {availableCohorts.map((cohort) => (
+                  <label key={cohort.id} className="flex cursor-pointer items-center gap-2 rounded-md border p-3 text-sm">
+                    <Checkbox
+                      checked={value.cohortIds.includes(cohort.id)}
+                      onCheckedChange={(checked) => onChange({
+                        ...value,
+                        cohortIds: checked
+                          ? [...value.cohortIds, cohort.id]
+                          : value.cohortIds.filter((id) => id !== cohort.id),
+                      })}
+                    />
+                    <span>{cohort.displayName || cohort.name}</span>
+                  </label>
+                ))}
+              </div>}
+            {value.cohortIds.length === 0 && <p className="text-xs text-destructive">Select at least one cohort.</p>}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -225,7 +275,7 @@ function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () =
             <p className="mt-1 text-muted-foreground">Build the sequence learners will follow. Resources remain reusable in the resource library.</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => { setSettingsDraft({ title: course.title, shortDescription: course.shortDescription || "", description: course.description || "", category: course.category || categories[0], level: course.level || "beginner", status: course.status || "draft", durationOverrideMinutes: course.durationOverrideMinutes }); setSettingsDialog(true); }}><Settings2 className="mr-2 h-4 w-4" />Course settings</Button>
+             <Button variant="outline" onClick={() => { setSettingsDraft({ title: course.title, shortDescription: course.shortDescription || "", description: course.description || "", category: course.category || categories[0], level: course.level || "beginner", status: course.status || "draft", durationOverrideMinutes: course.durationOverrideMinutes, audience: course.audience || "all", cohortIds: course.cohortIds || [] }); setSettingsDialog(true); }}><Settings2 className="mr-2 h-4 w-4" />Course settings</Button>
             <Button onClick={() => setModuleDialog(true)}><Plus className="mr-2 h-4 w-4" />Add module</Button>
           </div>
         </div>
@@ -295,7 +345,7 @@ function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () =
         </DialogContent>
       </Dialog>
 
-      <Dialog open={settingsDialog} onOpenChange={setSettingsDialog}><DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto"><DialogHeader><DialogTitle>Course settings</DialogTitle><DialogDescription>Courses can only be published when each module has published, playable lessons.</DialogDescription></DialogHeader><CourseFields value={settingsDraft} onChange={setSettingsDraft} /><p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">Calculated curriculum duration: {formatDuration(course.calculatedDurationMinutes)}.</p><DialogFooter><Button variant="outline" onClick={() => setSettingsDialog(false)}>Cancel</Button><Button disabled={!settingsDraft.title.trim() || settingsMutation.isPending} onClick={() => settingsMutation.mutate()}>{settingsMutation.isPending ? "Saving…" : "Save settings"}</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={settingsDialog} onOpenChange={setSettingsDialog}><DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto"><DialogHeader><DialogTitle>Course settings</DialogTitle><DialogDescription>Courses can only be published when each module has published, playable lessons.</DialogDescription></DialogHeader><CourseFields value={settingsDraft} onChange={setSettingsDraft} /><p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">Calculated curriculum duration: {formatDuration(course.calculatedDurationMinutes)}.</p><DialogFooter><Button variant="outline" onClick={() => setSettingsDialog(false)}>Cancel</Button><Button disabled={!settingsDraft.title.trim() || (settingsDraft.audience === "selected" && settingsDraft.cohortIds.length === 0) || settingsMutation.isPending} onClick={() => settingsMutation.mutate()}>{settingsMutation.isPending ? "Saving…" : "Save settings"}</Button></DialogFooter></DialogContent></Dialog>
     </main>
   );
 }
@@ -328,7 +378,7 @@ export default function CourseManagement() {
             filteredCourses.length === 0 ? <Card className="border-dashed py-12 text-center"><CardContent><BookOpen className="mx-auto mb-3 h-10 w-10 text-muted-foreground" /><h2 className="text-lg font-semibold">No courses found</h2><p className="mt-1 text-sm text-muted-foreground">{searchQuery ? "Try a different search." : "Create your first course, then add its curriculum."}</p>{!searchQuery && <Button className="mt-5" onClick={() => setCreateDialog(true)}>Create course</Button>}</CardContent></Card> :
               <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{filteredCourses.map((course) => <Card key={course.id} data-testid={`card-course-${course.id}`}><CardHeader><div className="flex items-start justify-between gap-3">{statusBadge(course.status)}<Button variant="ghost" size="icon" onClick={() => deleteCourse(course)} aria-label="Delete course"><Trash2 className="h-4 w-4 text-destructive" /></Button></div><CardTitle className="mt-2">{course.title}</CardTitle></CardHeader><CardContent><p className="min-h-10 text-sm text-muted-foreground">{course.shortDescription || course.description || "No description yet."}</p><div className="my-4 flex flex-wrap gap-3 text-sm text-muted-foreground"><span className="flex items-center gap-1"><Clock className="h-4 w-4" />{formatDuration(course.durationMinutes)}</span><span className="flex items-center gap-1"><BookOpen className="h-4 w-4" />{course.moduleCount} modules · {course.lessonCount} lessons</span></div><Button className="w-full" variant="outline" onClick={() => setEditorCourseId(course.id)}><Pencil className="mr-2 h-4 w-4" />Edit curriculum</Button></CardContent></Card>)}</div>}
         </div></main>}
-      <Dialog open={createDialog} onOpenChange={setCreateDialog}><DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto"><DialogHeader><DialogTitle>Create a course</DialogTitle><DialogDescription>Courses start as drafts so you can build a complete curriculum before learners see it.</DialogDescription></DialogHeader><CourseFields value={createDraft} onChange={setCreateDraft} showStatus={false} /><DialogFooter><Button variant="outline" onClick={() => setCreateDialog(false)}>Cancel</Button><Button disabled={!createDraft.title.trim() || createCourse.isPending} onClick={() => createCourse.mutate()}>{createCourse.isPending ? "Creating…" : "Create course"}</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={createDialog} onOpenChange={setCreateDialog}><DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto"><DialogHeader><DialogTitle>Create a course</DialogTitle><DialogDescription>Courses start as drafts so you can build a complete curriculum before learners see it.</DialogDescription></DialogHeader><CourseFields value={createDraft} onChange={setCreateDraft} showStatus={false} /><DialogFooter><Button variant="outline" onClick={() => setCreateDialog(false)}>Cancel</Button><Button disabled={!createDraft.title.trim() || (createDraft.audience === "selected" && createDraft.cohortIds.length === 0) || createCourse.isPending} onClick={() => createCourse.mutate()}>{createCourse.isPending ? "Creating…" : "Create course"}</Button></DialogFooter></DialogContent></Dialog>
     </div>
   );
 }

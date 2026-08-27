@@ -38,6 +38,19 @@ const loginSchema = z.object({
   password: z.string().min(6)
 });
 
+const courseAssignmentSchema = z.object({
+  audience: z.enum(["all", "selected"]).default("all"),
+  cohortIds: z.array(z.string().min(1)).default([]),
+}).superRefine((assignment, ctx) => {
+  if (assignment.audience === "selected" && assignment.cohortIds.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["cohortIds"],
+      message: "Select at least one cohort, or make the course available to all participants.",
+    });
+  }
+});
+
 const youtubeVideoResourceSchema = insertResourceSchema.superRefine((resource, ctx) => {
   if (resource.resourceType === "video") {
     const source = resource.videoSource || (resource.youtubeVideoId ? "youtube" : "upload");
@@ -400,7 +413,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const sessionUser = sessionUserId
       ? await storage.getUser(sessionUserId)
       : undefined;
-    return authorizePlayback(resource, sessionUserId, sessionUser);
+    const authorization = authorizePlayback(resource, sessionUserId, sessionUser);
+    if (authorization.status !== 200 || !sessionUserId || isAdminSession(req)) {
+      return authorization;
+    }
+    const courses = await storage.getCoursesForResource(resource.id);
+    if (courses.length > 0 && !(await Promise.all(courses.map((course) => canAccessCourse(req, course)))).some(Boolean)) {
+      return { status: 403 as const, userId: sessionUserId };
+    }
+    return authorization;
   };
 
   app.get("/api/users", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
@@ -763,6 +784,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       moduleCount: modulesWithLessons.length,
       lessonCount,
       modules: modulesWithLessons,
+      ...(admin ? { cohortIds: await storage.getCourseCohortIds(course.id) } : {}),
     };
   };
 
@@ -775,11 +797,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return undefined;
   };
 
+  const canAccessCourse = async (req: Request, course: any): Promise<boolean> => {
+    if (isAdminSession(req) || course.audience !== "selected") return true;
+    if (!req.session.userId) return false;
+    const activeCohort = await storage.getActiveCohortForUser(req.session.userId);
+    return Boolean(activeCohort && await storage.isCourseAssignedToCohort(course.id, activeCohort.id));
+  };
+
+  const canAccessResource = async (req: Request, resource: any): Promise<boolean> => {
+    if (isAdminSession(req)) return true;
+    const courses = await storage.getCoursesForResource(resource.id);
+    return courses.length === 0 || (await Promise.all(courses.map((course) => canAccessCourse(req, course)))).some(Boolean);
+  };
+
+  const validateCourseCohorts = async (cohortIds: string[]): Promise<string | null> => {
+    const uniqueCohortIds = Array.from(new Set(cohortIds));
+    const cohorts = await Promise.all(uniqueCohortIds.map((cohortId) => storage.getCohort(cohortId)));
+    const missing = uniqueCohortIds.filter((_, index) => !cohorts[index]);
+    return missing.length > 0 ? "One or more selected cohorts could not be found." : null;
+  };
+
   app.get("/api/courses", requireAuth, async (req: Request, res: Response) => {
     try {
       const admin = isAdminSession(req);
       const allCourses = admin ? await storage.getAllCourses() : await storage.getPublishedCourses();
-      res.json(await Promise.all(allCourses.map((course) => getCourseResponse(course, admin, req.session.userRole || null))));
+      const visibleCourses = admin
+        ? allCourses
+        : (await Promise.all(allCourses.map(async (course) => (
+          await canAccessCourse(req, course) ? course : null
+        )))).filter((course): course is typeof allCourses[number] => Boolean(course));
+      res.json(await Promise.all(visibleCourses.map((course) => getCourseResponse(course, admin, req.session.userRole || null))));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch courses" });
     }
@@ -790,7 +837,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const course = await storage.getCourse(req.params.id);
       if (!course) return res.status(404).json({ error: "Course not found" });
       const admin = isAdminSession(req);
-      if (!admin && course.status !== "published") return res.status(404).json({ error: "Course not found" });
+      if (!admin && (course.status !== "published" || !(await canAccessCourse(req, course)))) {
+        return res.status(404).json({ error: "Course not found" });
+      }
       res.json(await getCourseResponse(course, admin, req.session.userRole || null));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch course" });
@@ -799,11 +848,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/courses", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
+      const assignment = courseAssignmentSchema.parse(req.body);
       const data = insertCourseSchema.parse(req.body);
       if (data.status === "published") {
         return res.status(400).json({ error: "Create the course as a draft, add its curriculum, then publish it." });
       }
+      const cohortError = await validateCourseCohorts(assignment.cohortIds);
+      if (cohortError) return res.status(400).json({ error: cohortError });
       const course = await storage.createCourse(data);
+      await storage.setCourseCohorts(course.id, assignment.audience === "selected" ? Array.from(new Set(assignment.cohortIds)) : []);
       res.status(201).json(course);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -815,7 +868,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/courses/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
+      const hasAssignmentFields = Object.prototype.hasOwnProperty.call(req.body, "audience")
+        || Object.prototype.hasOwnProperty.call(req.body, "cohortIds");
+      const assignment = hasAssignmentFields ? courseAssignmentSchema.parse(req.body) : null;
       const data = insertCourseSchema.partial().parse(req.body);
+      if (assignment) {
+        const cohortError = await validateCourseCohorts(assignment.cohortIds);
+        if (cohortError) return res.status(400).json({ error: cohortError });
+      }
       if (data.status === "published") {
         const issue = await validateCourseForPublication(req.params.id);
         if (issue) return res.status(400).json({ error: issue });
@@ -825,8 +885,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...(data.status === "published" ? { publishedAt: new Date() } : {}),
       });
       if (!course) return res.status(404).json({ error: "Course not found" });
+      if (assignment) {
+        await storage.setCourseCohorts(course.id, assignment.audience === "selected" ? Array.from(new Set(assignment.cohortIds)) : []);
+      }
       res.json(course);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
       res.status(500).json({ error: "Failed to update course" });
     }
   });
@@ -843,7 +909,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/courses/:courseId/modules", requireAuth, async (req: Request, res: Response) => {
     try {
       const course = await storage.getCourse(req.params.courseId);
-      if (!course || (!isAdminSession(req) && course.status !== "published")) {
+      if (!course || (!isAdminSession(req) && (course.status !== "published" || !(await canAccessCourse(req, course))))) {
         return res.status(404).json({ error: "Course not found" });
       }
       const response = await getCourseResponse(course, isAdminSession(req), req.session.userRole || null);
@@ -901,6 +967,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!parentCourse || parentCourse.status !== "published") {
         return res.status(404).json({ error: "Module not found" });
       }
+      if (!(await canAccessCourse(req, parentCourse))) {
+        return res.status(404).json({ error: "Module not found" });
+      }
       res.json(moduleLessons.filter((lesson) => lesson.status === "published"));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch lessons" });
@@ -912,7 +981,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const lesson = await storage.getLesson(req.params.id);
       if (!lesson) return res.status(404).json({ error: "Lesson not found" });
       const course = await getCourseForLesson(lesson);
-      if (!course || (!isAdminSession(req) && (course.status !== "published" || lesson.status !== "published"))) {
+      if (!course || (!isAdminSession(req) && (course.status !== "published" || lesson.status !== "published" || !(await canAccessCourse(req, course))))) {
         return res.status(404).json({ error: "Lesson not found" });
       }
       res.json(lesson);
@@ -1017,7 +1086,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/progress/me", requireAuth, async (req: Request, res: Response) => {
     try {
-      res.json(await storage.getLessonProgressByUser(req.session.userId!));
+      const progress = await storage.getLessonProgressByUser(req.session.userId!);
+      if (isAdminSession(req)) return res.json(progress);
+      const visibleProgress = (await Promise.all(progress.map(async (entry) => {
+        const lesson = await storage.getLesson(entry.lessonId);
+        const course = lesson ? await getCourseForLesson(lesson) : undefined;
+        return course && await canAccessCourse(req, course) ? entry : null;
+      }))).filter((entry): entry is typeof progress[number] => Boolean(entry));
+      res.json(visibleProgress);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch progress" });
     }
@@ -1029,7 +1105,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Access denied" });
       }
       const progress = await storage.getLessonProgressByUser(req.params.userId);
-      res.json(progress);
+      if (isAdminSession(req)) return res.json(progress);
+      const visibleProgress = (await Promise.all(progress.map(async (entry) => {
+        const lesson = await storage.getLesson(entry.lessonId);
+        const course = lesson ? await getCourseForLesson(lesson) : undefined;
+        return course && await canAccessCourse(req, course) ? entry : null;
+      }))).filter((entry): entry is typeof progress[number] => Boolean(entry));
+      res.json(visibleProgress);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch progress" });
     }
@@ -1045,7 +1127,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const lesson = await storage.getLesson(data.lessonId);
       if (!lesson) return res.status(404).json({ error: "Lesson not found" });
       const course = await getCourseForLesson(lesson);
-      if (!course || course.status !== "published" || lesson.status !== "published") {
+      if (!course || course.status !== "published" || lesson.status !== "published" || !(await canAccessCourse(req, course))) {
         return res.status(404).json({ error: "Lesson not available" });
       }
       const progressData = {
@@ -1309,7 +1391,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : allResources.filter(r =>
             r.status === "published" && canAccessVisibility(r.visibility, userRole)
           );
-      res.json(visibleResources.map(resource => toResourceResponse(resource, isAdminUser)));
+      const accessCheckedResources = isAdminUser
+        ? visibleResources
+        : (await Promise.all(visibleResources.map(async (resource) => (
+          await canAccessResource(req, resource) ? resource : null
+        )))).filter((resource): resource is typeof visibleResources[number] => Boolean(resource));
+      res.json(accessCheckedResources.map(resource => toResourceResponse(resource, isAdminUser)));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch resources" });
     }
@@ -1325,6 +1412,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Resource not found" });
       }
       if (!isAdminUser && !canAccessVisibility(resource.visibility, userRole)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      if (!(await canAccessResource(req, resource))) {
         return res.status(403).json({ error: "Access denied" });
       }
       res.json(toResourceResponse(resource, isAdminUser));
@@ -1794,6 +1884,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (userRole !== "admin" && userRole !== "superadmin") {
         if (!canAccessVisibility(resource.visibility, userRole)) {
           return res.status(403).json({ error: "Access denied: cohort members only" });
+        }
+        if (!(await canAccessResource(req, resource))) {
+          return res.status(403).json({ error: "Access denied" });
         }
       }
       
