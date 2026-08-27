@@ -129,6 +129,8 @@ export interface IStorage {
   incrementResourceDownload(id: string): Promise<void>;
   trackPrivateVideoUpload(storageKey: string, uploadedById: string): Promise<PrivateVideoUpload>;
   claimPrivateVideoUpload(storageKey: string, resourceId: string): Promise<void>;
+  releasePrivateVideoUpload(storageKey: string, resourceId: string): Promise<void>;
+  getPrivateVideoUploads(): Promise<PrivateVideoUpload[]>;
   getExpiredPrivateVideoUploads(cutoff: Date): Promise<PrivateVideoUpload[]>;
   getResourceByVideoStorageKey(storageKey: string): Promise<Resource | undefined>;
   removePrivateVideoUpload(storageKey: string): Promise<void>;
@@ -690,11 +692,27 @@ export class DatabaseStorage implements IStorage {
 
   async claimPrivateVideoUpload(storageKey: string, resourceId: string): Promise<void> {
     await db.update(privateVideoUploads)
-      .set({ resourceId })
+      .set({ resourceId, cleanupRequestedAt: null })
       .where(and(
         eq(privateVideoUploads.storageKey, storageKey),
         isNull(privateVideoUploads.resourceId),
       ));
+  }
+
+  async releasePrivateVideoUpload(storageKey: string, resourceId: string): Promise<void> {
+    await db.update(privateVideoUploads)
+      .set({ resourceId: null, cleanupRequestedAt: new Date() })
+      .where(and(
+        eq(privateVideoUploads.storageKey, storageKey),
+        or(
+          eq(privateVideoUploads.resourceId, resourceId),
+          isNull(privateVideoUploads.resourceId),
+        ),
+      ));
+  }
+
+  async getPrivateVideoUploads(): Promise<PrivateVideoUpload[]> {
+    return db.select().from(privateVideoUploads);
   }
 
   async getExpiredPrivateVideoUploads(cutoff: Date): Promise<PrivateVideoUpload[]> {

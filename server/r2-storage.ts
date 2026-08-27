@@ -135,6 +135,31 @@ export async function listFiles(prefix: string): Promise<string[]> {
   return (response.Contents || []).map(obj => obj.Key!).filter(Boolean);
 }
 
+// Reconciliation must never enumerate or delete objects outside the private
+// video namespace. Keep pagination here so a large bucket does not leave
+// orphaned objects undiscovered after the first provider response.
+export async function listPrivateVideoFiles(): Promise<string[]> {
+  const client = getS3Client();
+  const keys: string[] = [];
+  let continuationToken: string | undefined;
+
+  do {
+    const response = await client.send(new ListObjectsV2Command({
+      Bucket: R2_BUCKET_NAME,
+      Prefix: PRIVATE_VIDEO_KEY_PREFIX,
+      ...(continuationToken ? { ContinuationToken: continuationToken } : {}),
+    }));
+    keys.push(
+      ...(response.Contents || [])
+        .map(object => object.Key)
+        .filter((key): key is string => isPrivateVideoStorageKey(key)),
+    );
+    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  return keys;
+}
+
 export async function downloadFile(key: string): Promise<Buffer> {
   const client = getS3Client();
   

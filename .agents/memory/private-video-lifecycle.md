@@ -7,4 +7,4 @@ Save resource record changes before attempting to delete replaced or removed pri
 
 **Why:** The database record is the authoritative association. Deleting storage first can break playback if the database mutation fails, while a storage outage after a successful mutation only leaves an orphan for later cleanup.
 
-**How to apply:** Restrict lifecycle cleanup to the generated private-video key namespace, log failures without returning provider details, and clean up the old key only after a replacement is saved.
+**How to apply:** Record an explicit cleanup request in the upload ledger before deletion, restrict reconciliation to generated private-video namespace keys that are no longer attached to a resource, log failures without returning provider details, and clean up the old key only after a replacement is saved.

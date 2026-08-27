@@ -95,9 +95,11 @@ async function withResourceRoutes<T>(
     mustChangePassword: false,
   }));
   replace("getExpiredPrivateVideoUploads", async () => []);
+  replace("getPrivateVideoUploads", async () => []);
   replace("getResourceByVideoStorageKey", async () => undefined);
   replace("removePrivateVideoUpload", async () => undefined);
   replace("claimPrivateVideoUpload", async () => undefined);
+  replace("releasePrivateVideoUpload", async () => undefined);
   configureStorage(resource);
 
   const app = express();
@@ -244,4 +246,148 @@ test("cleanup failures are logged without changing the generic API response", as
   assert.match(String(logCalls[0][0]), /Failed to clean up private video/);
   assert.equal(String(logCalls[0][0]).includes(storageFailure), false);
   assert.equal(result.body.includes(storageFailure), false);
+});
+
+test("a transient cleanup failure remains retryable through the admin reconciliation route", async () => {
+  const events: string[] = [];
+  let resource: ResourceRecord;
+  let cleanupEnabled = false;
+  let shouldFailDelete = true;
+  let upload = {
+    id: "private-video-upload-1",
+    storageKey: oldStorageKey,
+    uploadedById: adminId,
+    resourceId: "resource-1",
+    cleanupRequestedAt: null as Date | null,
+    createdAt: new Date("2026-08-25T00:00:00.000Z"),
+  };
+  const result = await withResourceRoutes(
+    {
+      listPrivateVideoFiles: async () => cleanupEnabled ? [oldStorageKey] : [],
+      deletePrivateVideo: async key => {
+        events.push(`delete:${key}`);
+        if (shouldFailDelete) throw new Error("temporary storage outage");
+      },
+      logError: (...args) => {
+        events.push(`log:${String(args[0])}`);
+      },
+    },
+    initialResource => {
+      resource = initialResource;
+      const mutableStorage = storage as unknown as Record<string, StorageMethod>;
+      mutableStorage.getResource = async (id: string) =>
+        id === resource.id ? resource : undefined;
+      mutableStorage.updateResource = async (_id: string, data: Record<string, unknown>) => {
+        events.push("resource-update");
+        resource = { ...resource, ...data } as ResourceRecord;
+        return resource;
+      };
+      mutableStorage.getPrivateVideoUploads = async () => upload ? [upload] : [];
+      mutableStorage.releasePrivateVideoUpload = async (key: string, resourceId: string) => {
+        events.push(`release:${resourceId}`);
+        if (upload.storageKey === key && upload.resourceId === resourceId) {
+          upload = { ...upload, resourceId: null, cleanupRequestedAt: new Date() };
+        }
+      };
+      mutableStorage.removePrivateVideoUpload = async key => {
+        events.push(`remove:${key}`);
+        if (upload.storageKey === key) upload = undefined as never;
+      };
+    },
+    async baseUrl => {
+      const update = await request(
+        baseUrl,
+        "PATCH",
+        "/api/resources/resource-1",
+        { videoStorageKey: newStorageKey },
+      );
+      assert.equal(update.status, 200);
+      assert.equal(upload.resourceId, null);
+
+      cleanupEnabled = true;
+      const failedRetry = await request(
+        baseUrl,
+        "POST",
+        "/api/admin/resources/private-videos/reconcile",
+      );
+      assert.equal(failedRetry.status, 200);
+      assert.deepEqual(JSON.parse(failedRetry.body), {
+        scanned: 1,
+        deletedKeys: [],
+        failedKeys: [oldStorageKey],
+        untrackedKeys: [],
+      });
+      assert.ok(upload);
+
+      shouldFailDelete = false;
+      const successfulRetry = await request(
+        baseUrl,
+        "POST",
+        "/api/admin/resources/private-videos/reconcile",
+      );
+      assert.equal(successfulRetry.status, 200);
+      assert.deepEqual(JSON.parse(successfulRetry.body), {
+        scanned: 1,
+        deletedKeys: [oldStorageKey],
+        failedKeys: [],
+        untrackedKeys: [],
+      });
+      assert.equal(upload, undefined);
+      return { update, failedRetry, successfulRetry };
+    },
+  );
+
+  assert.equal(result.update.status, 200);
+  assert.deepEqual(events, [
+    "resource-update",
+    "release:resource-1",
+    `delete:${oldStorageKey}`,
+    "log:Failed to clean up private video for resource resource-1.",
+    `delete:${oldStorageKey}`,
+    "log:Failed to reconcile private video upload private-video-upload-1.",
+    `delete:${oldStorageKey}`,
+    `remove:${oldStorageKey}`,
+  ]);
+});
+
+test("reconciliation reports only unattached private-video namespace keys", async () => {
+  const privateKey = "private/resources/private-videos/untracked-video.mp4";
+  const result = await withResourceRoutes(
+    {
+      listPrivateVideoFiles: async () => [
+        privateKey,
+        "private/resources/documents/not-a-video.pdf",
+        "public/resources/other.pdf",
+      ],
+      deletePrivateVideo: async () => {
+        throw new Error("should not delete untracked objects");
+      },
+    },
+    initialResource => {
+      const mutableStorage = storage as unknown as Record<string, StorageMethod>;
+      mutableStorage.getResource = async () => undefined;
+      mutableStorage.getPrivateVideoUploads = async () => [];
+      mutableStorage.removePrivateVideoUpload = async () => undefined;
+      void initialResource;
+    },
+    async baseUrl => {
+      const response = await request(
+        baseUrl,
+        "POST",
+        "/api/admin/resources/private-videos/reconcile",
+      );
+      assert.equal(response.status, 200);
+      assert.deepEqual(JSON.parse(response.body), {
+        scanned: 1,
+        deletedKeys: [],
+        failedKeys: [],
+        untrackedKeys: [
+          privateKey,
+        ],
+      });
+      return response;
+    },
+  );
+
+  assert.equal(result.status, 200);
 });

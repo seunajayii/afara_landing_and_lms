@@ -267,6 +267,7 @@ export const privateVideoUploads = pgTable("private_video_uploads", {
   storageKey: text("storage_key").notNull().unique(),
   uploadedById: varchar("uploaded_by_id").references(() => users.id, { onDelete: "set null" }),
   resourceId: varchar("resource_id").references(() => resources.id, { onDelete: "set null" }),
+  cleanupRequestedAt: timestamp("cleanup_requested_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

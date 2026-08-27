@@ -32,6 +32,7 @@ import {
   type YouTubePrivacyStatus,
   type YouTubeVideoMetadata,
 } from "./youtube";
+import { isPrivateVideoStorageKey } from "./r2-storage";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -104,6 +105,7 @@ const youtubeResumableUploadSchema = youtubeUploadMetadataSchema.extend({
 
 export interface ResourceLifecycleDependencies {
   deletePrivateVideo?: (storageKey: string) => Promise<void>;
+  listPrivateVideoFiles?: () => Promise<string[]>;
   logError?: (...args: unknown[]) => void;
 }
 
@@ -404,6 +406,17 @@ export async function registerRoutes(
   const cleanupPrivateVideo = async (resourceId: string, storageKey: string | null | undefined) => {
     if (!storageKey) return;
     try {
+      // The resource mutation has already succeeded. Release the ledger row
+      // before attempting provider cleanup so a transient outage leaves a
+      // durable, retryable candidate instead of an apparently attached one.
+      await storage.releasePrivateVideoUpload(storageKey, resourceId);
+    } catch (error) {
+      (dependencies.logError ?? console.error)(
+        `Failed to record private video cleanup for resource ${resourceId}.`,
+        error instanceof Error ? error.message : "unknown error",
+      );
+    }
+    try {
       const attachedResource = await storage.getResourceByVideoStorageKey(storageKey);
       if (attachedResource && attachedResource.id !== resourceId) {
         return;
@@ -416,8 +429,8 @@ export async function registerRoutes(
       await storage.removePrivateVideoUpload(storageKey);
     } catch (error) {
       (dependencies.logError ?? console.error)(
-        `Failed to clean up private video for resource ${resourceId}:`,
-        error,
+        `Failed to clean up private video for resource ${resourceId}.`,
+        error instanceof Error ? error.message : "unknown error",
       );
     }
   };
@@ -427,40 +440,108 @@ export async function registerRoutes(
   // authoritative, and a storage outage must only leave an object for a
   // later sweep rather than break an unrelated request.
   let privateVideoCleanupInProgress = false;
-  const cleanupExpiredPrivateVideoUploads = async () => {
+  const reconcilePrivateVideoObjects = async () => {
     if (privateVideoCleanupInProgress) return;
     privateVideoCleanupInProgress = true;
+    const deletedKeys: string[] = [];
+    const failedKeys: string[] = [];
+    const untrackedKeys: string[] = [];
+    let scanned = 0;
     try {
       const cutoff = new Date(Date.now() - PRIVATE_VIDEO_UPLOAD_RETENTION_MS);
-      const uploads = await storage.getExpiredPrivateVideoUploads(cutoff);
-      for (const upload of uploads) {
-        const attachedResource = await storage.getResourceByVideoStorageKey(upload.storageKey);
+      if (!dependencies.listPrivateVideoFiles) {
+        const { isR2Configured } = await import("./r2-storage");
+        if (!isR2Configured()) {
+          return { scanned: 0, deletedKeys, failedKeys, untrackedKeys };
+        }
+      }
+      const [privateVideoKeys, uploads] = await Promise.all([
+        dependencies.listPrivateVideoFiles
+          ? dependencies.listPrivateVideoFiles()
+          : (async () => {
+              const { listPrivateVideoFiles } = await import("./r2-storage");
+              return listPrivateVideoFiles();
+            })(),
+        storage.getPrivateVideoUploads(),
+      ]);
+      const uploadsByKey = new Map(uploads.map(upload => [upload.storageKey, upload]));
+      const candidateKeys = privateVideoKeys.filter(key => isPrivateVideoStorageKey(key));
+      scanned = candidateKeys.length;
+      for (const storageKey of candidateKeys) {
+        const attachedResource = await storage.getResourceByVideoStorageKey(storageKey);
         if (attachedResource) {
           // Recover from a process interruption between saving the resource
           // and claiming the upload ledger row.
-          await storage.claimPrivateVideoUpload(upload.storageKey, attachedResource.id);
+          await storage.claimPrivateVideoUpload(storageKey, attachedResource.id);
+          continue;
+        }
+        const upload = uploadsByKey.get(storageKey);
+        if (!upload) {
+          // The object is inside our generated namespace but has no ledger
+          // record. Report it without deleting it; an operator can investigate
+          // it without allowing a malformed/unrelated key to be removed.
+          untrackedKeys.push(storageKey);
+          continue;
+        }
+        // A stale resource claim also means cleanup was requested: it covers
+        // older failures that happened before cleanup_requested_at existed or
+        // while recording the cleanup request was unavailable.
+        const hasStaleResourceClaim = upload.resourceId !== null;
+        if (!upload.cleanupRequestedAt && !hasStaleResourceClaim && upload.createdAt >= cutoff) {
           continue;
         }
         try {
-          const { deletePrivateVideo } = await import("./r2-storage");
-          await deletePrivateVideo(upload.storageKey);
-          await storage.removePrivateVideoUpload(upload.storageKey);
+          const deletePrivateVideo = dependencies.deletePrivateVideo ?? (async (key: string) => {
+            const { deletePrivateVideo: deleteFromStorage } = await import("./r2-storage");
+            await deleteFromStorage(key);
+          });
+          await deletePrivateVideo(storageKey);
+          await storage.removePrivateVideoUpload(storageKey);
+          deletedKeys.push(storageKey);
         } catch (error) {
-          console.error(`Failed to clean up expired private video upload ${upload.id}:`, error);
+          failedKeys.push(storageKey);
+          (dependencies.logError ?? console.error)(
+            `Failed to reconcile private video upload ${upload.id}.`,
+            error instanceof Error ? error.message : "unknown error",
+          );
         }
       }
     } catch (error) {
-      console.error("Failed to sweep expired private video uploads:", error);
+      (dependencies.logError ?? console.error)(
+        "Failed to reconcile private video objects.",
+        error instanceof Error ? error.message : "unknown error",
+      );
     } finally {
       privateVideoCleanupInProgress = false;
     }
+    return {
+      scanned,
+      deletedKeys,
+      failedKeys,
+      untrackedKeys,
+    };
   };
-  void cleanupExpiredPrivateVideoUploads();
+  void reconcilePrivateVideoObjects();
   const privateVideoCleanupTimer = setInterval(
-    () => void cleanupExpiredPrivateVideoUploads(),
+    () => void reconcilePrivateVideoObjects(),
     PRIVATE_VIDEO_CLEANUP_INTERVAL_MS,
   );
   privateVideoCleanupTimer.unref();
+
+  app.post(
+    "/api/admin/resources/private-videos/reconcile",
+    requireAuth,
+    requireAdminRole,
+    async (_req: Request, res: Response) => {
+      const result = await reconcilePrivateVideoObjects();
+      res.json(result ?? {
+        scanned: 0,
+        deletedKeys: [],
+        failedKeys: [],
+        untrackedKeys: [],
+      });
+    },
+  );
 
   const claimPrivateVideoUpload = async (storageKey: string | null | undefined, resourceId: string) => {
     if (!storageKey) return;

@@ -108,8 +108,13 @@ export async function runSchemaMigrations() {
         storage_key TEXT NOT NULL UNIQUE,
         uploaded_by_id VARCHAR REFERENCES users(id) ON DELETE SET NULL,
         resource_id VARCHAR REFERENCES resources(id) ON DELETE SET NULL,
+        cleanup_requested_at TIMESTAMP,
         created_at TIMESTAMP NOT NULL DEFAULT NOW()
       )
+    `);
+    await db.execute(sql`
+      ALTER TABLE private_video_uploads
+        ADD COLUMN IF NOT EXISTS cleanup_requested_at TIMESTAMP
     `);
     await db.execute(sql`
       CREATE INDEX IF NOT EXISTS private_video_uploads_created_at_idx
