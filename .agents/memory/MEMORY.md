@@ -1,2 +1,3 @@
 - [Cohort system](cohort-system.md) — cohorts table added; cohortId FK on applications; cohort CRUD + batch-eval routes all require admin role
 - [YouTube learning materials](youtube-learning-materials.md) — YouTube videos are LMS resources; unlisted embeds are app-gated but not share-proof
+- [Resumable provider uploads](resumable-provider-uploads.md) — dropped responses require opaque server sessions and an authoritative provider status check before retrying a chunk

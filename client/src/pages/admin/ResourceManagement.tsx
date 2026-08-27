@@ -246,8 +246,13 @@ function YouTubeVideoFields({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [videoValue, setVideoValue] = useState(form.getValues("youtubeUrl") || "");
   const [isLookingUp, setIsLookingUp] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
+  const [uploadState, setUploadState] = useState<"idle" | "uploading" | "retrying" | "processing" | "completed" | "error">("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState("");
+  const uploadRef = useRef<{ file: File; uploadId: string | null; nextByte: number } | null>(null);
+  const uploadInProgressRef = useRef(false);
+  const YOUTUBE_CHUNK_SIZE = 8 * 1024 * 1024;
+  const MAX_YOUTUBE_UPLOAD_SIZE = 10 * 1024 * 1024 * 1024;
 
   async function resolveVideo() {
     if (!videoValue.trim()) {
@@ -270,51 +275,180 @@ function YouTubeVideoFields({
     }
   }
 
-  function uploadVideo(file: File) {
+  async function readUploadResponse(response: Response, fallback: string) {
+    const data = await response.json().catch(() => ({})) as {
+      error?: string;
+      nextByte?: number;
+      uploadId?: string;
+      status?: string;
+      video?: YouTubeVideo;
+    };
+    if (!response.ok) throw new Error(data.error || fallback);
+    return data;
+  }
+
+  async function getUploadStatus(uploadId: string) {
+    const response = await fetch(`/api/admin/youtube/videos/upload/${encodeURIComponent(uploadId)}/status`, {
+      credentials: "include",
+    });
+    return readUploadResponse(response, "Could not check the YouTube upload progress.");
+  }
+
+  function waitForRetry(attempt: number) {
+    return new Promise<void>((resolve) => window.setTimeout(resolve, Math.min(1000 * 2 ** attempt, 5000)));
+  }
+
+  function finishYouTubeUpload(video: YouTubeVideo) {
+    setUploadProgress(100);
+    setUploadState("processing");
+    onVideoSelected(video);
+    setVideoValue(video.url);
+    setUploadState("completed");
+    toast({
+      title: "Video upload complete",
+      description: video.uploadStatus === "processing"
+        ? "YouTube is processing the video. You can now publish this learning resource."
+        : "You can now publish this learning resource.",
+    });
+  }
+
+  async function resumeUpload(active: { file: File; uploadId: string; nextByte: number }) {
+    while (active.nextByte < active.file.size) {
+      setUploadProgress(Math.round((active.nextByte / active.file.size) * 100));
+      setUploadState("uploading");
+      const chunkEnd = Math.min(active.nextByte + YOUTUBE_CHUNK_SIZE, active.file.size);
+      const chunk = active.file.slice(active.nextByte, chunkEnd);
+      let chunkCompleted = false;
+
+      for (let attempt = 0; attempt < 4 && !chunkCompleted; attempt += 1) {
+        try {
+          const response = await fetch(`/api/admin/youtube/videos/upload/${encodeURIComponent(active.uploadId)}`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": active.file.type || "video/mp4",
+              "Content-Range": `bytes ${active.nextByte}-${chunkEnd - 1}/${active.file.size}`,
+            },
+            body: chunk,
+            credentials: "include",
+          });
+
+          if (response.status === 409) {
+            const data = await response.json().catch(() => ({})) as { nextByte?: number };
+            if (typeof data.nextByte === "number" && data.nextByte >= 0 && data.nextByte <= active.file.size) {
+              active.nextByte = data.nextByte;
+              chunkCompleted = true;
+              continue;
+            }
+          }
+
+          const data = await readUploadResponse(response, "YouTube could not process this video chunk.");
+          if (typeof data.nextByte !== "number") throw new Error("YouTube did not return upload progress.");
+          active.nextByte = data.nextByte;
+          if (data.status === "completed" && data.video) {
+            finishYouTubeUpload(data.video);
+            return;
+          }
+          chunkCompleted = true;
+        } catch (error: unknown) {
+          if (attempt === 3) throw error;
+          setUploadState("retrying");
+          setUploadError("Connection interrupted. Checking the upload before retrying…");
+          await waitForRetry(attempt);
+          const status = await getUploadStatus(active.uploadId);
+          if (typeof status.nextByte !== "number") throw new Error("YouTube did not return upload progress.");
+          active.nextByte = status.nextByte;
+          if (status.status === "completed" && status.video) {
+            finishYouTubeUpload(status.video);
+            return;
+          }
+          chunkCompleted = true;
+        }
+      }
+    }
+
+    throw new Error("YouTube finished the upload without returning the video.");
+  }
+
+  async function startUpload(file: File) {
     const title = form.getValues("title").trim();
     if (!title) {
       toast({ title: "Add a title first", description: "Enter a resource title before uploading a video.", variant: "destructive" });
       return;
     }
+    if (file.size > MAX_YOUTUBE_UPLOAD_SIZE) {
+      toast({ title: "Video too large", description: "YouTube uploads are limited to 10 GB.", variant: "destructive" });
+      return;
+    }
+    if (file.type && !file.type.startsWith("video/")) {
+      toast({ title: "Choose a video file", description: "The selected file is not a supported video.", variant: "destructive" });
+      return;
+    }
+    if (uploadInProgressRef.current) return;
 
-    setIsUploading(true);
+    uploadInProgressRef.current = true;
+    uploadRef.current = { file, uploadId: null, nextByte: 0 };
+    setUploadError("");
     setUploadProgress(0);
-    const data = new FormData();
-    data.append("video", file);
-    data.append("title", title);
-    data.append("description", form.getValues("description") || "");
-    data.append("privacyStatus", form.getValues("youtubePrivacyStatus") || "unlisted");
+    setUploadState("uploading");
+    try {
+      const response = await fetch("/api/admin/youtube/videos/upload/initiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileSize: file.size,
+          contentType: file.type || "video/mp4",
+          title,
+          description: form.getValues("description") || "",
+          privacyStatus: form.getValues("youtubePrivacyStatus") || "unlisted",
+        }),
+        credentials: "include",
+      });
+      const data = await readUploadResponse(response, "YouTube could not start this upload.");
+      if (!data.uploadId) throw new Error("YouTube did not return an upload session.");
+      uploadRef.current!.uploadId = data.uploadId;
+      uploadRef.current!.nextByte = data.nextByte || 0;
+      await resumeUpload(uploadRef.current as { file: File; uploadId: string; nextByte: number });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "The video could not be uploaded.";
+      setUploadError(message);
+      setUploadState("error");
+      toast({ title: "Upload paused", description: message, variant: "destructive" });
+    } finally {
+      uploadInProgressRef.current = false;
+    }
+  }
 
-    const request = new XMLHttpRequest();
-    request.open("POST", "/api/admin/youtube/videos/upload");
-    request.withCredentials = true;
-    request.upload.onprogress = (event) => {
-      if (event.lengthComputable) setUploadProgress(Math.round((event.loaded / event.total) * 100));
-    };
-    request.onerror = () => {
-      setIsUploading(false);
-      toast({ title: "Upload error", description: "The video could not be uploaded. Check your connection and try again.", variant: "destructive" });
-    };
-    request.onload = () => {
-      setIsUploading(false);
-      if (request.status < 200 || request.status >= 300) {
-        let message = "YouTube could not process this upload.";
-        try {
-          message = (JSON.parse(request.responseText) as { error?: string }).error || message;
-        } catch {
-          // Fall back to the concise message above.
-        }
-        toast({ title: "Upload error", description: message, variant: "destructive" });
+  async function retryUpload() {
+    const active = uploadRef.current;
+    if (!active || uploadInProgressRef.current) return;
+    uploadInProgressRef.current = true;
+    setUploadError("");
+    setUploadState("retrying");
+    try {
+      if (!active.uploadId) {
+        uploadInProgressRef.current = false;
+        await startUpload(active.file);
         return;
       }
-
-      const video = JSON.parse(request.responseText) as YouTubeVideo;
-      onVideoSelected(video);
-      setVideoValue(video.url);
-      toast({ title: "Video uploaded to YouTube", description: "You can now publish this learning resource." });
-    };
-    request.send(data);
+      const status = await getUploadStatus(active.uploadId);
+      if (typeof status.nextByte !== "number") throw new Error("YouTube did not return upload progress.");
+      active.nextByte = status.nextByte;
+      if (status.status === "completed" && status.video) {
+        finishYouTubeUpload(status.video);
+      } else {
+        await resumeUpload(active as { file: File; uploadId: string; nextByte: number });
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "The video could not be resumed.";
+      setUploadError(message);
+      setUploadState("error");
+      toast({ title: "Retry failed", description: message, variant: "destructive" });
+    } finally {
+      uploadInProgressRef.current = false;
+    }
   }
+
+  const uploadBusy = uploadState === "uploading" || uploadState === "retrying" || uploadState === "processing";
 
   return (
     <div className="space-y-4 rounded-md border p-4">
@@ -336,7 +470,11 @@ function YouTubeVideoFields({
             <div className="p-3 flex-1 min-w-0">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
-                <span>Video selected</span>
+                <span>
+                  {uploadState === "completed"
+                    ? `Upload complete${uploadStatus === "processing" ? " — YouTube is processing the video" : ""}`
+                    : "Video selected"}
+                </span>
               </div>
               <p className="mt-1 text-xs text-muted-foreground break-all">ID: {videoId}</p>
               <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -344,7 +482,12 @@ function YouTubeVideoFields({
                 {privacyStatus && <Badge variant="outline">{privacyStatus}</Badge>}
                 {uploadStatus && <Badge variant="outline">{uploadStatus}</Badge>}
               </div>
-              <Button type="button" variant="ghost" className="px-0 h-auto mt-3 text-destructive hover:text-destructive" onClick={onClear} data-testid={`button-clear-${idPrefix}-youtube-video`}>
+              <Button type="button" variant="ghost" className="px-0 h-auto mt-3 text-destructive hover:text-destructive" onClick={() => {
+                uploadRef.current = null;
+                setUploadState("idle");
+                setUploadError("");
+                onClear();
+              }} data-testid={`button-clear-${idPrefix}-youtube-video`}>
                 Remove video
               </Button>
             </div>
@@ -396,6 +539,33 @@ function YouTubeVideoFields({
             )}
           />
 
+          {uploadState !== "idle" && uploadState !== "completed" && (
+            <div className="space-y-2 rounded-md border bg-muted/30 p-3 text-sm" role="status">
+              <div className="flex items-center gap-2">
+                {uploadState === "error" ? (
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                ) : (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+                <span>
+                  {uploadState === "retrying"
+                    ? "Connection interrupted — checking upload progress…"
+                    : uploadState === "processing"
+                      ? "Upload complete — YouTube is processing the video…"
+                      : uploadState === "error"
+                        ? "Upload paused"
+                        : `Uploading… ${uploadProgress}%`}
+                </span>
+              </div>
+              {uploadState !== "error" && (
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full bg-primary transition-all" style={{ width: `${uploadProgress}%` }} />
+                </div>
+              )}
+              {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
+            </div>
+          )}
+
           <input
             ref={fileInputRef}
             type="file"
@@ -403,7 +573,7 @@ function YouTubeVideoFields({
             className="hidden"
             onChange={(event) => {
               const file = event.target.files?.[0];
-              if (file) uploadVideo(file);
+               if (file) startUpload(file);
               event.target.value = "";
             }}
             data-testid={`input-${idPrefix}-youtube-upload`}
@@ -412,13 +582,13 @@ function YouTubeVideoFields({
             type="button"
             variant="outline"
             className="w-full min-h-20 flex-col gap-1"
-            disabled={isUploading}
-            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadBusy}
+            onClick={() => uploadState === "error" ? retryUpload() : fileInputRef.current?.click()}
             data-testid={`button-${idPrefix}-youtube-upload`}
           >
-            {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <UploadCloud className="w-5 h-5" />}
-            <span>{isUploading ? `Uploading to YouTube… ${uploadProgress}%` : "Upload video to YouTube"}</span>
-            <span className="text-xs font-normal text-muted-foreground">MP4, MOV, WebM, or M4V · maximum 250 MB</span>
+            {uploadBusy ? <Loader2 className="w-5 h-5 animate-spin" /> : uploadState === "error" ? <AlertTriangle className="w-5 h-5 text-destructive" /> : <UploadCloud className="w-5 h-5" />}
+            <span>{uploadState === "error" ? "Retry upload" : uploadBusy ? `Uploading to YouTube… ${uploadProgress}%` : "Upload video to YouTube"}</span>
+            <span className="text-xs font-normal text-muted-foreground">MP4, MOV, WebM, or M4V · resumable uploads up to 10 GB</span>
           </Button>
         </>
       )}

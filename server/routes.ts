@@ -1,4 +1,4 @@
-import type { Express, Request, Response, NextFunction } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import { storage } from "./storage";
@@ -18,8 +18,11 @@ import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import {
   getYouTubeVideo,
   parseYouTubeVideoId,
-  uploadYouTubeVideo,
+  startYouTubeResumableUpload,
+  uploadYouTubeChunk,
+  getYouTubeUploadStatus,
   type YouTubePrivacyStatus,
+  type YouTubeVideoMetadata,
 } from "./youtube";
 
 const loginSchema = z.object({
@@ -67,6 +70,35 @@ const youtubeUploadMetadataSchema = z.object({
   description: z.string().trim().max(5000).optional(),
   privacyStatus: z.enum(["public", "unlisted", "private"]).default("unlisted"),
 });
+
+const YOUTUBE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024;
+const MAX_YOUTUBE_UPLOAD_SIZE = 10 * 1024 * 1024 * 1024;
+const YOUTUBE_UPLOAD_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+const youtubeResumableUploadSchema = youtubeUploadMetadataSchema.extend({
+  fileSize: z.number().int().positive().max(MAX_YOUTUBE_UPLOAD_SIZE),
+  contentType: z.string().trim().regex(/^video\//).max(100),
+});
+
+interface YouTubeUploadSession {
+  userId: string;
+  sessionPath: string;
+  totalBytes: number;
+  contentType: string;
+  nextByte: number;
+  status: "uploading" | "completed";
+  video?: YouTubeVideoMetadata;
+  expiresAt: number;
+  operation: Promise<void>;
+}
+
+const youtubeUploadSessions = new Map<string, YouTubeUploadSession>();
+
+function removeExpiredYouTubeUploadSessions(): void {
+  const now = Date.now();
+  for (const [uploadId, session] of Array.from(youtubeUploadSessions.entries())) {
+    if (session.expiresAt <= now) youtubeUploadSessions.delete(uploadId);
+  }
+}
 
 /**
  * Returns the canonical application base URL used for security-sensitive emails
@@ -1274,18 +1306,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     limits: { fileSize: 4 * 1024 * 1024 }, // 4 MB
   });
 
-  const youtubeVideoUpload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 250 * 1024 * 1024 },
-    fileFilter: (_req, file, callback) => {
-      if (!file.mimetype.startsWith("video/")) {
-        callback(new Error("Please upload a video file."));
-        return;
-      }
-      callback(null, true);
-    },
-  });
-
   const privateVideoUpload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 250 * 1024 * 1024 },
@@ -1325,38 +1345,186 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   app.post(
-    "/api/admin/youtube/videos/upload",
+    "/api/admin/youtube/videos/upload/initiate",
     requireAuth,
     requireAdminRole,
-    (req: Request, res: Response, next: NextFunction) => {
-      youtubeVideoUpload.single("video")(req, res, (err) => {
-        if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
-          return res.status(400).json({ error: "Video exceeds the 250 MB upload limit. Compress it or upload it to YouTube first, then paste its URL." });
-        }
-        if (err) return res.status(400).json({ error: err.message || "Video upload failed." });
-        next();
-      });
-    },
     async (req: Request, res: Response) => {
-      if (!req.file) return res.status(400).json({ error: "Choose a video file to upload." });
-
-      const metadata = youtubeUploadMetadataSchema.safeParse(req.body);
-      if (!metadata.success) {
-        return res.status(400).json({ error: "Add a video title between 3 and 100 characters before uploading." });
+      const parsed = youtubeResumableUploadSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: "Choose a supported video and add a title between 3 and 100 characters.",
+        });
       }
 
       try {
-        const video = await uploadYouTubeVideo({
-          file: req.file.buffer,
-          contentType: req.file.mimetype || "video/mp4",
-          title: metadata.data.title,
-          description: metadata.data.description,
-          privacyStatus: metadata.data.privacyStatus as YouTubePrivacyStatus,
+        const sessionPath = await startYouTubeResumableUpload({
+          fileSize: parsed.data.fileSize,
+          contentType: parsed.data.contentType,
+          title: parsed.data.title,
+          description: parsed.data.description,
+          privacyStatus: parsed.data.privacyStatus as YouTubePrivacyStatus,
         });
-        res.status(201).json(video);
+        const uploadId = randomUUID();
+        youtubeUploadSessions.set(uploadId, {
+          userId: req.session.userId!,
+          sessionPath,
+          totalBytes: parsed.data.fileSize,
+          contentType: parsed.data.contentType,
+          nextByte: 0,
+          status: "uploading",
+          expiresAt: Date.now() + YOUTUBE_UPLOAD_SESSION_TTL_MS,
+          operation: Promise.resolve(),
+        });
+        res.status(201).json({
+          uploadId,
+          nextByte: 0,
+          totalBytes: parsed.data.fileSize,
+          status: "uploading",
+        });
       } catch (error) {
-        console.error("YouTube video upload failed:", error);
-        res.status(502).json({ error: "YouTube could not process this upload. Try again or upload the video to YouTube first and paste its URL." });
+        console.error("YouTube resumable upload initiation failed:", error);
+        res.status(502).json({
+          error: "YouTube could not start this upload. Check the connection and try again.",
+        });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/youtube/videos/upload/:uploadId/status",
+    requireAuth,
+    requireAdminRole,
+    async (req: Request, res: Response) => {
+      removeExpiredYouTubeUploadSessions();
+      const session = youtubeUploadSessions.get(req.params.uploadId);
+      if (!session || session.userId !== req.session.userId) {
+        return res.status(404).json({ error: "Upload session not found. Select the file again to restart." });
+      }
+      session.expiresAt = Date.now() + YOUTUBE_UPLOAD_SESSION_TTL_MS;
+
+      if (session.status === "completed" && session.video) {
+        return res.json({
+          status: session.status,
+          nextByte: session.nextByte,
+          totalBytes: session.totalBytes,
+          video: session.video,
+        });
+      }
+
+      try {
+        await session.operation;
+        const result = await getYouTubeUploadStatus({
+          sessionPath: session.sessionPath,
+          totalBytes: session.totalBytes,
+        });
+        session.nextByte = result.nextByte;
+        session.status = result.status;
+        if (result.video) {
+          session.video = result.video;
+          session.expiresAt = Date.now() + 30 * 60 * 1000;
+        }
+        res.json({
+          status: session.status,
+          nextByte: session.nextByte,
+          totalBytes: session.totalBytes,
+          ...(session.video ? { video: session.video } : {}),
+        });
+      } catch (error) {
+        console.error("YouTube resumable upload status check failed:", error);
+        res.status(502).json({
+          error: "Could not check the YouTube upload progress. Retrying may restore the connection.",
+        });
+      }
+    },
+  );
+
+  app.put(
+    "/api/admin/youtube/videos/upload/:uploadId",
+    requireAuth,
+    requireAdminRole,
+    express.raw({ type: "*/*", limit: `${YOUTUBE_UPLOAD_CHUNK_SIZE}b` }),
+    async (req: Request, res: Response) => {
+      removeExpiredYouTubeUploadSessions();
+      const session = youtubeUploadSessions.get(req.params.uploadId);
+      if (!session || session.userId !== req.session.userId) {
+        return res.status(404).json({ error: "Upload session not found. Select the file again to restart." });
+      }
+      if (session.status === "completed" && session.video) {
+        return res.json({
+          status: session.status,
+          nextByte: session.nextByte,
+          totalBytes: session.totalBytes,
+          video: session.video,
+        });
+      }
+
+      const contentRange = req.headers["content-range"];
+      const range = typeof contentRange === "string"
+        ? contentRange.match(/^bytes (\d+)-(\d+)\/(\d+)$/)
+        : null;
+      const chunk = Buffer.isBuffer(req.body) ? req.body : null;
+      if (!range || !chunk) {
+        return res.status(400).json({ error: "Each upload request must contain one video chunk and its byte range." });
+      }
+
+      const startByte = Number(range[1]);
+      const endByte = Number(range[2]);
+      const totalBytes = Number(range[3]);
+      if (
+        !Number.isSafeInteger(startByte) ||
+        !Number.isSafeInteger(endByte) ||
+        !Number.isSafeInteger(totalBytes) ||
+        totalBytes !== session.totalBytes ||
+        endByte < startByte ||
+        endByte - startByte + 1 !== chunk.length ||
+        chunk.length > YOUTUBE_UPLOAD_CHUNK_SIZE ||
+        endByte >= totalBytes
+      ) {
+        return res.status(400).json({ error: "The upload chunk range does not match the selected file." });
+      }
+      if (startByte !== session.nextByte) {
+        return res.status(409).json({
+          error: "Upload progress is out of sync.",
+          nextByte: session.nextByte,
+          totalBytes: session.totalBytes,
+        });
+      }
+      session.expiresAt = Date.now() + YOUTUBE_UPLOAD_SESSION_TTL_MS;
+
+      const previousOperation = session.operation;
+      let releaseOperation: (() => void) | undefined;
+      session.operation = previousOperation.then(() => new Promise<void>((resolve) => {
+        releaseOperation = resolve;
+      }));
+      await previousOperation;
+
+      try {
+        const result = await uploadYouTubeChunk({
+          sessionPath: session.sessionPath,
+          chunk,
+          startByte,
+          totalBytes,
+          contentType: session.contentType,
+        });
+        session.nextByte = result.nextByte;
+        session.status = result.status;
+        if (result.video) {
+          session.video = result.video;
+          session.expiresAt = Date.now() + 30 * 60 * 1000;
+        }
+        res.json({
+          status: session.status,
+          nextByte: session.nextByte,
+          totalBytes: session.totalBytes,
+          ...(session.video ? { video: session.video } : {}),
+        });
+      } catch (error) {
+        console.error("YouTube resumable upload chunk failed:", error);
+        res.status(502).json({
+          error: "The video chunk could not reach YouTube. Checking progress before retrying.",
+        });
+      } finally {
+        releaseOperation?.();
       }
     },
   );

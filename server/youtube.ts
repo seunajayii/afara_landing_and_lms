@@ -23,6 +23,50 @@ interface UploadVideoInput {
   privacyStatus: YouTubePrivacyStatus;
 }
 
+export interface YouTubeResumableUploadInput {
+  fileSize: number;
+  contentType: string;
+  title: string;
+  description?: string;
+  privacyStatus: YouTubePrivacyStatus;
+}
+
+export interface YouTubeUploadChunkResult {
+  status: "uploading" | "completed";
+  nextByte: number;
+  video?: YouTubeVideoMetadata;
+}
+
+function getResumableUploadPath(location: string): string {
+  try {
+    const url = new URL(location);
+    return `${url.pathname}${url.search}`;
+  } catch {
+    if (location.startsWith("/")) return location;
+    throw new Error("YouTube returned an invalid resumable upload location.");
+  }
+}
+
+function getNextByteFromRange(range: string | null): number {
+  if (!range) return 0;
+  const match = range.match(/^bytes=0-(\d+)$/);
+  if (!match) throw new Error("YouTube returned an invalid upload progress range.");
+  return Number(match[1]) + 1;
+}
+
+function getUploadMetadata(input: YouTubeResumableUploadInput): string {
+  return JSON.stringify({
+    snippet: {
+      title: input.title,
+      description: input.description || "",
+      categoryId: "27",
+    },
+    status: {
+      privacyStatus: input.privacyStatus,
+    },
+  });
+}
+
 export function parseYouTubeVideoId(value: string): string | null {
   const trimmed = value.trim();
   if (YOUTUBE_ID_PATTERN.test(trimmed)) return trimmed;
@@ -112,6 +156,107 @@ export async function getYouTubeVideo(videoId: string): Promise<YouTubeVideoMeta
   const body = await response.json() as { items?: Record<string, any>[] };
   const video = body.items?.[0];
   return video ? toMetadata(video) : null;
+}
+
+export async function startYouTubeResumableUpload(
+  input: YouTubeResumableUploadInput,
+): Promise<string> {
+  const connectors = new ReplitConnectors();
+  const response = await connectors.proxy(
+    "youtube",
+    "/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json; charset=UTF-8",
+        "X-Upload-Content-Length": String(input.fileSize),
+        "X-Upload-Content-Type": input.contentType,
+      },
+      body: getUploadMetadata(input),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getYouTubeError(response));
+  }
+
+  const location = response.headers.get("location");
+  if (!location) throw new Error("YouTube did not return a resumable upload session.");
+  return getResumableUploadPath(location);
+}
+
+export async function uploadYouTubeChunk(input: {
+  sessionPath: string;
+  chunk: Buffer;
+  startByte: number;
+  totalBytes: number;
+  contentType: string;
+}): Promise<YouTubeUploadChunkResult> {
+  const endByte = input.startByte + input.chunk.length - 1;
+  if (input.chunk.length === 0 || endByte >= input.totalBytes) {
+    throw new Error("The YouTube upload chunk is outside the expected file range.");
+  }
+
+  const connectors = new ReplitConnectors();
+  const response = await connectors.proxy("youtube", input.sessionPath, {
+    method: "PUT",
+    headers: {
+      "Content-Type": input.contentType,
+      "Content-Length": String(input.chunk.length),
+      "Content-Range": `bytes ${input.startByte}-${endByte}/${input.totalBytes}`,
+    },
+    body: input.chunk,
+  });
+
+  if (response.status === 308) {
+    return {
+      status: "uploading",
+      nextByte: getNextByteFromRange(response.headers.get("range")),
+    };
+  }
+
+  if (!response.ok) {
+    throw new Error(await getYouTubeError(response));
+  }
+
+  const uploaded = toMetadata(await response.json() as Record<string, any>);
+  return {
+    status: "completed",
+    nextByte: input.totalBytes,
+    video: (await getYouTubeVideo(uploaded.videoId)) || uploaded,
+  };
+}
+
+export async function getYouTubeUploadStatus(input: {
+  sessionPath: string;
+  totalBytes: number;
+}): Promise<YouTubeUploadChunkResult> {
+  const connectors = new ReplitConnectors();
+  const response = await connectors.proxy("youtube", input.sessionPath, {
+    method: "PUT",
+    headers: {
+      "Content-Length": "0",
+      "Content-Range": `bytes */${input.totalBytes}`,
+    },
+  });
+
+  if (response.status === 308) {
+    return {
+      status: "uploading",
+      nextByte: getNextByteFromRange(response.headers.get("range")),
+    };
+  }
+
+  if (!response.ok) {
+    throw new Error(await getYouTubeError(response));
+  }
+
+  const uploaded = toMetadata(await response.json() as Record<string, any>);
+  return {
+    status: "completed",
+    nextByte: input.totalBytes,
+    video: (await getYouTubeVideo(uploaded.videoId)) || uploaded,
+  };
 }
 
 export async function uploadYouTubeVideo(input: UploadVideoInput): Promise<YouTubeVideoMetadata> {
