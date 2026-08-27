@@ -93,7 +93,11 @@ export async function runSchemaMigrations() {
         ADD COLUMN IF NOT EXISTS youtube_thumbnail_url TEXT,
         ADD COLUMN IF NOT EXISTS youtube_duration_seconds INTEGER,
         ADD COLUMN IF NOT EXISTS youtube_privacy_status TEXT,
-        ADD COLUMN IF NOT EXISTS youtube_upload_status TEXT
+        ADD COLUMN IF NOT EXISTS youtube_upload_status TEXT,
+        ADD COLUMN IF NOT EXISTS video_source video_source,
+        ADD COLUMN IF NOT EXISTS video_storage_key TEXT,
+        ADD COLUMN IF NOT EXISTS video_content_type TEXT,
+        ADD COLUMN IF NOT EXISTS video_file_size INTEGER
     `);
     log("Schema migrations applied successfully");
 

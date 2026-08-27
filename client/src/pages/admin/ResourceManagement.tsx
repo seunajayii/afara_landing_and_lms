@@ -63,6 +63,8 @@ import {
   Eye,
   EyeOff,
   Video,
+  ShieldCheck,
+  AlertTriangle,
   CheckCircle2,
 } from "lucide-react";
 import type { Resource } from "@shared/schema";
@@ -101,6 +103,14 @@ interface YouTubeVideo {
   durationSeconds: number | null;
   privacyStatus: string | null;
   uploadStatus: string | null;
+}
+
+interface PrivateHostedVideo {
+  videoSource: "upload";
+  videoStorageKey: string;
+  fileName: string;
+  fileSize: number;
+  contentType: string;
 }
 
 interface ResourceFileUploaderProps {
@@ -416,6 +426,117 @@ function YouTubeVideoFields({
   );
 }
 
+function PrivateVideoFields({
+  form,
+  idPrefix,
+  fileName,
+  fileSize,
+  onVideoSelected,
+  onClear,
+}: {
+  form: ReturnType<typeof useForm<ResourceFormData>>;
+  idPrefix: string;
+  fileName: string | undefined;
+  fileSize: number | undefined;
+  onVideoSelected: (video: PrivateHostedVideo) => void;
+  onClear: () => void;
+}) {
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  function uploadVideo(file: File) {
+    const title = form.getValues("title").trim();
+    if (!title) {
+      toast({ title: "Add a title first", description: "Enter a resource title before uploading a video.", variant: "destructive" });
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(0);
+    const data = new FormData();
+    data.append("video", file);
+    const request = new XMLHttpRequest();
+    request.open("POST", "/api/admin/resources/videos/upload");
+    request.withCredentials = true;
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) setUploadProgress(Math.round((event.loaded / event.total) * 100));
+    };
+    request.onerror = () => {
+      setIsUploading(false);
+      toast({ title: "Upload error", description: "The private video could not be uploaded. Check your connection and try again.", variant: "destructive" });
+    };
+    request.onload = () => {
+      setIsUploading(false);
+      if (request.status < 200 || request.status >= 300) {
+        let message = "Private video hosting could not process this upload.";
+        try {
+          message = (JSON.parse(request.responseText) as { error?: string }).error || message;
+        } catch {
+          // Use the concise message above when the response is not JSON.
+        }
+        toast({ title: "Upload error", description: message, variant: "destructive" });
+        return;
+      }
+      onVideoSelected(JSON.parse(request.responseText) as PrivateHostedVideo);
+      toast({ title: "Private video uploaded", description: "Playback is protected by the resource visibility rules." });
+    };
+    request.send(data);
+  }
+
+  return (
+    <div className="space-y-3 rounded-md border border-primary/30 bg-primary/5 p-4">
+      <div className="flex items-center gap-2 text-sm font-medium text-primary">
+        <ShieldCheck className="w-4 h-4" />
+        Private hosted video
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Playback is served through a short-lived signed URL and checked against the viewer&apos;s current access. A copied URL cannot be used without the required LMS access.
+      </p>
+      {form.watch("videoStorageKey") ? (
+        <div className="flex items-center gap-3 rounded-md border bg-background p-3">
+          <Video className="w-5 h-5 text-primary shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{fileName || "Private video"}</p>
+            {fileSize ? <p className="text-xs text-muted-foreground">{formatFileSize(fileSize)}</p> : null}
+          </div>
+          <Button type="button" variant="ghost" className="text-destructive hover:text-destructive" onClick={onClear} data-testid={`button-clear-${idPrefix}-private-video`}>
+            Remove
+          </Button>
+        </div>
+      ) : (
+        <>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="video/mp4,video/quicktime,video/webm,video/x-m4v"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) uploadVideo(file);
+              event.target.value = "";
+            }}
+            data-testid={`input-${idPrefix}-private-video-upload`}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full min-h-20 flex-col gap-1"
+            disabled={isUploading}
+            onClick={() => fileInputRef.current?.click()}
+            data-testid={`button-${idPrefix}-private-video-upload`}
+          >
+            {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <UploadCloud className="w-5 h-5" />}
+            <span>{isUploading ? `Uploading privately… ${uploadProgress}%` : "Upload private video"}</span>
+            <span className="text-xs font-normal text-muted-foreground">MP4, MOV, WebM, or M4V · maximum 250 MB</span>
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ResourceCardSkeleton() {
   return (
     <Card>
@@ -449,6 +570,10 @@ const resourceFormSchema = z.object({
   youtubeDurationSeconds: z.number().int().nonnegative().optional(),
   youtubePrivacyStatus: z.string().optional().or(z.literal("")),
   youtubeUploadStatus: z.string().optional().or(z.literal("")),
+  videoSource: z.enum(["youtube", "upload"]).default("youtube"),
+  videoStorageKey: z.string().optional().or(z.literal("")),
+  videoContentType: z.string().optional().or(z.literal("")),
+  videoFileSize: z.number().int().nonnegative().optional(),
   visibility: z.enum(["public", "community", "cohort_only"]).default("community"),
   status: z.enum(["draft", "pending_review", "published", "archived"]),
   partnerName: z.string().optional(),
@@ -519,6 +644,10 @@ const emptyDefaults: ResourceFormData = {
   youtubeDurationSeconds: undefined,
   youtubePrivacyStatus: "",
   youtubeUploadStatus: "",
+  videoSource: "youtube",
+  videoStorageKey: "",
+  videoContentType: "",
+  videoFileSize: undefined,
   visibility: "community",
   status: "published",
   partnerName: "",
@@ -657,6 +786,10 @@ export default function ResourceManagement() {
       youtubeDurationSeconds: resource.youtubeDurationSeconds ?? undefined,
       youtubePrivacyStatus: resource.youtubePrivacyStatus || "",
       youtubeUploadStatus: resource.youtubeUploadStatus || "",
+      videoSource: (resource.videoSource as ResourceFormData["videoSource"]) || (resource.youtubeVideoId ? "youtube" : "upload"),
+      videoStorageKey: resource.videoStorageKey || "",
+      videoContentType: resource.videoContentType || "",
+      videoFileSize: resource.videoFileSize ?? undefined,
       visibility: (resource.visibility as ResourceFormData["visibility"]) || "community",
       status: (resource.status as ResourceFormData["status"]) || "published",
       partnerName: (resource as any).partnerName || "",
@@ -697,8 +830,19 @@ export default function ResourceManagement() {
     const youtubeThumbnailUrl = form.watch("youtubeThumbnailUrl");
     const youtubeDurationSeconds = form.watch("youtubeDurationSeconds");
     const youtubePrivacyStatus = form.watch("youtubePrivacyStatus");
+    const videoSource = form.watch("videoSource");
+    const videoStorageKey = form.watch("videoStorageKey");
+    const videoFileName = form.watch("fileName");
+    const videoFileSize = form.watch("videoFileSize");
+    const visibility = form.watch("visibility");
 
     const applyYouTubeVideo = (video: YouTubeVideo) => {
+      form.setValue("videoSource", "youtube", { shouldValidate: true });
+      form.setValue("videoStorageKey", "");
+      form.setValue("videoContentType", "");
+      form.setValue("videoFileSize", undefined);
+      form.setValue("fileName", "");
+      form.setValue("fileSize", undefined);
       form.setValue("youtubeVideoId", video.videoId, { shouldValidate: true });
       form.setValue("youtubeUrl", video.url);
       form.setValue("youtubeThumbnailUrl", video.thumbnailUrl || "");
@@ -719,6 +863,31 @@ export default function ResourceManagement() {
       form.setValue("youtubePrivacyStatus", "");
       form.setValue("youtubeUploadStatus", "");
       form.setValue("thumbnailUrl", "");
+      form.setValue("fileUrl", "");
+    };
+
+    const applyPrivateVideo = (video: PrivateHostedVideo) => {
+      form.setValue("videoSource", "upload", { shouldValidate: true });
+      form.setValue("videoStorageKey", video.videoStorageKey, { shouldValidate: true });
+      form.setValue("videoContentType", video.contentType);
+      form.setValue("videoFileSize", video.fileSize);
+      form.setValue("fileName", video.fileName);
+      form.setValue("fileSize", video.fileSize);
+      form.setValue("fileUrl", "");
+      form.setValue("youtubeVideoId", "");
+      form.setValue("youtubeUrl", "");
+      form.setValue("youtubeThumbnailUrl", "");
+      form.setValue("youtubeDurationSeconds", undefined);
+      form.setValue("youtubePrivacyStatus", "");
+      form.setValue("youtubeUploadStatus", "");
+    };
+
+    const clearPrivateVideo = () => {
+      form.setValue("videoStorageKey", "");
+      form.setValue("videoContentType", "");
+      form.setValue("videoFileSize", undefined);
+      form.setValue("fileName", "");
+      form.setValue("fileSize", undefined);
       form.setValue("fileUrl", "");
     };
 
@@ -801,17 +970,66 @@ export default function ResourceManagement() {
         </div>
 
         {isVideo && (
-          <YouTubeVideoFields
-            form={form}
-            idPrefix={idPrefix}
-            videoId={youtubeVideoId}
-            thumbnailUrl={youtubeThumbnailUrl}
-            durationSeconds={youtubeDurationSeconds}
-            privacyStatus={youtubePrivacyStatus}
-            uploadStatus={form.watch("youtubeUploadStatus")}
-            onVideoSelected={applyYouTubeVideo}
-            onClear={clearYouTubeVideo}
-          />
+          <>
+            <FormField
+              control={form.control}
+              name="videoSource"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Video Hosting</FormLabel>
+                  <Select
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      if (value === "upload") clearYouTubeVideo();
+                      else clearPrivateVideo();
+                    }}
+                    value={field.value || "youtube"}
+                  >
+                    <FormControl>
+                      <SelectTrigger data-testid={`select-${idPrefix}-video-source`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="youtube">YouTube (public / shareable)</SelectItem>
+                      <SelectItem value="upload">Private hosted (signed playback)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {videoSource === "upload" ? (
+              <PrivateVideoFields
+                form={form}
+                idPrefix={idPrefix}
+                fileName={videoFileName}
+                fileSize={videoFileSize}
+                onVideoSelected={applyPrivateVideo}
+                onClear={clearPrivateVideo}
+              />
+            ) : (
+              <>
+                {visibility !== "public" && (
+                  <div className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200" data-testid={`notice-${idPrefix}-protected-video-hosting`}>
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>Community and cohort-only videos must use private hosted playback. YouTube links can be copied and shared outside the LMS.</span>
+                  </div>
+                )}
+                <YouTubeVideoFields
+                  form={form}
+                  idPrefix={idPrefix}
+                  videoId={youtubeVideoId}
+                  thumbnailUrl={youtubeThumbnailUrl}
+                  durationSeconds={youtubeDurationSeconds}
+                  privacyStatus={youtubePrivacyStatus}
+                  uploadStatus={form.watch("youtubeUploadStatus")}
+                  onVideoSelected={applyYouTubeVideo}
+                  onClear={clearYouTubeVideo}
+                />
+              </>
+            )}
+          </>
         )}
 
         {!isPartner && !isVideo && (
@@ -1066,6 +1284,19 @@ export default function ResourceManagement() {
                     <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3 flex-wrap">
                       <Badge variant="outline">{resource.resourceType}</Badge>
                       {resource.category && <Badge variant="outline">{resource.category}</Badge>}
+                       {resource.visibility && <Badge variant="outline">{resource.visibility.replace("_", " ")}</Badge>}
+                       {resource.resourceType === "video" && resource.videoSource === "upload" && (
+                         <Badge variant="outline" className="gap-1 border-primary/40 text-primary">
+                           <ShieldCheck className="h-3 w-3" />
+                           Signed playback
+                         </Badge>
+                       )}
+                       {resource.resourceType === "video" && resource.visibility !== "public" && resource.videoSource !== "upload" && (
+                         <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-700 dark:text-amber-300">
+                           <AlertTriangle className="h-3 w-3" />
+                           Needs private hosting
+                         </Badge>
+                       )}
                       {resource.fileSize && (
                         <span className="text-xs">{formatFileSize(resource.fileSize)}</span>
                       )}

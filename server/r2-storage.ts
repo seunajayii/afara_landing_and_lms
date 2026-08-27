@@ -73,6 +73,36 @@ export async function getPresignedUrl(key: string, expiresIn: number = 3600): Pr
   return await getSignedUrl(client, command, { expiresIn });
 }
 
+export async function getFileStream(
+  key: string,
+  range?: string,
+): Promise<{
+  body: NodeJS.ReadableStream;
+  contentLength?: number;
+  contentType?: string;
+  contentRange?: string;
+  acceptRanges?: string;
+}> {
+  const client = getS3Client();
+  const response = await client.send(new GetObjectCommand({
+    Bucket: R2_BUCKET_NAME,
+    Key: key,
+    ...(range ? { Range: range } : {}),
+  }));
+
+  if (!response.Body) {
+    throw new Error("The requested file has no readable body");
+  }
+
+  return {
+    body: response.Body as NodeJS.ReadableStream,
+    contentLength: response.ContentLength,
+    contentType: response.ContentType,
+    contentRange: response.ContentRange,
+    acceptRanges: response.AcceptRanges,
+  };
+}
+
 export async function deleteFile(key: string): Promise<void> {
   const client = getS3Client();
   

@@ -4,7 +4,7 @@ import { useParams, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Lock, Download, FileText, Video } from "lucide-react";
+import { ArrowLeft, Lock, Download, FileText, Video, ShieldCheck, AlertTriangle, Loader2 } from "lucide-react";
 import type { Resource } from "@shared/schema";
 
 export default function ResourceDetail() {
@@ -18,6 +18,21 @@ export default function ResourceDetail() {
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw Object.assign(new Error(err.error || "Failed to load"), { status: res.status });
+      }
+      return res.json();
+    },
+  });
+
+  const privatePlayback = useQuery<{ playbackUrl: string; expiresAt: number }>({
+    queryKey: ["/api/resources", id, "playback"],
+    // The server deliberately removes videoStorageKey from learner responses.
+    // The source field is the safe signal that protected playback is needed.
+    enabled: Boolean(resource?.resourceType === "video" && resource.videoSource === "upload"),
+    queryFn: async () => {
+      const res = await fetch(`/api/resources/${id}/playback`, { credentials: "include" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Unable to authorize video playback");
       }
       return res.json();
     },
@@ -88,7 +103,40 @@ export default function ResourceDetail() {
                 )}
               </div>
 
-              {resource.resourceType === "video" && resource.youtubeVideoId ? (
+              {resource.resourceType === "video" && resource.videoSource === "upload" ? (
+                <div className="space-y-3">
+                  {privatePlayback.isLoading && (
+                    <div className="flex aspect-video items-center justify-center rounded-lg border bg-muted" data-testid="private-video-loading">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+                  {privatePlayback.data?.playbackUrl && (
+                    <div className="aspect-video overflow-hidden rounded-lg border bg-black shadow-sm">
+                      <video
+                        className="h-full w-full"
+                        src={privatePlayback.data.playbackUrl}
+                        controls
+                        controlsList="nodownload"
+                        preload="metadata"
+                        data-testid="private-resource-player"
+                      >
+                        Your browser does not support video playback.
+                      </video>
+                    </div>
+                  )}
+                  {privatePlayback.isError && (
+                    <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm" data-testid="notice-private-video-unavailable">
+                      <Lock className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                      <p>Video playback is unavailable because your access could not be verified. Please sign in with an authorized account and try again.</p>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <ShieldCheck className="h-4 w-4 text-primary" />
+                    <span>Protected video · signed playback</span>
+                    {resource.videoFileSize ? <span>· {Math.round(resource.videoFileSize / (1024 * 1024))} MB</span> : null}
+                  </div>
+                </div>
+              ) : resource.resourceType === "video" && resource.youtubeVideoId ? (
                 <div className="space-y-3">
                   <div className="aspect-video overflow-hidden rounded-lg border bg-black shadow-sm">
                     <iframe
@@ -107,6 +155,11 @@ export default function ResourceDetail() {
                       <span>· {Math.floor(resource.youtubeDurationSeconds / 60)} min</span>
                     ) : null}
                   </div>
+                </div>
+              ) : resource.resourceType === "video" && resource.visibility !== "public" ? (
+                <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200" data-testid="notice-video-needs-protected-hosting">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p>This restricted video is not yet configured for protected playback. Please contact an administrator.</p>
                 </div>
               ) : resource.fileUrl ? (
                 <Button asChild className="gap-2" data-testid="button-download-resource">

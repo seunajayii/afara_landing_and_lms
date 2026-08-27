@@ -9,3 +9,10 @@ Treat YouTube videos as provider-hosted LMS resources, storing their metadata al
 **Why:** YouTube handles video delivery and processing, while the application retains its established publication and cohort access model. However, a learner can share an unlisted YouTube URL outside the LMS.
 
 **How to apply:** Use YouTube for accessible, low-friction course material where unlisted sharing is an accepted tradeoff. If a future cohort requires share-proof or paid/restricted video, move that material to a provider that supports signed playback and stronger viewer authorization.
+
+## Protected playback
+Restricted hosted videos must be streamed through an application route that re-checks the viewer's current authorization; never redirect learners to a raw storage presigned URL.
+
+**Why:** A storage presigned URL remains usable by anyone who copies it until its storage signature expires, bypassing the LMS visibility and session rules.
+
+**How to apply:** Bind application playback tokens to restricted sessions, revalidate visibility on each request, and keep storage keys out of learner-facing resource responses.

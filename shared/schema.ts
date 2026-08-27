@@ -237,6 +237,12 @@ export const resources = pgTable("resources", {
   youtubeDurationSeconds: integer("youtube_duration_seconds"),
   youtubePrivacyStatus: text("youtube_privacy_status"),
   youtubeUploadStatus: text("youtube_upload_status"),
+  // Private uploads are delivered through the application's signed playback
+  // endpoint rather than exposing a provider URL to the learner.
+  videoSource: videoSourceEnum("video_source"),
+  videoStorageKey: text("video_storage_key"),
+  videoContentType: text("video_content_type"),
+  videoFileSize: integer("video_file_size"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
