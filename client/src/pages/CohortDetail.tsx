@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRight, Globe, Layers, Sparkles, Handshake, Target } from "lucide-react";
+import dorewaHeroBanner from "@assets/Copy_of_Presentation_-_DOREWA_1787816454760.png";
 
 type PublicCohort = {
   id: string;
@@ -88,12 +89,22 @@ export default function CohortDetail() {
   }
 
   const statusCfg = STATUS_CONFIG[cohort.status] ?? { label: cohort.status, variant: "outline" as const };
+  const heroImageUrl = cohort.slug === "dorewa" ? dorewaHeroBanner : (cohort.heroImageUrl ?? undefined);
 
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
       <main className="flex-1">
         <section className="relative py-20 px-4 sm:px-6 lg:px-8 bg-card">
+          {cohort.slug === "dorewa" && (
+            <div className="max-w-6xl mx-auto mb-12 overflow-hidden rounded-lg shadow-lg" data-testid="dorewa-hero-banner">
+              <img
+                src={heroImageUrl}
+                alt="DOREWA — Women-led agri-energy cohort"
+                className="block w-full aspect-[16/9] object-cover"
+              />
+            </div>
+          )}
           <div className="max-w-5xl mx-auto">
             <div className="flex flex-wrap items-center gap-2 mb-6">
               <Badge variant={statusCfg.variant} data-testid="badge-cohort-status">{statusCfg.label}</Badge>
@@ -116,9 +127,9 @@ export default function CohortDetail() {
               <p className="text-xl text-muted-foreground max-w-3xl" data-testid="text-cohort-tagline">{cohort.tagline}</p>
             )}
 
-            {cohort.heroImageUrl && (
+            {cohort.slug !== "dorewa" && heroImageUrl && (
               <div className="mt-10 rounded-md overflow-hidden shadow-lg">
-                <img src={cohort.heroImageUrl} alt={cohort.displayName || cohort.name} className="w-full h-80 object-cover" />
+                <img src={heroImageUrl} alt={cohort.displayName || cohort.name} className="w-full h-80 object-cover" />
               </div>
             )}
           </div>
