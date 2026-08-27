@@ -67,6 +67,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { ExtraQuestion } from "@shared/schema";
+import { ExtraQuestionsSection } from "@/components/ExtraQuestionsSection";
 
 const COUNTRIES = [
   "Afghanistan","Albania","Algeria","Angola","Argentina","Armenia","Australia","Austria","Azerbaijan",
@@ -3035,84 +3036,6 @@ function CommitmentSection({
           </FormItem>
         )}
       />
-    </div>
-  );
-}
-
-// Renders a cohort's custom extra questions (short text, long text, single
-// select, yes/no) and collects answers into a plain id -> value map that
-// lives outside the fixed react-hook-form schema.
-function ExtraQuestionsSection({
-  questions,
-  answers,
-  onChange,
-}: {
-  questions: ExtraQuestion[];
-  answers: Record<string, string | boolean>;
-  onChange: (id: string, value: string | boolean) => void;
-}) {
-  if (questions.length === 0) return null;
-  return (
-    <div className="space-y-6">
-      {questions.map((q) => (
-        <div key={q.id} className="space-y-2">
-          <Label htmlFor={`extra-${q.id}`}>
-            {q.label}
-            {q.required && <span className="text-destructive ml-0.5">*</span>}
-          </Label>
-          {q.type === "short_text" && (
-            <Input
-              id={`extra-${q.id}`}
-              value={(answers[q.id] as string) || ""}
-              onChange={(e) => onChange(q.id, e.target.value)}
-              data-testid={`input-extra-${q.id}`}
-            />
-          )}
-          {q.type === "long_text" && (
-            <Textarea
-              id={`extra-${q.id}`}
-              className="min-h-[120px]"
-              value={(answers[q.id] as string) || ""}
-              onChange={(e) => onChange(q.id, e.target.value)}
-              data-testid={`input-extra-${q.id}`}
-            />
-          )}
-          {q.type === "single_select" && (
-            <Select
-              value={(answers[q.id] as string) || undefined}
-              onValueChange={(v) => onChange(q.id, v)}
-            >
-              <SelectTrigger id={`extra-${q.id}`} data-testid={`select-extra-${q.id}`}>
-                <SelectValue placeholder="Select an option" />
-              </SelectTrigger>
-              <SelectContent>
-                {(q.options || []).map((opt) => (
-                  <SelectItem key={opt} value={opt}>
-                    {opt}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          {q.type === "yes_no" && (
-            <RadioGroup
-              value={answers[q.id] === true ? "yes" : answers[q.id] === false ? "no" : ""}
-              onValueChange={(v) => onChange(q.id, v === "yes")}
-              className="flex gap-6"
-              data-testid={`radiogroup-extra-${q.id}`}
-            >
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="yes" id={`extra-${q.id}-yes`} />
-                <Label htmlFor={`extra-${q.id}-yes`} className="font-normal">Yes</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="no" id={`extra-${q.id}-no`} />
-                <Label htmlFor={`extra-${q.id}-no`} className="font-normal">No</Label>
-              </div>
-            </RadioGroup>
-          )}
-        </div>
-      ))}
     </div>
   );
 }

@@ -49,6 +49,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { ExtraQuestionsSection } from "@/components/ExtraQuestionsSection";
 import {
   Plus,
   Pencil,
@@ -62,6 +63,8 @@ import {
   Loader2,
   FolderOpen,
   Mail,
+  Eye,
+  HelpCircle,
 } from "lucide-react";
 import type { Cohort, ExtraQuestion } from "@shared/schema";
 
@@ -459,142 +462,206 @@ function CohortFormFields({ form, isEdit }: { form: ReturnType<typeof useForm<Co
 // form; a cohort with no questions leaves the form completely unchanged.
 function ExtraQuestionsEditor({ form }: { form: ReturnType<typeof useForm<CohortFormValues>> }) {
   const { fields, append, remove, move } = useFieldArray({ control: form.control, name: "extraQuestions" });
+  const questions = form.watch("extraQuestions") ?? [];
+  const cohortLabel = form.watch("displayName")?.trim() || form.watch("name")?.trim() || "AFÁRÁ Accelerator";
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   return (
-    <div className="sm:col-span-2 space-y-3 border-t pt-4 mt-1">
-      <div className="flex items-center justify-between">
-        <FormLabel className="text-base">Custom application questions</FormLabel>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            append({ id: newExtraQuestionId(), label: "", type: "short_text", required: false, options: [] })
-          }
-          data-testid="button-add-extra-question"
-        >
-          <Plus className="h-3.5 w-3.5 mr-1" /> Add question
-        </Button>
-      </div>
-      <FormDescription>
-        Optional, cohort-specific questions shown as an extra step near the end of this cohort's application
-        form. Leave empty to keep the standard AFÁRA application form unchanged.
-      </FormDescription>
-      {fields.length === 0 && (
-        <p className="text-sm text-muted-foreground italic">No custom questions added.</p>
-      )}
-      <div className="space-y-3">
-        {fields.map((field, index) => {
-          const type = form.watch(`extraQuestions.${index}.type`);
-          return (
-            <Card key={field.id} className="p-3 bg-muted/30">
-              <div className="flex items-start gap-2">
-                <div className="flex-1 space-y-2 min-w-0">
-                  <FormField
-                    control={form.control}
-                    name={`extraQuestions.${index}.label`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <Input {...field} placeholder="Question text" data-testid={`input-extra-question-label-${index}`} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <div className="flex flex-wrap gap-3 items-center">
+    <>
+      <div className="sm:col-span-2 space-y-3 border-t pt-4 mt-1">
+        <div className="flex items-center justify-between gap-2">
+          <FormLabel className="text-base">Custom application questions</FormLabel>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={questions.length === 0}
+              onClick={() => setPreviewOpen(true)}
+              data-testid="button-preview-extra-questions"
+            >
+              <Eye className="h-3.5 w-3.5" /> Preview
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                append({ id: newExtraQuestionId(), label: "", type: "short_text", required: false, options: [] })
+              }
+              data-testid="button-add-extra-question"
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" /> Add question
+            </Button>
+          </div>
+        </div>
+        <FormDescription>
+          Optional, cohort-specific questions shown as an extra step near the end of this cohort's application
+          form. Leave empty to keep the standard AFÁRA application form unchanged.
+        </FormDescription>
+        {fields.length === 0 && (
+          <p className="text-sm text-muted-foreground italic">No custom questions added.</p>
+        )}
+        <div className="space-y-3">
+          {fields.map((field, index) => {
+            const type = form.watch(`extraQuestions.${index}.type`);
+            return (
+              <Card key={field.id} className="p-3 bg-muted/30">
+                <div className="flex items-start gap-2">
+                  <div className="flex-1 space-y-2 min-w-0">
                     <FormField
                       control={form.control}
-                      name={`extraQuestions.${index}.type`}
-                      render={({ field }) => (
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger className="w-40" data-testid={`select-extra-question-type-${index}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="short_text">Short text</SelectItem>
-                            <SelectItem value="long_text">Long text</SelectItem>
-                            <SelectItem value="single_select">Single select</SelectItem>
-                            <SelectItem value="yes_no">Yes / No</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`extraQuestions.${index}.required`}
-                      render={({ field }) => (
-                        <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                            data-testid={`checkbox-extra-question-required-${index}`}
-                          />
-                          Required
-                        </label>
-                      )}
-                    />
-                  </div>
-                  {type === "single_select" && (
-                    <FormField
-                      control={form.control}
-                      name={`extraQuestions.${index}.options`}
+                      name={`extraQuestions.${index}.label`}
                       render={({ field }) => (
                         <FormItem>
                           <FormControl>
-                            <Input
-                              placeholder="Option A, Option B, Option C"
-                              value={(field.value || []).join(", ")}
-                              onChange={(e) =>
-                                field.onChange(e.target.value.split(",").map((s) => s.trim()).filter(Boolean))
-                              }
-                              data-testid={`input-extra-question-options-${index}`}
-                            />
+                            <Input {...field} placeholder="Question text" data-testid={`input-extra-question-label-${index}`} />
                           </FormControl>
-                          <FormDescription>Comma-separated list of options</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                  )}
+                    <div className="flex flex-wrap gap-3 items-center">
+                      <FormField
+                        control={form.control}
+                        name={`extraQuestions.${index}.type`}
+                        render={({ field }) => (
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <SelectTrigger className="w-40" data-testid={`select-extra-question-type-${index}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="short_text">Short text</SelectItem>
+                              <SelectItem value="long_text">Long text</SelectItem>
+                              <SelectItem value="single_select">Single select</SelectItem>
+                              <SelectItem value="yes_no">Yes / No</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`extraQuestions.${index}.required`}
+                        render={({ field }) => (
+                          <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid={`checkbox-extra-question-required-${index}`}
+                            />
+                            Required
+                          </label>
+                        )}
+                      />
+                    </div>
+                    {type === "single_select" && (
+                      <FormField
+                        control={form.control}
+                        name={`extraQuestions.${index}.options`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input
+                                placeholder="Option A, Option B, Option C"
+                                value={(field.value || []).join(", ")}
+                                onChange={(e) =>
+                                  field.onChange(e.target.value.split(",").map((s) => s.trim()).filter(Boolean))
+                                }
+                                data-testid={`input-extra-question-options-${index}`}
+                              />
+                            </FormControl>
+                            <FormDescription>Comma-separated list of options</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1 flex-shrink-0">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      disabled={index === 0}
+                      onClick={() => move(index, index - 1)}
+                      data-testid={`button-move-up-extra-question-${index}`}
+                    >
+                      <ArrowUp className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      disabled={index === fields.length - 1}
+                      onClick={() => move(index, index + 1)}
+                      data-testid={`button-move-down-extra-question-${index}`}
+                    >
+                      <ArrowDown className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => remove(index)}
+                      data-testid={`button-remove-extra-question-${index}`}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-1 flex-shrink-0">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    disabled={index === 0}
-                    onClick={() => move(index, index - 1)}
-                    data-testid={`button-move-up-extra-question-${index}`}
-                  >
-                    <ArrowUp className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    disabled={index === fields.length - 1}
-                    onClick={() => move(index, index + 1)}
-                    data-testid={`button-move-down-extra-question-${index}`}
-                  >
-                    <ArrowDown className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => remove(index)}
-                    data-testid={`button-remove-extra-question-${index}`}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          );
-        })}
+              </Card>
+            );
+          })}
+        </div>
       </div>
-    </div>
+      <ExtraQuestionsPreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        questions={questions as ExtraQuestion[]}
+        cohortLabel={cohortLabel}
+      />
+    </>
+  );
+}
+
+function ExtraQuestionsPreviewDialog({
+  open,
+  onOpenChange,
+  questions,
+  cohortLabel,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  questions: ExtraQuestion[];
+  cohortLabel: string;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto" data-testid="dialog-preview-extra-questions">
+        <DialogHeader>
+          <DialogTitle>Preview “Additional Questions”</DialogTitle>
+          <DialogDescription>
+            This is how applicants will see this step. The preview updates as you edit the questions, including unsaved changes.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="rounded-lg border bg-background p-5">
+          <div className="mb-6">
+            <h3 className="flex items-center gap-2 text-lg font-semibold">
+              <HelpCircle className="h-5 w-5" />
+              Additional Questions
+            </h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              {cohortLabel}-specific questions
+            </p>
+          </div>
+          <ExtraQuestionsSection questions={questions} readOnly />
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
