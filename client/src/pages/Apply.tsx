@@ -2914,7 +2914,9 @@ function CommitmentSection({
             </FormControl>
             <div className="space-y-1 leading-none">
               <FormLabel>
-                Are you able to commit time to a six-month accelerator program, including workshops and mentoring sessions?
+                {isDorewaLite
+                  ? "Are you able to commit time to the 16-week DOREWA program, including workshops and mentoring sessions?"
+                  : "Are you able to commit time to a six-month accelerator program, including workshops and mentoring sessions?"}
               </FormLabel>
             </div>
           </FormItem>
@@ -2935,7 +2937,9 @@ function CommitmentSection({
             </FormControl>
             <div className="space-y-1 leading-none">
               <FormLabel>
-                Are you able to commit to our 2-day immersive, in-person event in Nairobi, Kenya?
+                {isDorewaLite
+                  ? "Are you able to attend our physical event in Lagos, Nigeria?"
+                  : "Are you able to commit to our 2-day immersive, in-person event in Nairobi, Kenya?"}
               </FormLabel>
             </div>
           </FormItem>
