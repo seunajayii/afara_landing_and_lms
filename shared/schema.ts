@@ -258,6 +258,18 @@ export const resources = pgTable("resources", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Every private video is tracked as soon as it reaches object storage. The
+// resourceId remains nullable while an administrator is still editing the
+// resource, so abandoned uploads can be removed without scanning provider
+// storage blindly.
+export const privateVideoUploads = pgTable("private_video_uploads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  storageKey: text("storage_key").notNull().unique(),
+  uploadedById: varchar("uploaded_by_id").references(() => users.id, { onDelete: "set null" }),
+  resourceId: varchar("resource_id").references(() => resources.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const discussionThreads = pgTable("discussion_threads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),
@@ -609,6 +621,8 @@ export type InsertEventRegistration = z.infer<typeof insertEventRegistrationSche
 export type EventRegistration = typeof eventRegistrations.$inferSelect;
 export type InsertResource = z.infer<typeof insertResourceSchema>;
 export type Resource = typeof resources.$inferSelect;
+export type PrivateVideoUpload = typeof privateVideoUploads.$inferSelect;
+export type InsertPrivateVideoUpload = typeof privateVideoUploads.$inferInsert;
 export type InsertDiscussionThread = z.infer<typeof insertDiscussionThreadSchema>;
 export type DiscussionThread = typeof discussionThreads.$inferSelect;
 export type InsertDiscussionPost = z.infer<typeof insertDiscussionPostSchema>;

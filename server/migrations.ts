@@ -99,6 +99,22 @@ export async function runSchemaMigrations() {
         ADD COLUMN IF NOT EXISTS video_content_type TEXT,
         ADD COLUMN IF NOT EXISTS video_file_size INTEGER
     `);
+    // Private video objects are created before the resource form is saved.
+    // Keep a durable owner/timestamp ledger so abandoned objects can be
+    // removed after a retention period without touching attached resources.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS private_video_uploads (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        storage_key TEXT NOT NULL UNIQUE,
+        uploaded_by_id VARCHAR REFERENCES users(id) ON DELETE SET NULL,
+        resource_id VARCHAR REFERENCES resources(id) ON DELETE SET NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS private_video_uploads_created_at_idx
+        ON private_video_uploads (created_at)
+    `);
     // Course curriculum additions are nullable/defaulted so existing courses
     // and seeded lessons keep working. Existing lessons are treated as
     // published to preserve the learner experience they already had.

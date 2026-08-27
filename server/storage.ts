@@ -12,7 +12,7 @@ import {
   type MentorshipSession, type InsertMentorshipSession,
   type Event, type InsertEvent,
   type EventRegistration, type InsertEventRegistration,
-  type Resource, type InsertResource,
+  type Resource, type InsertResource, type PrivateVideoUpload,
   type DiscussionThread, type InsertDiscussionThread,
   type DiscussionPost, type InsertDiscussionPost,
   type Certificate, type InsertCertificate,
@@ -26,14 +26,14 @@ import {
   users, profiles, mentorProfiles, facilitatorProfiles,
   courses, modules, lessons, enrollments, lessonProgress,
   mentorshipRequests, mentorshipSessions,
-  events, eventRegistrations, resources,
+  events, eventRegistrations, resources, privateVideoUploads,
   discussionThreads, discussionPosts, postLikes,
   certificates, achievements, userAchievements, notifications,
   newsletterSubscribers, newsletterCampaigns,
   applications, applicationEvaluations, cohorts, courseCohortAssignments
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, ne, desc, asc, sql, or, inArray } from "drizzle-orm";
+import { eq, and, ne, desc, asc, sql, or, inArray, isNull, lt } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -127,6 +127,11 @@ export interface IStorage {
   updateResource(id: string, data: Partial<InsertResource>): Promise<Resource | undefined>;
   deleteResource(id: string): Promise<void>;
   incrementResourceDownload(id: string): Promise<void>;
+  trackPrivateVideoUpload(storageKey: string, uploadedById: string): Promise<PrivateVideoUpload>;
+  claimPrivateVideoUpload(storageKey: string, resourceId: string): Promise<void>;
+  getExpiredPrivateVideoUploads(cutoff: Date): Promise<PrivateVideoUpload[]>;
+  getResourceByVideoStorageKey(storageKey: string): Promise<Resource | undefined>;
+  removePrivateVideoUpload(storageKey: string): Promise<void>;
   
   getDiscussionThread(id: string): Promise<DiscussionThread | undefined>;
   getAllDiscussionThreads(): Promise<DiscussionThread[]>;
@@ -674,6 +679,40 @@ export class DatabaseStorage implements IStorage {
 
   async deleteResource(id: string): Promise<void> {
     await db.delete(resources).where(eq(resources.id, id));
+  }
+
+  async trackPrivateVideoUpload(storageKey: string, uploadedById: string): Promise<PrivateVideoUpload> {
+    const [upload] = await db.insert(privateVideoUploads)
+      .values({ storageKey, uploadedById })
+      .returning();
+    return upload;
+  }
+
+  async claimPrivateVideoUpload(storageKey: string, resourceId: string): Promise<void> {
+    await db.update(privateVideoUploads)
+      .set({ resourceId })
+      .where(and(
+        eq(privateVideoUploads.storageKey, storageKey),
+        isNull(privateVideoUploads.resourceId),
+      ));
+  }
+
+  async getExpiredPrivateVideoUploads(cutoff: Date): Promise<PrivateVideoUpload[]> {
+    return db.select().from(privateVideoUploads).where(and(
+      isNull(privateVideoUploads.resourceId),
+      lt(privateVideoUploads.createdAt, cutoff),
+    ));
+  }
+
+  async getResourceByVideoStorageKey(storageKey: string): Promise<Resource | undefined> {
+    const [resource] = await db.select().from(resources)
+      .where(eq(resources.videoStorageKey, storageKey));
+    return resource;
+  }
+
+  async removePrivateVideoUpload(storageKey: string): Promise<void> {
+    await db.delete(privateVideoUploads)
+      .where(eq(privateVideoUploads.storageKey, storageKey));
   }
 
   async incrementResourceDownload(id: string): Promise<void> {

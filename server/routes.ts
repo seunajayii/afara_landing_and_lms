@@ -95,6 +95,8 @@ const youtubeUploadMetadataSchema = z.object({
 const YOUTUBE_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024;
 const MAX_YOUTUBE_UPLOAD_SIZE = 10 * 1024 * 1024 * 1024;
 const YOUTUBE_UPLOAD_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+const PRIVATE_VIDEO_UPLOAD_RETENTION_MS = 24 * 60 * 60 * 1000;
+const PRIVATE_VIDEO_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const youtubeResumableUploadSchema = youtubeUploadMetadataSchema.extend({
   fileSize: z.number().int().positive().max(MAX_YOUTUBE_UPLOAD_SIZE),
   contentType: z.string().trim().regex(/^video\//).max(100),
@@ -394,10 +396,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const cleanupPrivateVideo = async (resourceId: string, storageKey: string | null | undefined) => {
     if (!storageKey) return;
     try {
+      const attachedResource = await storage.getResourceByVideoStorageKey(storageKey);
+      if (attachedResource && attachedResource.id !== resourceId) {
+        return;
+      }
       const { deletePrivateVideo } = await import("./r2-storage");
       await deletePrivateVideo(storageKey);
+      await storage.removePrivateVideoUpload(storageKey);
     } catch (error) {
       console.error(`Failed to clean up private video for resource ${resourceId}:`, error);
+    }
+  };
+
+  // Uploads are tracked before they are returned to the admin UI. Cleanup is
+  // deliberately best-effort: the database/resource association is
+  // authoritative, and a storage outage must only leave an object for a
+  // later sweep rather than break an unrelated request.
+  let privateVideoCleanupInProgress = false;
+  const cleanupExpiredPrivateVideoUploads = async () => {
+    if (privateVideoCleanupInProgress) return;
+    privateVideoCleanupInProgress = true;
+    try {
+      const cutoff = new Date(Date.now() - PRIVATE_VIDEO_UPLOAD_RETENTION_MS);
+      const uploads = await storage.getExpiredPrivateVideoUploads(cutoff);
+      for (const upload of uploads) {
+        const attachedResource = await storage.getResourceByVideoStorageKey(upload.storageKey);
+        if (attachedResource) {
+          // Recover from a process interruption between saving the resource
+          // and claiming the upload ledger row.
+          await storage.claimPrivateVideoUpload(upload.storageKey, attachedResource.id);
+          continue;
+        }
+        try {
+          const { deletePrivateVideo } = await import("./r2-storage");
+          await deletePrivateVideo(upload.storageKey);
+          await storage.removePrivateVideoUpload(upload.storageKey);
+        } catch (error) {
+          console.error(`Failed to clean up expired private video upload ${upload.id}:`, error);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to sweep expired private video uploads:", error);
+    } finally {
+      privateVideoCleanupInProgress = false;
+    }
+  };
+  void cleanupExpiredPrivateVideoUploads();
+  const privateVideoCleanupTimer = setInterval(
+    () => void cleanupExpiredPrivateVideoUploads(),
+    PRIVATE_VIDEO_CLEANUP_INTERVAL_MS,
+  );
+  privateVideoCleanupTimer.unref();
+
+  const claimPrivateVideoUpload = async (storageKey: string | null | undefined, resourceId: string) => {
+    if (!storageKey) return;
+    try {
+      await storage.claimPrivateVideoUpload(storageKey, resourceId);
+    } catch (error) {
+      console.error(`Failed to claim private video upload for resource ${resourceId}:`, error);
     }
   };
 
@@ -1751,6 +1807,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
     async (req: Request, res: Response) => {
       if (!req.file) return res.status(400).json({ error: "Choose a video file to upload." });
+      const uploadedById = req.session.userId;
+      if (!uploadedById) return res.status(401).json({ error: "Authentication required" });
       try {
         const { isR2Configured, uploadFile } = await import("./r2-storage");
         if (!isR2Configured()) {
@@ -1767,9 +1825,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           req.file.mimetype || "video/mp4",
           false,
         );
+        let upload;
+        try {
+          upload = await storage.trackPrivateVideoUpload(key, uploadedById);
+        } catch (error) {
+          try {
+            const { deletePrivateVideo } = await import("./r2-storage");
+            await deletePrivateVideo(key);
+          } catch (cleanupError) {
+            console.error("Failed to clean up untracked private video upload:", cleanupError);
+          }
+          throw error;
+        }
         res.status(201).json({
           videoSource: "upload",
           videoStorageKey: result.key,
+          uploadId: upload.id,
           fileName: originalName,
           fileSize: req.file.size,
           contentType: req.file.mimetype || "video/mp4",
@@ -1834,6 +1905,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = youtubeVideoResourceSchema.parse(req.body);
       const resource = await storage.createResource(data);
+      await claimPrivateVideoUpload(data.videoStorageKey, resource.id);
       res.status(201).json(resource);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1850,9 +1922,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const data = insertResourceSchema.partial().parse(req.body);
       youtubeVideoResourceSchema.parse({ ...existing, ...data });
       const resource = await storage.updateResource(req.params.id, data);
-      if (resource && existing.videoStorageKey !== resource.videoStorageKey) {
+      const existingUsesPrivateVideo = existing.videoSource === "upload" ||
+        (!existing.videoSource && Boolean(existing.videoStorageKey));
+      const updatedUsesPrivateVideo = resource?.videoSource === "upload" ||
+        (!resource?.videoSource && Boolean(resource?.videoStorageKey));
+      if (
+        resource &&
+        existingUsesPrivateVideo &&
+        (!updatedUsesPrivateVideo || existing.videoStorageKey !== resource.videoStorageKey)
+      ) {
         await cleanupPrivateVideo(existing.id, existing.videoStorageKey);
       }
+      if (resource) await claimPrivateVideoUpload(resource.videoStorageKey, resource.id);
       res.json(resource);
     } catch (error) {
       if (error instanceof z.ZodError) {
