@@ -1,1 +1,2 @@
 - [Cohort system](cohort-system.md) — cohorts table added; cohortId FK on applications; cohort CRUD + batch-eval routes all require admin role
+- [YouTube learning materials](youtube-learning-materials.md) — YouTube videos are LMS resources; unlisted embeds are app-gated but not share-proof

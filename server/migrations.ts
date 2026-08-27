@@ -70,6 +70,31 @@ export async function runSchemaMigrations() {
       ALTER TABLE applications
         ADD COLUMN IF NOT EXISTS extra_answers JSONB NOT NULL DEFAULT '{}'::jsonb
     `);
+    // YouTube-backed learning resources sit alongside existing downloadable
+    // materials. The columns are nullable so all existing resources remain
+    // unchanged.
+    await db.execute(sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_enum
+          WHERE enumlabel = 'video'
+            AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'resource_type')
+        ) THEN
+          ALTER TYPE resource_type ADD VALUE 'video';
+        END IF;
+      END
+      $$;
+    `);
+    await db.execute(sql`
+      ALTER TABLE resources
+        ADD COLUMN IF NOT EXISTS youtube_video_id TEXT,
+        ADD COLUMN IF NOT EXISTS youtube_url TEXT,
+        ADD COLUMN IF NOT EXISTS youtube_thumbnail_url TEXT,
+        ADD COLUMN IF NOT EXISTS youtube_duration_seconds INTEGER,
+        ADD COLUMN IF NOT EXISTS youtube_privacy_status TEXT,
+        ADD COLUMN IF NOT EXISTS youtube_upload_status TEXT
+    `);
     log("Schema migrations applied successfully");
 
     // Data migration: backfill slugs/status for pre-existing cohorts, seed the two

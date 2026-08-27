@@ -62,6 +62,8 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
+  Video,
+  CheckCircle2,
 } from "lucide-react";
 import type { Resource } from "@shared/schema";
 
@@ -71,10 +73,34 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function getRequestErrorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof Error)) return fallback;
+  const message = error.message.replace(/^\d+:\s*/, "");
+  try {
+    const body = JSON.parse(message) as { error?: string | { message?: string }[] };
+    if (typeof body.error === "string") return body.error;
+    if (Array.isArray(body.error) && body.error[0]?.message) return body.error[0].message;
+  } catch {
+    // Use the response text below when it was not JSON.
+  }
+  return message || fallback;
+}
+
 interface UploadedFile {
   fileUrl: string;
   fileName: string;
   fileSize: number;
+}
+
+interface YouTubeVideo {
+  videoId: string;
+  url: string;
+  title: string;
+  description: string;
+  thumbnailUrl: string | null;
+  durationSeconds: number | null;
+  privacyStatus: string | null;
+  uploadStatus: string | null;
 }
 
 interface ResourceFileUploaderProps {
@@ -178,6 +204,218 @@ function ResourceFileUploader({ current, onUploaded, onCleared }: ResourceFileUp
   );
 }
 
+function formatVideoDuration(seconds: number | null | undefined): string {
+  if (seconds == null) return "Duration unavailable";
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
+function YouTubeVideoFields({
+  form,
+  idPrefix,
+  videoId,
+  thumbnailUrl,
+  durationSeconds,
+  privacyStatus,
+  uploadStatus,
+  onVideoSelected,
+  onClear,
+}: {
+  form: ReturnType<typeof useForm<ResourceFormData>>;
+  idPrefix: string;
+  videoId: string | undefined;
+  thumbnailUrl: string | undefined;
+  durationSeconds: number | undefined;
+  privacyStatus: string | undefined;
+  uploadStatus: string | undefined;
+  onVideoSelected: (video: YouTubeVideo) => void;
+  onClear: () => void;
+}) {
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [videoValue, setVideoValue] = useState(form.getValues("youtubeUrl") || "");
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  async function resolveVideo() {
+    if (!videoValue.trim()) {
+      toast({ title: "Add a YouTube link", description: "Paste a YouTube URL or 11-character video ID first.", variant: "destructive" });
+      return;
+    }
+
+    setIsLookingUp(true);
+    try {
+      const response = await apiRequest("POST", "/api/admin/youtube/videos/resolve", { value: videoValue.trim() });
+      const video = await response.json() as YouTubeVideo;
+      onVideoSelected(video);
+      setVideoValue(video.url);
+      toast({ title: "YouTube video added", description: video.title });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message.replace(/^\d+:\s*/, "") : "Unable to look up this YouTube video.";
+      toast({ title: "Video not available", description: message, variant: "destructive" });
+    } finally {
+      setIsLookingUp(false);
+    }
+  }
+
+  function uploadVideo(file: File) {
+    const title = form.getValues("title").trim();
+    if (!title) {
+      toast({ title: "Add a title first", description: "Enter a resource title before uploading a video.", variant: "destructive" });
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(0);
+    const data = new FormData();
+    data.append("video", file);
+    data.append("title", title);
+    data.append("description", form.getValues("description") || "");
+    data.append("privacyStatus", form.getValues("youtubePrivacyStatus") || "unlisted");
+
+    const request = new XMLHttpRequest();
+    request.open("POST", "/api/admin/youtube/videos/upload");
+    request.withCredentials = true;
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) setUploadProgress(Math.round((event.loaded / event.total) * 100));
+    };
+    request.onerror = () => {
+      setIsUploading(false);
+      toast({ title: "Upload error", description: "The video could not be uploaded. Check your connection and try again.", variant: "destructive" });
+    };
+    request.onload = () => {
+      setIsUploading(false);
+      if (request.status < 200 || request.status >= 300) {
+        let message = "YouTube could not process this upload.";
+        try {
+          message = (JSON.parse(request.responseText) as { error?: string }).error || message;
+        } catch {
+          // Fall back to the concise message above.
+        }
+        toast({ title: "Upload error", description: message, variant: "destructive" });
+        return;
+      }
+
+      const video = JSON.parse(request.responseText) as YouTubeVideo;
+      onVideoSelected(video);
+      setVideoValue(video.url);
+      toast({ title: "Video uploaded to YouTube", description: "You can now publish this learning resource." });
+    };
+    request.send(data);
+  }
+
+  return (
+    <div className="space-y-4 rounded-md border p-4">
+      <div className="flex items-center gap-2 text-sm font-medium text-red-600 dark:text-red-400">
+        <Video className="w-4 h-4" />
+        YouTube Video
+      </div>
+
+      {videoId ? (
+        <div className="rounded-md border bg-muted/40 overflow-hidden">
+          <div className="flex flex-col sm:flex-row">
+            {thumbnailUrl ? (
+              <img src={thumbnailUrl} alt="" className="h-32 w-full object-cover sm:w-56" />
+            ) : (
+              <div className="h-32 w-full bg-muted flex items-center justify-center sm:w-56">
+                <Video className="w-8 h-8 text-muted-foreground" />
+              </div>
+            )}
+            <div className="p-3 flex-1 min-w-0">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                <span>Video selected</span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground break-all">ID: {videoId}</p>
+              <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                <Badge variant="outline">{formatVideoDuration(durationSeconds)}</Badge>
+                {privacyStatus && <Badge variant="outline">{privacyStatus}</Badge>}
+                {uploadStatus && <Badge variant="outline">{uploadStatus}</Badge>}
+              </div>
+              <Button type="button" variant="ghost" className="px-0 h-auto mt-3 text-destructive hover:text-destructive" onClick={onClear} data-testid={`button-clear-${idPrefix}-youtube-video`}>
+                Remove video
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-2">
+            <FormLabel>Existing YouTube Video</FormLabel>
+            <div className="flex gap-2">
+              <Input
+                value={videoValue}
+                onChange={(event) => setVideoValue(event.target.value)}
+                placeholder="Paste a YouTube URL or video ID"
+                data-testid={`input-${idPrefix}-youtube-url`}
+              />
+              <Button type="button" variant="outline" onClick={resolveVideo} disabled={isLookingUp} data-testid={`button-${idPrefix}-youtube-lookup`}>
+                {isLookingUp ? <Loader2 className="w-4 h-4 animate-spin" /> : "Use video"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground">or upload to the connected YouTube channel</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+
+          <FormField
+            control={form.control}
+            name="youtubePrivacyStatus"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>YouTube privacy for uploads</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value || "unlisted"}>
+                  <FormControl>
+                    <SelectTrigger data-testid={`select-${idPrefix}-youtube-privacy`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="unlisted">Unlisted (recommended)</SelectItem>
+                    <SelectItem value="private">Private</SelectItem>
+                    <SelectItem value="public">Public</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Unlisted videos are not searchable, but anyone with the YouTube link can share it.</p>
+              </FormItem>
+            )}
+          />
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="video/mp4,video/quicktime,video/webm,video/x-m4v"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) uploadVideo(file);
+              event.target.value = "";
+            }}
+            data-testid={`input-${idPrefix}-youtube-upload`}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full min-h-20 flex-col gap-1"
+            disabled={isUploading}
+            onClick={() => fileInputRef.current?.click()}
+            data-testid={`button-${idPrefix}-youtube-upload`}
+          >
+            {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <UploadCloud className="w-5 h-5" />}
+            <span>{isUploading ? `Uploading to YouTube… ${uploadProgress}%` : "Upload video to YouTube"}</span>
+            <span className="text-xs font-normal text-muted-foreground">MP4, MOV, WebM, or M4V · maximum 250 MB</span>
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ResourceCardSkeleton() {
   return (
     <Card>
@@ -199,11 +437,18 @@ function ResourceCardSkeleton() {
 const resourceFormSchema = z.object({
   title: z.string().min(1, "Title is required").min(3, "Title must be at least 3 characters"),
   description: z.string().optional(),
-  resourceType: z.enum(["document", "template", "toolkit", "guide", "resource_partner"]),
+  resourceType: z.enum(["document", "template", "toolkit", "guide", "resource_partner", "video"]),
   category: z.string().min(1, "Category is required"),
   fileUrl: z.string().optional().or(z.literal("")),
   fileName: z.string().optional(),
   fileSize: z.number().optional(),
+  thumbnailUrl: z.string().optional().or(z.literal("")),
+  youtubeVideoId: z.string().optional().or(z.literal("")),
+  youtubeUrl: z.string().optional().or(z.literal("")),
+  youtubeThumbnailUrl: z.string().optional().or(z.literal("")),
+  youtubeDurationSeconds: z.number().int().nonnegative().optional(),
+  youtubePrivacyStatus: z.string().optional().or(z.literal("")),
+  youtubeUploadStatus: z.string().optional().or(z.literal("")),
   visibility: z.enum(["public", "community", "cohort_only"]).default("community"),
   status: z.enum(["draft", "pending_review", "published", "archived"]),
   partnerName: z.string().optional(),
@@ -242,6 +487,7 @@ function getResourceTypeIcon(type: string) {
     case "toolkit": return <File className="w-5 h-5" />;
     case "guide": return <FileImage className="w-5 h-5" />;
     case "resource_partner": return <ExternalLink className="w-5 h-5" />;
+    case "video": return <Video className="w-5 h-5" />;
     default: return <FileText className="w-5 h-5" />;
   }
 }
@@ -253,6 +499,7 @@ function getResourceTypeColor(type: string) {
     case "toolkit": return "bg-purple-500/10 text-purple-600 dark:text-purple-400";
     case "guide": return "bg-orange-500/10 text-orange-600 dark:text-orange-400";
     case "resource_partner": return "bg-teal-500/10 text-teal-600 dark:text-teal-400";
+    case "video": return "bg-red-500/10 text-red-600 dark:text-red-400";
     default: return "";
   }
 }
@@ -265,6 +512,13 @@ const emptyDefaults: ResourceFormData = {
   fileUrl: "",
   fileName: "",
   fileSize: undefined,
+  thumbnailUrl: "",
+  youtubeVideoId: "",
+  youtubeUrl: "",
+  youtubeThumbnailUrl: "",
+  youtubeDurationSeconds: undefined,
+  youtubePrivacyStatus: "",
+  youtubeUploadStatus: "",
   visibility: "community",
   status: "published",
   partnerName: "",
@@ -309,8 +563,8 @@ export default function ResourceManagement() {
       createForm.reset(emptyDefaults);
       toast({ title: "Resource Created", description: "The resource has been created successfully." });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to create resource. Please try again.", variant: "destructive" });
+    onError: (error) => {
+      toast({ title: "Resource not created", description: getRequestErrorMessage(error, "Failed to create resource. Please try again."), variant: "destructive" });
     },
   });
 
@@ -327,8 +581,8 @@ export default function ResourceManagement() {
       editForm.reset(emptyDefaults);
       toast({ title: "Resource Updated", description: "The resource has been updated successfully." });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to update resource. Please try again.", variant: "destructive" });
+    onError: (error) => {
+      toast({ title: "Resource not updated", description: getRequestErrorMessage(error, "Failed to update resource. Please try again."), variant: "destructive" });
     },
   });
 
@@ -396,6 +650,13 @@ export default function ResourceManagement() {
       fileUrl: resource.fileUrl || "",
       fileName: resource.fileName || "",
       fileSize: resource.fileSize ?? undefined,
+      thumbnailUrl: resource.thumbnailUrl || "",
+      youtubeVideoId: resource.youtubeVideoId || "",
+      youtubeUrl: resource.youtubeUrl || "",
+      youtubeThumbnailUrl: resource.youtubeThumbnailUrl || "",
+      youtubeDurationSeconds: resource.youtubeDurationSeconds ?? undefined,
+      youtubePrivacyStatus: resource.youtubePrivacyStatus || "",
+      youtubeUploadStatus: resource.youtubeUploadStatus || "",
       visibility: (resource.visibility as ResourceFormData["visibility"]) || "community",
       status: (resource.status as ResourceFormData["status"]) || "published",
       partnerName: (resource as any).partnerName || "",
@@ -431,6 +692,35 @@ export default function ResourceManagement() {
     const [showPassword, setShowPassword] = useState(false);
     const watchedType = form.watch("resourceType");
     const isPartner = watchedType === "resource_partner";
+    const isVideo = watchedType === "video";
+    const youtubeVideoId = form.watch("youtubeVideoId");
+    const youtubeThumbnailUrl = form.watch("youtubeThumbnailUrl");
+    const youtubeDurationSeconds = form.watch("youtubeDurationSeconds");
+    const youtubePrivacyStatus = form.watch("youtubePrivacyStatus");
+
+    const applyYouTubeVideo = (video: YouTubeVideo) => {
+      form.setValue("youtubeVideoId", video.videoId, { shouldValidate: true });
+      form.setValue("youtubeUrl", video.url);
+      form.setValue("youtubeThumbnailUrl", video.thumbnailUrl || "");
+      form.setValue("youtubeDurationSeconds", video.durationSeconds ?? undefined);
+      form.setValue("youtubePrivacyStatus", video.privacyStatus || "");
+      form.setValue("youtubeUploadStatus", video.uploadStatus || "processing");
+      form.setValue("thumbnailUrl", video.thumbnailUrl || "");
+      form.setValue("fileUrl", video.url);
+      if (!form.getValues("title").trim()) form.setValue("title", video.title);
+      if (!form.getValues("description")?.trim() && video.description) form.setValue("description", video.description);
+    };
+
+    const clearYouTubeVideo = () => {
+      form.setValue("youtubeVideoId", "");
+      form.setValue("youtubeUrl", "");
+      form.setValue("youtubeThumbnailUrl", "");
+      form.setValue("youtubeDurationSeconds", undefined);
+      form.setValue("youtubePrivacyStatus", "");
+      form.setValue("youtubeUploadStatus", "");
+      form.setValue("thumbnailUrl", "");
+      form.setValue("fileUrl", "");
+    };
 
     return (
       <div className="space-y-4">
@@ -478,6 +768,7 @@ export default function ResourceManagement() {
                     <SelectItem value="template">Template</SelectItem>
                     <SelectItem value="toolkit">Toolkit</SelectItem>
                     <SelectItem value="guide">Guide</SelectItem>
+                    <SelectItem value="video">YouTube Video</SelectItem>
                     <SelectItem value="resource_partner">Resource Partner</SelectItem>
                   </SelectContent>
                 </Select>
@@ -509,7 +800,21 @@ export default function ResourceManagement() {
           />
         </div>
 
-        {!isPartner && (
+        {isVideo && (
+          <YouTubeVideoFields
+            form={form}
+            idPrefix={idPrefix}
+            videoId={youtubeVideoId}
+            thumbnailUrl={youtubeThumbnailUrl}
+            durationSeconds={youtubeDurationSeconds}
+            privacyStatus={youtubePrivacyStatus}
+            uploadStatus={form.watch("youtubeUploadStatus")}
+            onVideoSelected={applyYouTubeVideo}
+            onClear={clearYouTubeVideo}
+          />
+        )}
+
+        {!isPartner && !isVideo && (
           <div className="space-y-3">
             <p className="text-sm font-medium">File</p>
             <ResourceFileUploader current={upload} onUploaded={onUploaded} onCleared={onCleared} />

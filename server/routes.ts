@@ -15,10 +15,32 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import { randomUUID } from "crypto";
+import {
+  getYouTubeVideo,
+  parseYouTubeVideoId,
+  uploadYouTubeVideo,
+  type YouTubePrivacyStatus,
+} from "./youtube";
 
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6)
+});
+
+const youtubeVideoResourceSchema = insertResourceSchema.superRefine((resource, ctx) => {
+  if (resource.resourceType === "video" && !resource.youtubeVideoId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["youtubeVideoId"],
+      message: "A YouTube video is required for video resources.",
+    });
+  }
+});
+
+const youtubeUploadMetadataSchema = z.object({
+  title: z.string().trim().min(3).max(100),
+  description: z.string().trim().max(5000).optional(),
+  privacyStatus: z.enum(["public", "unlisted", "private"]).default("unlisted"),
 });
 
 /**
@@ -1039,6 +1061,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!resource) return res.status(404).json({ error: "Resource not found" });
       const userRole = (req.session?.userRole as string) || null;
       const isAdminUser = userRole === "admin" || userRole === "superadmin";
+      if (!isAdminUser && resource.status !== "published") {
+        return res.status(404).json({ error: "Resource not found" });
+      }
       if (!isAdminUser && !canAccessVisibility(resource.visibility, userRole)) {
         return res.status(403).json({ error: "Access denied" });
       }
@@ -1053,6 +1078,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     storage: multer.memoryStorage(),
     limits: { fileSize: 4 * 1024 * 1024 }, // 4 MB
   });
+
+  const youtubeVideoUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 250 * 1024 * 1024 },
+    fileFilter: (_req, file, callback) => {
+      if (!file.mimetype.startsWith("video/")) {
+        callback(new Error("Please upload a video file."));
+        return;
+      }
+      callback(null, true);
+    },
+  });
+
+  app.post(
+    "/api/admin/youtube/videos/resolve",
+    requireAuth,
+    requireAdminRole,
+    async (req: Request, res: Response) => {
+      const parsed = z.object({ value: z.string().trim().min(1) }).safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Enter a YouTube URL or video ID." });
+      }
+
+      const videoId = parseYouTubeVideoId(parsed.data.value);
+      if (!videoId) {
+        return res.status(400).json({ error: "Enter a valid YouTube video URL or 11-character video ID." });
+      }
+
+      try {
+        const video = await getYouTubeVideo(videoId);
+        if (!video) return res.status(404).json({ error: "This YouTube video could not be found or accessed." });
+        res.json(video);
+      } catch (error) {
+        console.error("YouTube video lookup failed:", error);
+        res.status(502).json({ error: "Unable to retrieve this video from YouTube. Check the video and try again." });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/youtube/videos/upload",
+    requireAuth,
+    requireAdminRole,
+    (req: Request, res: Response, next: NextFunction) => {
+      youtubeVideoUpload.single("video")(req, res, (err) => {
+        if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({ error: "Video exceeds the 250 MB upload limit. Compress it or upload it to YouTube first, then paste its URL." });
+        }
+        if (err) return res.status(400).json({ error: err.message || "Video upload failed." });
+        next();
+      });
+    },
+    async (req: Request, res: Response) => {
+      if (!req.file) return res.status(400).json({ error: "Choose a video file to upload." });
+
+      const metadata = youtubeUploadMetadataSchema.safeParse(req.body);
+      if (!metadata.success) {
+        return res.status(400).json({ error: "Add a video title between 3 and 100 characters before uploading." });
+      }
+
+      try {
+        const video = await uploadYouTubeVideo({
+          file: req.file.buffer,
+          contentType: req.file.mimetype || "video/mp4",
+          title: metadata.data.title,
+          description: metadata.data.description,
+          privacyStatus: metadata.data.privacyStatus as YouTubePrivacyStatus,
+        });
+        res.status(201).json(video);
+      } catch (error) {
+        console.error("YouTube video upload failed:", error);
+        res.status(502).json({ error: "YouTube could not process this upload. Try again or upload the video to YouTube first and paste its URL." });
+      }
+    },
+  );
 
   app.post(
     "/api/resources/upload",
@@ -1105,7 +1205,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/resources", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
-      const data = insertResourceSchema.parse(req.body);
+      const data = youtubeVideoResourceSchema.parse(req.body);
       const resource = await storage.createResource(data);
       res.status(201).json(resource);
     } catch (error) {
@@ -1118,10 +1218,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/resources/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
-      const resource = await storage.updateResource(req.params.id, req.body);
-      if (!resource) return res.status(404).json({ error: "Resource not found" });
+      const existing = await storage.getResource(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Resource not found" });
+      const data = insertResourceSchema.partial().parse(req.body);
+      youtubeVideoResourceSchema.parse({ ...existing, ...data });
+      const resource = await storage.updateResource(req.params.id, data);
       res.json(resource);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
       res.status(500).json({ error: "Failed to update resource" });
     }
   });

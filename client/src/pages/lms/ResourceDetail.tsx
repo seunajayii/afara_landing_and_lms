@@ -4,7 +4,7 @@ import { useParams, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Lock, Download, FileText } from "lucide-react";
+import { ArrowLeft, Lock, Download, FileText, Video } from "lucide-react";
 import type { Resource } from "@shared/schema";
 
 export default function ResourceDetail() {
@@ -88,7 +88,27 @@ export default function ResourceDetail() {
                 )}
               </div>
 
-              {resource.fileUrl ? (
+              {resource.resourceType === "video" && resource.youtubeVideoId ? (
+                <div className="space-y-3">
+                  <div className="aspect-video overflow-hidden rounded-lg border bg-black shadow-sm">
+                    <iframe
+                      className="h-full w-full"
+                      src={`https://www.youtube-nocookie.com/embed/${resource.youtubeVideoId}`}
+                      title={resource.title}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                      data-testid="youtube-resource-player"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Video className="h-4 w-4" />
+                    <span>YouTube video</span>
+                    {resource.youtubeDurationSeconds ? (
+                      <span>· {Math.floor(resource.youtubeDurationSeconds / 60)} min</span>
+                    ) : null}
+                  </div>
+                </div>
+              ) : resource.fileUrl ? (
                 <Button asChild className="gap-2" data-testid="button-download-resource">
                   <a href={resource.fileUrl} target="_blank" rel="noopener noreferrer">
                     <Download className="w-4 h-4" />
