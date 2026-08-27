@@ -14,6 +14,7 @@ import Contact from "@/pages/Contact";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/lms/Dashboard";
 import Courses from "@/pages/lms/Courses";
+import CourseDetail from "@/pages/lms/CourseDetail";
 import Mentorship from "@/pages/lms/Mentorship";
 import Events from "@/pages/lms/Events";
 import EventDetail from "@/pages/lms/EventDetail";
@@ -124,6 +125,7 @@ function Router() {
       
       <Route path="/lms/dashboard">{() => <ProtectedRoute component={Dashboard} />}</Route>
       <Route path="/lms/courses">{() => <ProtectedRoute component={Courses} />}</Route>
+      <Route path="/lms/courses/:id">{() => <ProtectedRoute component={CourseDetail} />}</Route>
       <Route path="/lms/mentorship">{() => <ProtectedRoute component={Mentorship} />}</Route>
       <Route path="/lms/events">{() => <ProtectedRoute component={Events} />}</Route>
       <Route path="/lms/events/:id">{() => <ProtectedRoute component={EventDetail} />}</Route>

@@ -1,745 +1,334 @@
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { AdminSidebar } from "@/components/AdminSidebar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  Plus, 
-  Pencil, 
-  Trash2, 
-  BookOpen,
-  Search,
-  Clock,
+import { useLocation } from "wouter";
+import {
+  ArrowDown, ArrowLeft, ArrowUp, BookOpen, Clock, FileText, GripVertical,
+  Link as LinkIcon, Pencil, Plus, Search, Settings2, Trash2, Video,
 } from "lucide-react";
-import type { Course } from "@shared/schema";
+import type { Course, Lesson, Module, Resource } from "@shared/schema";
 
-function CourseCardSkeleton() {
+type LessonWithResource = Lesson & { resource?: Resource | null };
+type ModuleWithLessons = Module & { lessons: LessonWithResource[] };
+type CourseWithCurriculum = Course & {
+  modules: ModuleWithLessons[];
+  calculatedDurationMinutes: number;
+  moduleCount: number;
+  lessonCount: number;
+};
+
+const categories = ["Business Foundations", "Financial Management", "Leadership", "Marketing & Sales", "Operations", "Legal & Compliance", "Technology & Innovation"];
+const initialCourse = { title: "", shortDescription: "", description: "", category: "Business Foundations", level: "beginner", status: "draft", durationOverrideMinutes: null as number | null };
+
+function formatDuration(minutes: number | null | undefined) {
+  if (!minutes) return "Self-paced";
+  if (minutes < 60) return `${minutes} min`;
+  return `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}`;
+}
+
+function statusBadge(status: string | null) {
+  const styles: Record<string, string> = {
+    published: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    draft: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    pending_review: "bg-blue-500/10 text-blue-700 dark:text-blue-300",
+    archived: "bg-muted text-muted-foreground",
+  };
+  return <Badge className={styles[status || "draft"]}>{status || "draft"}</Badge>;
+}
+
+function CourseFields({ value, onChange, showStatus = true }: { value: typeof initialCourse; onChange: (value: typeof initialCourse) => void; showStatus?: boolean }) {
   return (
-    <Card>
-      <CardHeader>
-        <Skeleton className="h-6 w-3/4" />
-      </CardHeader>
-      <CardContent className="space-y-2">
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-2/3" />
-        <div className="flex gap-2">
-          <Skeleton className="h-6 w-20" />
-          <Skeleton className="h-6 w-16" />
+    <div className="space-y-4">
+      <div>
+        <Label htmlFor="course-title">Course title</Label>
+        <Input id="course-title" value={value.title} onChange={(e) => onChange({ ...value, title: e.target.value })} placeholder="e.g. Financial Foundations" data-testid="input-course-title" />
+      </div>
+      <div>
+        <Label htmlFor="course-summary">Short description</Label>
+        <Input id="course-summary" value={value.shortDescription} onChange={(e) => onChange({ ...value, shortDescription: e.target.value })} placeholder="Shown on the course card" />
+      </div>
+      <div>
+        <Label htmlFor="course-description">Description</Label>
+        <Textarea id="course-description" value={value.description} onChange={(e) => onChange({ ...value, description: e.target.value })} placeholder="What learners will gain from this course" rows={3} />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Category</Label>
+          <Select value={value.category} onValueChange={(category) => onChange({ ...value, category })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>{categories.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent>
+          </Select>
         </div>
-      </CardContent>
-    </Card>
+        <div>
+          <Label>Level</Label>
+          <Select value={value.level} onValueChange={(level) => onChange({ ...value, level })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="beginner">Beginner</SelectItem>
+              <SelectItem value="intermediate">Intermediate</SelectItem>
+              <SelectItem value="advanced">Advanced</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="course-duration">Duration override (minutes)</Label>
+          <Input id="course-duration" type="number" min="0" value={value.durationOverrideMinutes ?? ""} onChange={(e) => onChange({ ...value, durationOverrideMinutes: e.target.value === "" ? null : Math.max(0, Number(e.target.value)) })} placeholder="Calculated from lessons" />
+          <p className="mt-1 text-xs text-muted-foreground">Leave empty to calculate it from lesson durations.</p>
+        </div>
+        {showStatus ? <div>
+            <Label>Status</Label>
+            <Select value={value.status} onValueChange={(status) => onChange({ ...value, status })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="pending_review">Pending review</SelectItem>
+                <SelectItem value="published">Published</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
+              </SelectContent>
+            </Select>
+          </div> : <div className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">New courses are created as drafts. You can publish after adding complete modules and lessons.</div>}
+      </div>
+    </div>
   );
 }
 
-const courseFormSchema = z.object({
-  title: z.string().min(1, "Title is required").min(3, "Title must be at least 3 characters"),
-  description: z.string().optional(),
-  shortDescription: z.string().optional(),
-  category: z.string().min(1, "Category is required"),
-  level: z.string().min(1, "Level is required"),
-  durationMinutes: z.coerce.number().min(0, "Duration must be 0 or more"),
-  status: z.enum(["draft", "pending_review", "published", "archived"]),
-});
+function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () => void }) {
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const [moduleDialog, setModuleDialog] = useState(false);
+  const [lessonDialog, setLessonDialog] = useState<{ moduleId: string; lesson?: LessonWithResource } | null>(null);
+  const [settingsDialog, setSettingsDialog] = useState(false);
+  const [moduleDraft, setModuleDraft] = useState({ title: "", description: "" });
+  const [lessonDraft, setLessonDraft] = useState({
+    title: "", description: "", lessonType: "video", status: "draft", durationMinutes: 0,
+    content: "", source: "resource", resourceId: "", youtubeValue: "", videoId: "", videoDurationSeconds: 0,
+  });
+  const [settingsDraft, setSettingsDraft] = useState<typeof initialCourse>(initialCourse);
 
-type CourseFormData = z.infer<typeof courseFormSchema>;
+  const courseQuery = useQuery<CourseWithCurriculum>({ queryKey: ["/api/courses", courseId] });
+  const resourcesQuery = useQuery<Resource[]>({ queryKey: ["/api/resources"] });
+  const course = courseQuery.data;
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/courses"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/courses", courseId] });
+  };
 
-const categories = [
-  "Business Foundations",
-  "Financial Management",
-  "Leadership",
-  "Marketing & Sales",
-  "Operations",
-  "Legal & Compliance",
-  "Technology & Innovation",
-];
+  const moduleMutation = useMutation({
+    mutationFn: async () => apiRequest("POST", "/api/modules", { ...moduleDraft, courseId, orderIndex: course?.modules.length || 0 }),
+    onSuccess: () => { invalidate(); setModuleDialog(false); setModuleDraft({ title: "", description: "" }); toast({ title: "Module added" }); },
+    onError: () => toast({ title: "Could not add module", variant: "destructive" }),
+  });
+  const lessonMutation = useMutation({
+    mutationFn: async () => {
+      if (!lessonDialog) return;
+      const payload = {
+        moduleId: lessonDialog.moduleId, title: lessonDraft.title, description: lessonDraft.description || null,
+        lessonType: lessonDraft.lessonType, status: lessonDraft.status, durationMinutes: lessonDraft.durationMinutes || null,
+        content: lessonDraft.lessonType === "text" ? lessonDraft.content : null,
+        resourceId: lessonDraft.source === "resource" && lessonDraft.resourceId ? lessonDraft.resourceId : null,
+        videoSource: lessonDraft.lessonType === "video" && lessonDraft.source === "youtube" ? "youtube" : null,
+        videoUrl: lessonDraft.lessonType === "video" && lessonDraft.source === "youtube" ? lessonDraft.youtubeValue : null,
+        videoId: lessonDraft.lessonType === "video" && lessonDraft.source === "youtube" ? lessonDraft.videoId : null,
+        videoDurationSeconds: lessonDraft.videoDurationSeconds || null,
+        downloadableUrl: null,
+        orderIndex: lessonDialog.lesson?.orderIndex ?? (course?.modules.find((module) => module.id === lessonDialog.moduleId)?.lessons.length || 0),
+      };
+      return lessonDialog.lesson
+        ? apiRequest("PATCH", `/api/lessons/${lessonDialog.lesson.id}`, payload)
+        : apiRequest("POST", "/api/lessons", payload);
+    },
+    onSuccess: () => { invalidate(); setLessonDialog(null); toast({ title: "Lesson saved" }); },
+    onError: async (error: Error) => toast({ title: "Could not save lesson", description: error.message.replace(/^\d+:\s*/, ""), variant: "destructive" }),
+  });
+  const settingsMutation = useMutation({
+    mutationFn: async () => apiRequest("PATCH", `/api/courses/${courseId}`, settingsDraft),
+    onSuccess: () => { invalidate(); setSettingsDialog(false); toast({ title: "Course settings saved" }); },
+    onError: async (error: Error) => toast({ title: "Could not publish course", description: error.message.replace(/^\d+:\s*/, ""), variant: "destructive" }),
+  });
+
+  function openLesson(moduleId: string, lesson?: LessonWithResource) {
+    setLessonDialog({ moduleId, lesson });
+    setLessonDraft({
+      title: lesson?.title || "", description: lesson?.description || "", lessonType: lesson?.lessonType || "video",
+      status: lesson?.status || "draft", durationMinutes: lesson?.durationMinutes || 0, content: lesson?.content || "",
+      source: lesson?.resourceId ? "resource" : "youtube", resourceId: lesson?.resourceId || "",
+      youtubeValue: lesson?.videoUrl || "", videoId: lesson?.videoId || "", videoDurationSeconds: lesson?.videoDurationSeconds || 0,
+    });
+  }
+  async function resolveYouTube() {
+    if (!lessonDraft.youtubeValue.trim()) {
+      toast({ title: "Add a YouTube URL or ID first", variant: "destructive" });
+      return;
+    }
+    try {
+      const res = await apiRequest("POST", "/api/admin/youtube/videos/resolve", { value: lessonDraft.youtubeValue });
+      const video = await res.json();
+      setLessonDraft((draft) => ({ ...draft, youtubeValue: video.url, videoId: video.videoId, videoDurationSeconds: video.durationSeconds || 0, durationMinutes: draft.durationMinutes || Math.ceil((video.durationSeconds || 0) / 60) }));
+      toast({ title: "YouTube video validated", description: video.title });
+    } catch (error) {
+      toast({ title: "Video could not be validated", description: error instanceof Error ? error.message.replace(/^\d+:\s*/, "") : undefined, variant: "destructive" });
+    }
+  }
+  async function reorder(kind: "modules" | "lessons", item: ModuleWithLessons | LessonWithResource, direction: -1 | 1, parentId?: string) {
+    const items = kind === "modules" ? course?.modules || [] : course?.modules.find((module) => module.id === parentId)?.lessons || [];
+    const index = items.findIndex((candidate) => candidate.id === item.id);
+    const target = items[index + direction];
+    if (!target) return;
+    try {
+      await Promise.all([
+        apiRequest("PATCH", kind === "modules" ? `/api/modules/${item.id}` : `/api/lessons/${item.id}`, { orderIndex: target.orderIndex }),
+        apiRequest("PATCH", kind === "modules" ? `/api/modules/${target.id}` : `/api/lessons/${target.id}`, { orderIndex: item.orderIndex }),
+      ]);
+      invalidate();
+    } catch {
+      toast({ title: "Could not reorder content", variant: "destructive" });
+    }
+  }
+  async function remove(kind: "module" | "lesson", id: string, title: string) {
+    if (!window.confirm(`Delete "${title}"? This cannot be undone.`)) return;
+    try {
+      await apiRequest("DELETE", kind === "module" ? `/api/modules/${id}` : `/api/lessons/${id}`);
+      invalidate();
+      toast({ title: `${kind === "module" ? "Module" : "Lesson"} deleted` });
+    } catch {
+      toast({ title: "Could not delete content", variant: "destructive" });
+    }
+  }
+
+  if (courseQuery.isLoading) return <main className="flex-1 p-8 space-y-4"><Skeleton className="h-10 w-72" /><Skeleton className="h-64 w-full" /></main>;
+  if (!course) return <main className="flex-1 p-8"><Button variant="outline" onClick={onBack}><ArrowLeft className="mr-2 h-4 w-4" />Back to courses</Button><p className="mt-8 text-muted-foreground">Course not found.</p></main>;
+  const resourceOptions = (resourcesQuery.data || []).filter((resource) =>
+    lessonDraft.lessonType === "video" ? resource.resourceType === "video" : resource.resourceType !== "video"
+  );
+
+  return (
+    <main className="flex-1 overflow-auto">
+      <div className="mx-auto max-w-5xl p-6 md:p-8">
+        <Button variant="ghost" className="mb-5 -ml-3" onClick={onBack}><ArrowLeft className="mr-2 h-4 w-4" />All courses</Button>
+        <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="mb-2 flex items-center gap-2">{statusBadge(course.status)} <span className="text-sm text-muted-foreground">{course.moduleCount} modules · {course.lessonCount} lessons · {formatDuration(course.durationMinutes)}</span></div>
+            <h1 className="text-3xl font-bold">{course.title}</h1>
+            <p className="mt-1 text-muted-foreground">Build the sequence learners will follow. Resources remain reusable in the resource library.</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => { setSettingsDraft({ title: course.title, shortDescription: course.shortDescription || "", description: course.description || "", category: course.category || categories[0], level: course.level || "beginner", status: course.status || "draft", durationOverrideMinutes: course.durationOverrideMinutes }); setSettingsDialog(true); }}><Settings2 className="mr-2 h-4 w-4" />Course settings</Button>
+            <Button onClick={() => setModuleDialog(true)}><Plus className="mr-2 h-4 w-4" />Add module</Button>
+          </div>
+        </div>
+
+        {course.modules.length === 0 ? (
+          <Card className="border-dashed py-10 text-center"><CardContent><BookOpen className="mx-auto mb-3 h-10 w-10 text-muted-foreground" /><h2 className="text-lg font-semibold">Start with a module</h2><p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Modules group a set of ordered lessons. Add your first module, then attach a video, PDF, or written lesson.</p><Button className="mt-5" onClick={() => setModuleDialog(true)}>Add first module</Button></CardContent></Card>
+        ) : course.modules.map((module, index) => (
+          <Card key={module.id} className="mb-5" data-testid={`course-module-${module.id}`}>
+            <CardHeader className="border-b bg-muted/20 pb-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex gap-3">
+                  <GripVertical className="mt-1 h-5 w-5 text-muted-foreground" />
+                  <div><p className="text-xs font-semibold uppercase tracking-wide text-primary">Module {index + 1}</p><CardTitle className="mt-1">{module.title}</CardTitle>{module.description && <p className="mt-1 text-sm text-muted-foreground">{module.description}</p>}</div>
+                </div>
+                <div className="flex gap-1">
+                  <Button variant="ghost" size="icon" disabled={index === 0} onClick={() => reorder("modules", module, -1)} aria-label="Move module up"><ArrowUp className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" disabled={index === course.modules.length - 1} onClick={() => reorder("modules", module, 1)} aria-label="Move module down"><ArrowDown className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => remove("module", module.id, module.title)} aria-label="Delete module"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  <Button size="sm" onClick={() => openLesson(module.id)}><Plus className="mr-1 h-4 w-4" />Lesson</Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {module.lessons.length === 0 ? <p className="p-5 text-sm text-muted-foreground">No lessons yet. Add a lesson to make this module ready for learners.</p> :
+                <div className="divide-y">{module.lessons.map((lesson, lessonIndex) => (
+                  <div key={lesson.id} className="flex flex-wrap items-center gap-3 p-4">
+                    <GripVertical className="h-4 w-4 text-muted-foreground" />
+                    {lesson.lessonType === "video" ? <Video className="h-4 w-4 text-primary" /> : <FileText className="h-4 w-4 text-primary" />}
+                    <div className="min-w-[180px] flex-1"><p className="font-medium">{lesson.title}</p><p className="text-xs text-muted-foreground">{lesson.resource?.title || (lesson.videoId ? "YouTube video" : lesson.lessonType)} · {formatDuration(lesson.durationMinutes)}</p></div>
+                    {statusBadge(lesson.status)}
+                    <div className="flex">
+                      <Button variant="ghost" size="icon" disabled={lessonIndex === 0} onClick={() => reorder("lessons", lesson, -1, module.id)} aria-label="Move lesson up"><ArrowUp className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" disabled={lessonIndex === module.lessons.length - 1} onClick={() => reorder("lessons", lesson, 1, module.id)} aria-label="Move lesson down"><ArrowDown className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => openLesson(module.id, lesson)} aria-label="Edit lesson"><Pencil className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => remove("lesson", lesson.id, lesson.title)} aria-label="Delete lesson"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    </div>
+                  </div>
+                ))}</div>}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Dialog open={moduleDialog} onOpenChange={setModuleDialog}>
+        <DialogContent><DialogHeader><DialogTitle>Add module</DialogTitle><DialogDescription>Modules keep lessons grouped and ordered.</DialogDescription></DialogHeader><div className="space-y-4"><div><Label>Module title</Label><Input value={moduleDraft.title} onChange={(e) => setModuleDraft({ ...moduleDraft, title: e.target.value })} /></div><div><Label>Description (optional)</Label><Textarea value={moduleDraft.description} onChange={(e) => setModuleDraft({ ...moduleDraft, description: e.target.value })} /></div></div><DialogFooter><Button variant="outline" onClick={() => setModuleDialog(false)}>Cancel</Button><Button disabled={!moduleDraft.title.trim() || moduleMutation.isPending} onClick={() => moduleMutation.mutate()}>{moduleMutation.isPending ? "Adding…" : "Add module"}</Button></DialogFooter></DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(lessonDialog)} onOpenChange={(open) => !open && setLessonDialog(null)}>
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+          <DialogHeader><DialogTitle>{lessonDialog?.lesson ? "Edit lesson" : "Add lesson"}</DialogTitle><DialogDescription>Draft lessons stay in the editor. Published lessons become visible when the course is published.</DialogDescription></DialogHeader>
+          <div className="space-y-4">
+            <div><Label>Lesson title</Label><Input value={lessonDraft.title} onChange={(e) => setLessonDraft({ ...lessonDraft, title: e.target.value })} /></div>
+            <div><Label>Description (optional)</Label><Textarea value={lessonDraft.description} onChange={(e) => setLessonDraft({ ...lessonDraft, description: e.target.value })} /></div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div><Label>Lesson type</Label><Select value={lessonDraft.lessonType} onValueChange={(lessonType) => setLessonDraft({ ...lessonDraft, lessonType, source: lessonType === "video" ? lessonDraft.source : "resource", resourceId: "" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="video">Video</SelectItem><SelectItem value="downloadable">PDF / download</SelectItem><SelectItem value="text">Written lesson</SelectItem></SelectContent></Select></div>
+              <div><Label>Duration (minutes)</Label><Input type="number" min="0" value={lessonDraft.durationMinutes || ""} onChange={(e) => setLessonDraft({ ...lessonDraft, durationMinutes: Number(e.target.value) || 0 })} /></div>
+              <div><Label>Status</Label><Select value={lessonDraft.status} onValueChange={(status) => setLessonDraft({ ...lessonDraft, status })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="draft">Draft</SelectItem><SelectItem value="published">Published</SelectItem></SelectContent></Select></div>
+            </div>
+            {lessonDraft.lessonType === "text" && <div><Label>Lesson content</Label><Textarea rows={7} value={lessonDraft.content} onChange={(e) => setLessonDraft({ ...lessonDraft, content: e.target.value })} placeholder="Write the learning content here" /></div>}
+            {lessonDraft.lessonType !== "text" && <>
+              {lessonDraft.lessonType === "video" && <div><Label>Content source</Label><Select value={lessonDraft.source} onValueChange={(source) => setLessonDraft({ ...lessonDraft, source, resourceId: "", youtubeValue: "", videoId: "" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="resource">Reusable video resource</SelectItem><SelectItem value="youtube">YouTube URL / ID</SelectItem></SelectContent></Select></div>}
+              {lessonDraft.lessonType === "video" && lessonDraft.source === "youtube" ? <div className="rounded-md border p-4"><Label>YouTube URL or video ID</Label><div className="mt-2 flex gap-2"><Input value={lessonDraft.youtubeValue} onChange={(e) => setLessonDraft({ ...lessonDraft, youtubeValue: e.target.value, videoId: "" })} placeholder="https://youtube.com/watch?v=…" /><Button type="button" variant="outline" onClick={resolveYouTube}>Validate</Button></div><p className="mt-2 text-xs text-muted-foreground">{lessonDraft.videoId ? `Validated video ID: ${lessonDraft.videoId}` : "Validate before publishing so learners receive a playable video."}</p></div> :
+                <div className="rounded-md border p-4"><Label>Attach a reusable {lessonDraft.lessonType === "video" ? "video" : "file"} resource</Label><Select value={lessonDraft.resourceId || "none"} onValueChange={(resourceId) => setLessonDraft({ ...lessonDraft, resourceId: resourceId === "none" ? "" : resourceId })}><SelectTrigger className="mt-2"><SelectValue placeholder="Choose a resource" /></SelectTrigger><SelectContent><SelectItem value="none">Choose a resource</SelectItem>{resourceOptions.map((resource) => <SelectItem key={resource.id} value={resource.id}>{resource.title}{resource.status !== "published" ? " (draft)" : ""}</SelectItem>)}</SelectContent></Select><div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"><LinkIcon className="h-3.5 w-3.5" />Need a new PDF or protected video? <Button variant="ghost" className="h-auto p-0 text-xs underline" onClick={() => setLocation("/admin/resources")}>Create it in Resource Management</Button>.</div></div>}
+            </>}
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setLessonDialog(null)}>Cancel</Button><Button disabled={!lessonDraft.title.trim() || lessonMutation.isPending} onClick={() => lessonMutation.mutate()}>{lessonMutation.isPending ? "Saving…" : "Save lesson"}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={settingsDialog} onOpenChange={setSettingsDialog}><DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto"><DialogHeader><DialogTitle>Course settings</DialogTitle><DialogDescription>Courses can only be published when each module has published, playable lessons.</DialogDescription></DialogHeader><CourseFields value={settingsDraft} onChange={setSettingsDraft} /><p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">Calculated curriculum duration: {formatDuration(course.calculatedDurationMinutes)}.</p><DialogFooter><Button variant="outline" onClick={() => setSettingsDialog(false)}>Cancel</Button><Button disabled={!settingsDraft.title.trim() || settingsMutation.isPending} onClick={() => settingsMutation.mutate()}>{settingsMutation.isPending ? "Saving…" : "Save settings"}</Button></DialogFooter></DialogContent></Dialog>
+    </main>
+  );
+}
 
 export default function CourseManagement() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
-
-  const createForm = useForm<CourseFormData>({
-    resolver: zodResolver(courseFormSchema),
-    defaultValues: {
-      title: "",
-      description: "",
-      shortDescription: "",
-      category: "Business Foundations",
-      level: "beginner",
-      durationMinutes: 60,
-      status: "draft",
-    },
+  const [createDialog, setCreateDialog] = useState(false);
+  const [createDraft, setCreateDraft] = useState(initialCourse);
+  const [editorCourseId, setEditorCourseId] = useState<string | null>(null);
+  const { data: courses, isLoading } = useQuery<CourseWithCurriculum[]>({ queryKey: ["/api/courses"] });
+  const createCourse = useMutation({
+    mutationFn: async () => apiRequest("POST", "/api/courses", { ...createDraft, status: "draft" }),
+    onSuccess: async (response) => { const course = await response.json(); queryClient.invalidateQueries({ queryKey: ["/api/courses"] }); setCreateDialog(false); setCreateDraft(initialCourse); setEditorCourseId(course.id); toast({ title: "Course created", description: "Add modules and lessons before publishing." }); },
+    onError: () => toast({ title: "Could not create course", variant: "destructive" }),
   });
-
-  const editForm = useForm<CourseFormData>({
-    resolver: zodResolver(courseFormSchema),
-    defaultValues: {
-      title: "",
-      description: "",
-      shortDescription: "",
-      category: "Business Foundations",
-      level: "beginner",
-      durationMinutes: 60,
-      status: "draft",
-    },
-  });
-
-  const { data: courses, isLoading } = useQuery<Course[]>({
-    queryKey: ["/api/courses"],
-  });
-
-  const createMutation = useMutation({
-    mutationFn: async (data: CourseFormData) => {
-      const res = await apiRequest("POST", "/api/courses", data);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/courses"] });
-      setIsCreateDialogOpen(false);
-      createForm.reset();
-      toast({
-        title: "Course Created",
-        description: "The course has been created successfully.",
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to create course. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: CourseFormData }) => {
-      const res = await apiRequest("PATCH", `/api/courses/${id}`, data);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/courses"] });
-      setIsEditDialogOpen(false);
-      setSelectedCourse(null);
-      editForm.reset();
-      toast({
-        title: "Course Updated",
-        description: "The course has been updated successfully.",
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to update course. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await apiRequest("DELETE", `/api/courses/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/courses"] });
-      setIsDeleteDialogOpen(false);
-      setSelectedCourse(null);
-      toast({
-        title: "Course Deleted",
-        description: "The course has been deleted successfully.",
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to delete course. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const filteredCourses = courses?.filter(course =>
-    course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    course.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    course.category?.toLowerCase().includes(searchQuery.toLowerCase())
-  ) || [];
-
-  const handleCreateSubmit = (data: CourseFormData) => {
-    createMutation.mutate(data);
+  const deleteCourse = async (course: CourseWithCurriculum) => {
+    if (!window.confirm(`Delete "${course.title}" and all of its modules, lessons, enrolments, and certificate records? Reusable resources will not be deleted.`)) return;
+    try { await apiRequest("DELETE", `/api/courses/${course.id}`); queryClient.invalidateQueries({ queryKey: ["/api/courses"] }); toast({ title: "Course deleted" }); } catch { toast({ title: "Could not delete course", variant: "destructive" }); }
   };
-
-  const handleEditSubmit = (data: CourseFormData) => {
-    if (selectedCourse) {
-      updateMutation.mutate({ id: selectedCourse.id, data });
-    }
-  };
-
-  const openEditDialog = (course: Course) => {
-    setSelectedCourse(course);
-    editForm.reset({
-      title: course.title,
-      description: course.description || "",
-      shortDescription: course.shortDescription || "",
-      category: course.category || "Business Foundations",
-      level: course.level || "beginner",
-      durationMinutes: course.durationMinutes || 60,
-      status: (course.status as CourseFormData["status"]) || "draft",
-    });
-    setIsEditDialogOpen(true);
-  };
-
-  const openDeleteDialog = (course: Course) => {
-    setSelectedCourse(course);
-    setIsDeleteDialogOpen(true);
-  };
-
-  const handleDeleteConfirm = () => {
-    if (selectedCourse) {
-      deleteMutation.mutate(selectedCourse.id);
-    }
-  };
-
-  const formatDuration = (minutes: number | null): string => {
-    if (!minutes) return "Self-paced";
-    if (minutes < 60) return `${minutes} min`;
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-    if (remainingMinutes === 0) return `${hours}h`;
-    return `${hours}h ${remainingMinutes}min`;
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "published":
-        return "bg-green-500/10 text-green-600 dark:text-green-400";
-      case "draft":
-        return "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400";
-      case "archived":
-        return "bg-gray-500/10 text-gray-600 dark:text-gray-400";
-      case "pending_review":
-        return "bg-blue-500/10 text-blue-600 dark:text-blue-400";
-      default:
-        return "";
-    }
-  };
+  const filteredCourses = useMemo(() => (courses || []).filter((course) => `${course.title} ${course.description || ""} ${course.category || ""}`.toLowerCase().includes(searchQuery.toLowerCase())), [courses, searchQuery]);
 
   return (
-    <div className="flex flex-col md:flex-row h-screen">
-      <AdminSidebar />
-      <main className="flex-1 overflow-auto">
-        <div className="p-8">
-          <div className="flex items-center justify-between gap-4 mb-8 flex-wrap">
-            <div>
-              <h1 className="text-3xl font-bold" data-testid="text-course-management-title">
-                Course Management
-              </h1>
-              <p className="text-muted-foreground">
-                Create, edit, and manage training courses for participants.
-              </p>
-            </div>
-            <Button onClick={() => setIsCreateDialogOpen(true)} data-testid="button-create-course">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Course
-            </Button>
-          </div>
-
-          <div className="mb-6">
-            <div className="relative max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-              <Input
-                placeholder="Search courses..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-                data-testid="input-search-courses"
-              />
-            </div>
-          </div>
-
-          {isLoading ? (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[...Array(6)].map((_, i) => (
-                <CourseCardSkeleton key={i} />
-              ))}
-            </div>
-          ) : filteredCourses.length === 0 ? (
-            <Card className="p-8 text-center">
-              <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No courses found</h3>
-              <p className="text-muted-foreground mb-4">
-                {searchQuery
-                  ? "Try adjusting your search query."
-                  : "Get started by creating your first course."}
-              </p>
-              {!searchQuery && (
-                <Button onClick={() => setIsCreateDialogOpen(true)} data-testid="button-create-first-course">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Course
-                </Button>
-              )}
-            </Card>
-          ) : (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredCourses.map((course) => (
-                <Card key={course.id} className="hover-elevate" data-testid={`card-course-${course.id}`}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-2 flex-wrap">
-                      <CardTitle className="text-lg line-clamp-2">{course.title}</CardTitle>
-                      <Badge className={getStatusColor(course.status || "draft")}>
-                        {course.status || "draft"}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
-                      {course.shortDescription || course.description || "No description available"}
-                    </p>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4 flex-wrap">
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-4 h-4" />
-                        <span>{formatDuration(course.durationMinutes)}</span>
-                      </div>
-                      {course.category && (
-                        <Badge variant="outline">{course.category}</Badge>
-                      )}
-                    </div>
-                    <div className="flex gap-2 flex-wrap">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openEditDialog(course)}
-                        data-testid={`button-edit-course-${course.id}`}
-                      >
-                        <Pencil className="w-4 h-4 mr-1" />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => openDeleteDialog(course)}
-                        data-testid={`button-delete-course-${course.id}`}
-                      >
-                        <Trash2 className="w-4 h-4 mr-1" />
-                        Delete
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
-      </main>
-
-      {/* Create Course Dialog */}
-      <Dialog open={isCreateDialogOpen} onOpenChange={(open) => {
-        setIsCreateDialogOpen(open);
-        if (!open) createForm.reset();
-      }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create New Course</DialogTitle>
-            <DialogDescription>
-              Add a new training course for program participants.
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...createForm}>
-            <form onSubmit={createForm.handleSubmit(handleCreateSubmit)} className="space-y-4">
-              <FormField
-                control={createForm.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Course Title</FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="Enter course title" 
-                        {...field}
-                        data-testid="input-course-title"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={createForm.control}
-                name="shortDescription"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Short Description</FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="Brief summary for course cards" 
-                        {...field}
-                        data-testid="input-course-short-description"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={createForm.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Full Description</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        placeholder="Detailed course description" 
-                        rows={4}
-                        {...field}
-                        data-testid="input-course-description"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={createForm.control}
-                  name="category"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Category</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-course-category">
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {categories.map((cat) => (
-                            <SelectItem key={cat} value={cat}>
-                              {cat}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={createForm.control}
-                  name="level"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Difficulty Level</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-course-difficulty">
-                            <SelectValue placeholder="Select level" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="beginner">Beginner</SelectItem>
-                          <SelectItem value="intermediate">Intermediate</SelectItem>
-                          <SelectItem value="advanced">Advanced</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={createForm.control}
-                  name="durationMinutes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Duration (minutes)</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          min={0}
-                          {...field}
-                          data-testid="input-course-duration"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={createForm.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Status</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-course-status">
-                            <SelectValue placeholder="Select status" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="draft">Draft</SelectItem>
-                          <SelectItem value="pending_review">Pending Review</SelectItem>
-                          <SelectItem value="published">Published</SelectItem>
-                          <SelectItem value="archived">Archived</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={createMutation.isPending} data-testid="button-submit-create-course">
-                  {createMutation.isPending ? "Creating..." : "Create Course"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Course Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
-        setIsEditDialogOpen(open);
-        if (!open) {
-          editForm.reset();
-          setSelectedCourse(null);
-        }
-      }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Course</DialogTitle>
-            <DialogDescription>
-              Update course details and settings.
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...editForm}>
-            <form onSubmit={editForm.handleSubmit(handleEditSubmit)} className="space-y-4">
-              <FormField
-                control={editForm.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Course Title</FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="Enter course title" 
-                        {...field}
-                        data-testid="input-edit-course-title"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={editForm.control}
-                name="shortDescription"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Short Description</FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="Brief summary for course cards" 
-                        {...field}
-                        data-testid="input-edit-course-short-description"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={editForm.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Full Description</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        placeholder="Detailed course description" 
-                        rows={4}
-                        {...field}
-                        data-testid="input-edit-course-description"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={editForm.control}
-                  name="category"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Category</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-edit-course-category">
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {categories.map((cat) => (
-                            <SelectItem key={cat} value={cat}>
-                              {cat}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={editForm.control}
-                  name="level"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Difficulty Level</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-edit-course-difficulty">
-                            <SelectValue placeholder="Select level" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="beginner">Beginner</SelectItem>
-                          <SelectItem value="intermediate">Intermediate</SelectItem>
-                          <SelectItem value="advanced">Advanced</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={editForm.control}
-                  name="durationMinutes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Duration (minutes)</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          min={0}
-                          {...field}
-                          data-testid="input-edit-course-duration"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={editForm.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Status</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-edit-course-status">
-                            <SelectValue placeholder="Select status" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="draft">Draft</SelectItem>
-                          <SelectItem value="pending_review">Pending Review</SelectItem>
-                          <SelectItem value="published">Published</SelectItem>
-                          <SelectItem value="archived">Archived</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={updateMutation.isPending} data-testid="button-submit-edit-course">
-                  {updateMutation.isPending ? "Saving..." : "Save Changes"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Course</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete "{selectedCourse?.title}"? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              data-testid="button-confirm-delete-course"
-            >
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+    <div className="flex h-screen flex-col md:flex-row"><AdminSidebar />
+      {editorCourseId ? <CurriculumEditor courseId={editorCourseId} onBack={() => setEditorCourseId(null)} /> :
+        <main className="flex-1 overflow-auto"><div className="p-6 md:p-8">
+          <div className="mb-8 flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-3xl font-bold">Course Management</h1><p className="mt-1 text-muted-foreground">Create curriculum structure here and keep reusable content in Resource Management.</p></div><Button onClick={() => setCreateDialog(true)} data-testid="button-create-course"><Plus className="mr-2 h-4 w-4" />Add course</Button></div>
+          <div className="relative mb-6 max-w-md"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search courses" /></div>
+          {isLoading ? <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{[1, 2, 3].map((key) => <Skeleton key={key} className="h-56" />)}</div> :
+            filteredCourses.length === 0 ? <Card className="border-dashed py-12 text-center"><CardContent><BookOpen className="mx-auto mb-3 h-10 w-10 text-muted-foreground" /><h2 className="text-lg font-semibold">No courses found</h2><p className="mt-1 text-sm text-muted-foreground">{searchQuery ? "Try a different search." : "Create your first course, then add its curriculum."}</p>{!searchQuery && <Button className="mt-5" onClick={() => setCreateDialog(true)}>Create course</Button>}</CardContent></Card> :
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{filteredCourses.map((course) => <Card key={course.id} data-testid={`card-course-${course.id}`}><CardHeader><div className="flex items-start justify-between gap-3">{statusBadge(course.status)}<Button variant="ghost" size="icon" onClick={() => deleteCourse(course)} aria-label="Delete course"><Trash2 className="h-4 w-4 text-destructive" /></Button></div><CardTitle className="mt-2">{course.title}</CardTitle></CardHeader><CardContent><p className="min-h-10 text-sm text-muted-foreground">{course.shortDescription || course.description || "No description yet."}</p><div className="my-4 flex flex-wrap gap-3 text-sm text-muted-foreground"><span className="flex items-center gap-1"><Clock className="h-4 w-4" />{formatDuration(course.durationMinutes)}</span><span className="flex items-center gap-1"><BookOpen className="h-4 w-4" />{course.moduleCount} modules · {course.lessonCount} lessons</span></div><Button className="w-full" variant="outline" onClick={() => setEditorCourseId(course.id)}><Pencil className="mr-2 h-4 w-4" />Edit curriculum</Button></CardContent></Card>)}</div>}
+        </div></main>}
+      <Dialog open={createDialog} onOpenChange={setCreateDialog}><DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto"><DialogHeader><DialogTitle>Create a course</DialogTitle><DialogDescription>Courses start as drafts so you can build a complete curriculum before learners see it.</DialogDescription></DialogHeader><CourseFields value={createDraft} onChange={setCreateDraft} showStatus={false} /><DialogFooter><Button variant="outline" onClick={() => setCreateDialog(false)}>Cancel</Button><Button disabled={!createDraft.title.trim() || createCourse.isPending} onClick={() => createCourse.mutate()}>{createCourse.isPending ? "Creating…" : "Create course"}</Button></DialogFooter></DialogContent></Dialog>
     </div>
   );
 }

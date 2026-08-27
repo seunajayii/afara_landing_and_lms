@@ -99,6 +99,34 @@ export async function runSchemaMigrations() {
         ADD COLUMN IF NOT EXISTS video_content_type TEXT,
         ADD COLUMN IF NOT EXISTS video_file_size INTEGER
     `);
+    // Course curriculum additions are nullable/defaulted so existing courses
+    // and seeded lessons keep working. Existing lessons are treated as
+    // published to preserve the learner experience they already had.
+    await db.execute(sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'courses' AND column_name = 'duration_override_minutes'
+        ) THEN
+          ALTER TABLE courses ADD COLUMN duration_override_minutes INTEGER;
+          -- Existing manually entered durations become explicit overrides exactly
+          -- once. Subsequent blank overrides must remain blank.
+          UPDATE courses
+            SET duration_override_minutes = duration_minutes
+            WHERE duration_minutes IS NOT NULL;
+        END IF;
+      END
+      $$;
+    `);
+    await db.execute(sql`
+      ALTER TABLE lessons
+        ADD COLUMN IF NOT EXISTS resource_id VARCHAR REFERENCES resources(id),
+        ADD COLUMN IF NOT EXISTS status content_status NOT NULL DEFAULT 'published'
+    `);
+    await db.execute(sql`
+      ALTER TABLE lessons ALTER COLUMN status SET DEFAULT 'draft';
+    `);
     log("Schema migrations applied successfully");
 
     // Data migration: backfill slugs/status for pre-existing cohorts, seed the two

@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Clock, BookOpen } from "lucide-react";
+import { Link } from "wouter";
 
 interface CourseCardProps {
   title: string;
@@ -10,10 +11,11 @@ interface CourseCardProps {
   modules: number;
   progress?: number;
   category: string;
+  href?: string;
 }
 
-export function CourseCard({ title, description, duration, modules, progress, category }: CourseCardProps) {
-  return (
+export function CourseCard({ title, description, duration, modules, progress, category, href }: CourseCardProps) {
+  const card = (
     <Card className="hover-elevate transition-all duration-300" data-testid={`card-course-${title.toLowerCase().replace(/\s+/g, "-")}`}>
       <CardHeader className="pb-3">
         <Badge variant="secondary" className="w-fit mb-2">{category}</Badge>
@@ -43,4 +45,5 @@ export function CourseCard({ title, description, duration, modules, progress, ca
       </CardContent>
     </Card>
   );
+  return href ? <Link href={href} className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{card}</Link> : card;
 }

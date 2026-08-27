@@ -8,6 +8,8 @@ import type { Course } from "@shared/schema";
 
 interface CourseWithModules extends Course {
   modules?: { id: string }[];
+  moduleCount?: number;
+  lessonCount?: number;
 }
 
 function formatDuration(minutes: number | null): string {
@@ -78,8 +80,9 @@ export default function Courses() {
                   title={course.title}
                   description={course.shortDescription || course.description || ""}
                   duration={formatDuration(course.durationMinutes)}
-                  modules={course.modules?.length || 0}
+                  modules={course.moduleCount ?? course.modules?.length ?? 0}
                   category={course.category || "General"}
+                  href={`/lms/courses/${course.id}`}
                 />
               ))}
             </div>

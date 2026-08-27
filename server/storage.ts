@@ -375,6 +375,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteCourse(id: string): Promise<void> {
+    const courseModules = await db.select({ id: modules.id }).from(modules).where(eq(modules.courseId, id));
+    const moduleIds = courseModules.map((module) => module.id);
+    if (moduleIds.length > 0) {
+      const courseLessons = await db.select({ id: lessons.id }).from(lessons).where(inArray(lessons.moduleId, moduleIds));
+      const lessonIds = courseLessons.map((lesson) => lesson.id);
+      if (lessonIds.length > 0) {
+        await db.delete(lessonProgress).where(inArray(lessonProgress.lessonId, lessonIds));
+        await db.delete(lessons).where(inArray(lessons.id, lessonIds));
+      }
+      await db.delete(modules).where(inArray(modules.id, moduleIds));
+    }
+    await db.delete(certificates).where(eq(certificates.courseId, id));
+    await db.delete(enrollments).where(eq(enrollments.courseId, id));
     await db.delete(courses).where(eq(courses.id, id));
   }
 
@@ -393,6 +406,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteModule(id: string): Promise<void> {
+    const moduleLessons = await db.select({ id: lessons.id }).from(lessons).where(eq(lessons.moduleId, id));
+    const lessonIds = moduleLessons.map((lesson) => lesson.id);
+    if (lessonIds.length > 0) {
+      await db.delete(lessonProgress).where(inArray(lessonProgress.lessonId, lessonIds));
+      await db.delete(lessons).where(inArray(lessons.id, lessonIds));
+    }
     await db.delete(modules).where(eq(modules.id, id));
   }
 
@@ -416,6 +435,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteLesson(id: string): Promise<void> {
+    await db.delete(lessonProgress).where(eq(lessonProgress.lessonId, id));
     await db.delete(lessons).where(eq(lessons.id, id));
   }
 

@@ -726,29 +726,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/courses", async (req: Request, res: Response) => {
+  const getPublishedLessonIssue = async (lesson: any): Promise<string | null> => {
+    if (lesson.lessonType === "video") {
+      if (lesson.resourceId) {
+        const resource = await storage.getResource(lesson.resourceId);
+        if (!resource) return "The selected video resource no longer exists.";
+        if (resource.resourceType !== "video") return "A video lesson must use a video resource.";
+        if (resource.status !== "published") return "Publish the selected video resource before publishing this lesson.";
+        if (resource.videoSource === "upload" && !resource.videoStorageKey) return "The selected private video is not ready for playback.";
+        if (resource.videoSource === "youtube" && !resource.youtubeVideoId) return "The selected YouTube video is missing its video ID.";
+        return null;
+      }
+      const videoId = lesson.videoId || (lesson.videoUrl ? parseYouTubeVideoId(lesson.videoUrl) : null);
+      if (lesson.videoSource !== "youtube" || !videoId) {
+        return "Add a valid YouTube URL/ID or attach a ready video resource before publishing.";
+      }
+      return null;
+    }
+
+    if (lesson.lessonType === "downloadable") {
+      if (lesson.resourceId) {
+        const resource = await storage.getResource(lesson.resourceId);
+        if (!resource) return "The selected downloadable resource no longer exists.";
+        if (resource.resourceType === "video") return "A downloadable lesson cannot use a video resource.";
+        if (resource.status !== "published") return "Publish the selected resource before publishing this lesson.";
+        if (!resource.fileUrl) return "The selected resource does not have a downloadable file.";
+        return null;
+      }
+      return lesson.downloadableUrl ? null : "Attach a downloadable resource or provide a file URL before publishing.";
+    }
+
+    if (lesson.lessonType === "text" && !lesson.content?.trim()) {
+      return "Add written lesson content before publishing.";
+    }
+    return null;
+  };
+
+  const validateCourseForPublication = async (courseId: string): Promise<string | null> => {
+    const courseModules = await storage.getModulesByCourse(courseId);
+    if (courseModules.length === 0) return "Add at least one module before publishing this course.";
+    for (const module of courseModules) {
+      const moduleLessons = await storage.getLessonsByModule(module.id);
+      if (moduleLessons.length === 0) return `"${module.title}" needs at least one lesson before the course can be published.`;
+      for (const lesson of moduleLessons) {
+        if (lesson.status !== "published") return `Publish or remove "${lesson.title}" before publishing this course.`;
+        const issue = await getPublishedLessonIssue(lesson);
+        if (issue) return `"${lesson.title}": ${issue}`;
+      }
+    }
+    return null;
+  };
+
+  const getCourseResponse = async (course: any, admin: boolean, userRole: string | null) => {
+    const courseModules = await storage.getModulesByCourse(course.id);
+    let calculatedDurationMinutes = 0;
+    let lessonCount = 0;
+    const modulesWithLessons = await Promise.all(courseModules.map(async (module) => {
+      const allLessons = await storage.getLessonsByModule(module.id);
+      const visibleLessons = admin ? allLessons : allLessons.filter((lesson) => lesson.status === "published");
+      const lessonsWithResources = await Promise.all(visibleLessons.map(async (lesson) => {
+        const resource = lesson.resourceId ? await storage.getResource(lesson.resourceId) : null;
+        const canUseResource = !resource || (
+          resource.status === "published" &&
+          canAccessVisibility(resource.visibility, admin ? "admin" : userRole)
+        );
+        return {
+          ...lesson,
+          resource: resource && canUseResource ? toResourceResponse(resource, admin) : null,
+          contentAvailable: Boolean(!lesson.resourceId || canUseResource),
+        };
+      }));
+      lessonCount += lessonsWithResources.length;
+      calculatedDurationMinutes += lessonsWithResources.reduce(
+        (total, lesson) => total + (lesson.durationMinutes || Math.ceil((lesson.videoDurationSeconds || 0) / 60)),
+        0,
+      );
+      return { ...module, lessons: lessonsWithResources };
+    }));
+    return {
+      ...course,
+      durationMinutes: course.durationOverrideMinutes ?? calculatedDurationMinutes,
+      calculatedDurationMinutes,
+      moduleCount: modulesWithLessons.length,
+      lessonCount,
+      modules: modulesWithLessons,
+    };
+  };
+
+  const getCourseForLesson = async (lesson: any) => {
+    const allCourses = await storage.getAllCourses();
+    for (const course of allCourses) {
+      const courseModules = await storage.getModulesByCourse(course.id);
+      if (courseModules.some((module) => module.id === lesson.moduleId)) return course;
+    }
+    return undefined;
+  };
+
+  app.get("/api/courses", requireAuth, async (req: Request, res: Response) => {
     try {
-      const courses = req.query.published === "true" 
-        ? await storage.getPublishedCourses()
-        : await storage.getAllCourses();
-      res.json(courses);
+      const admin = isAdminSession(req);
+      const allCourses = admin ? await storage.getAllCourses() : await storage.getPublishedCourses();
+      res.json(await Promise.all(allCourses.map((course) => getCourseResponse(course, admin, req.session.userRole || null))));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch courses" });
     }
   });
 
-  app.get("/api/courses/:id", async (req: Request, res: Response) => {
+  app.get("/api/courses/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const course = await storage.getCourse(req.params.id);
       if (!course) return res.status(404).json({ error: "Course not found" });
-      const courseModules = await storage.getModulesByCourse(req.params.id);
-      const modulesWithLessons = await Promise.all(
-        courseModules.map(async (module) => {
-          const moduleLessons = await storage.getLessonsByModule(module.id);
-          return { ...module, lessons: moduleLessons };
-        })
-      );
-      res.json({ ...course, modules: modulesWithLessons });
+      const admin = isAdminSession(req);
+      if (!admin && course.status !== "published") return res.status(404).json({ error: "Course not found" });
+      res.json(await getCourseResponse(course, admin, req.session.userRole || null));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch course" });
     }
@@ -757,6 +847,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/courses", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const data = insertCourseSchema.parse(req.body);
+      if (data.status === "published") {
+        return res.status(400).json({ error: "Create the course as a draft, add its curriculum, then publish it." });
+      }
       const course = await storage.createCourse(data);
       res.status(201).json(course);
     } catch (error) {
@@ -769,7 +862,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/courses/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
-      const course = await storage.updateCourse(req.params.id, req.body);
+      const data = insertCourseSchema.partial().parse(req.body);
+      if (data.status === "published") {
+        const issue = await validateCourseForPublication(req.params.id);
+        if (issue) return res.status(400).json({ error: issue });
+      }
+      const course = await storage.updateCourse(req.params.id, {
+        ...data,
+        ...(data.status === "published" ? { publishedAt: new Date() } : {}),
+      });
       if (!course) return res.status(404).json({ error: "Course not found" });
       res.json(course);
     } catch (error) {
@@ -786,10 +887,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/courses/:courseId/modules", async (req: Request, res: Response) => {
+  app.get("/api/courses/:courseId/modules", requireAuth, async (req: Request, res: Response) => {
     try {
-      const courseModules = await storage.getModulesByCourse(req.params.courseId);
-      res.json(courseModules);
+      const course = await storage.getCourse(req.params.courseId);
+      if (!course || (!isAdminSession(req) && course.status !== "published")) {
+        return res.status(404).json({ error: "Course not found" });
+      }
+      const response = await getCourseResponse(course, isAdminSession(req), req.session.userRole || null);
+      res.json(response.modules);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch modules" });
     }
@@ -827,19 +932,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/modules/:moduleId/lessons", async (req: Request, res: Response) => {
+  app.get("/api/modules/:moduleId/lessons", requireAuth, async (req: Request, res: Response) => {
     try {
       const moduleLessons = await storage.getLessonsByModule(req.params.moduleId);
-      res.json(moduleLessons);
+      if (isAdminSession(req)) return res.json(moduleLessons);
+      const allCourses = await storage.getAllCourses();
+      let parentCourse: Awaited<ReturnType<typeof storage.getCourse>> | undefined;
+      for (const candidate of allCourses) {
+        const candidateModules = await storage.getModulesByCourse(candidate.id);
+        if (candidateModules.some((module) => module.id === req.params.moduleId)) {
+          parentCourse = candidate;
+          break;
+        }
+      }
+      if (!parentCourse || parentCourse.status !== "published") {
+        return res.status(404).json({ error: "Module not found" });
+      }
+      res.json(moduleLessons.filter((lesson) => lesson.status === "published"));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch lessons" });
     }
   });
 
-  app.get("/api/lessons/:id", async (req: Request, res: Response) => {
+  app.get("/api/lessons/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const lesson = await storage.getLesson(req.params.id);
       if (!lesson) return res.status(404).json({ error: "Lesson not found" });
+      const course = await getCourseForLesson(lesson);
+      if (!course || (!isAdminSession(req) && (course.status !== "published" || lesson.status !== "published"))) {
+        return res.status(404).json({ error: "Lesson not found" });
+      }
       res.json(lesson);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch lesson" });
@@ -849,6 +971,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/lessons", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const data = insertLessonSchema.parse(req.body);
+      if (data.status === "published") {
+        const issue = await getPublishedLessonIssue(data);
+        if (issue) return res.status(400).json({ error: issue });
+      }
       const lesson = await storage.createLesson(data);
       res.status(201).json(lesson);
     } catch (error) {
@@ -861,7 +987,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/lessons/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
-      const lesson = await storage.updateLesson(req.params.id, req.body);
+      const existing = await storage.getLesson(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Lesson not found" });
+      const merged = insertLessonSchema.parse({ ...existing, ...req.body });
+      if (merged.status === "published") {
+        const issue = await getPublishedLessonIssue(merged);
+        if (issue) return res.status(400).json({ error: issue });
+      }
+      const lesson = await storage.updateLesson(req.params.id, merged);
       if (!lesson) return res.status(404).json({ error: "Lesson not found" });
       res.json(lesson);
     } catch (error) {
@@ -929,8 +1062,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/progress/user/:userId", async (req: Request, res: Response) => {
+  app.get("/api/progress/me", requireAuth, async (req: Request, res: Response) => {
     try {
+      res.json(await storage.getLessonProgressByUser(req.session.userId!));
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch progress" });
+    }
+  });
+
+  app.get("/api/progress/user/:userId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      if (req.params.userId !== req.session.userId && !isAdminSession(req)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const progress = await storage.getLessonProgressByUser(req.params.userId);
       res.json(progress);
     } catch (error) {
@@ -938,15 +1082,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/progress", async (req: Request, res: Response) => {
+  app.post("/api/progress", requireAuth, async (req: Request, res: Response) => {
     try {
-      const data = req.body;
-      const existing = await storage.getLessonProgress(data.userId, data.lessonId);
+      const data = z.object({
+        lessonId: z.string().min(1),
+        status: z.enum(["not_started", "in_progress", "completed"]).optional(),
+        videoWatchedSeconds: z.number().int().min(0).optional(),
+      }).parse(req.body);
+      const lesson = await storage.getLesson(data.lessonId);
+      if (!lesson) return res.status(404).json({ error: "Lesson not found" });
+      const course = await getCourseForLesson(lesson);
+      if (!course || course.status !== "published" || lesson.status !== "published") {
+        return res.status(404).json({ error: "Lesson not available" });
+      }
+      const progressData = {
+        userId: req.session.userId!,
+        lessonId: data.lessonId,
+        status: data.status || "in_progress",
+        videoWatchedSeconds: data.videoWatchedSeconds,
+        lastAccessedAt: new Date(),
+        completedAt: data.status === "completed" ? new Date() : undefined,
+      };
+      const existing = await storage.getLessonProgress(progressData.userId, data.lessonId);
       if (existing) {
-        const updated = await storage.updateLessonProgress(existing.id, data);
+        const updated = await storage.updateLessonProgress(existing.id, progressData);
         return res.json(updated);
       }
-      const progress = await storage.createLessonProgress(data);
+      const progress = await storage.createLessonProgress(progressData);
       res.status(201).json(progress);
     } catch (error) {
       res.status(500).json({ error: "Failed to update progress" });

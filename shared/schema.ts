@@ -104,6 +104,10 @@ export const courses = pgTable("courses", {
   thumbnailUrl: text("thumbnail_url"),
   instructorId: varchar("instructor_id").references(() => users.id),
   durationMinutes: integer("duration_minutes"),
+  // When absent, the API reports the sum of lesson durations. This is kept
+  // separate from the calculated value so facilitators can intentionally set
+  // a different advertised duration without losing the curriculum estimate.
+  durationOverrideMinutes: integer("duration_override_minutes"),
   status: contentStatusEnum("status").notNull().default("draft"),
   category: text("category"),
   level: text("level"),
@@ -135,7 +139,11 @@ export const lessons = pgTable("lessons", {
   videoId: text("video_id"),
   videoDurationSeconds: integer("video_duration_seconds"),
   downloadableUrl: text("downloadable_url"),
+  // A lesson references a reusable resource instead of copying its file or
+  // video provider data. Direct YouTube fields remain for existing lessons.
+  resourceId: varchar("resource_id").references(() => resources.id),
   durationMinutes: integer("duration_minutes"),
+  status: contentStatusEnum("status").notNull().default("draft"),
   isFree: boolean("is_free").default(false),
 });
 
