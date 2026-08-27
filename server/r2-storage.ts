@@ -12,6 +12,7 @@ const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
 const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
 const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || "afara-storage";
 const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL;
+const PRIVATE_VIDEO_KEY_PREFIX = "private/resources/private-videos/";
 
 let s3Client: S3Client | null = null;
 
@@ -110,6 +111,17 @@ export async function deleteFile(key: string): Promise<void> {
     Bucket: R2_BUCKET_NAME,
     Key: key,
   }));
+}
+
+export function isPrivateVideoStorageKey(key: string | null | undefined): key is string {
+  return typeof key === "string" && key.startsWith(PRIVATE_VIDEO_KEY_PREFIX);
+}
+
+export async function deletePrivateVideo(key: string): Promise<void> {
+  if (!isPrivateVideoStorageKey(key)) {
+    throw new Error("Refusing to delete a non-private video object");
+  }
+  await deleteFile(key);
 }
 
 export async function listFiles(prefix: string): Promise<string[]> {

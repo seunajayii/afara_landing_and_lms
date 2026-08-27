@@ -375,6 +375,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     };
   };
 
+  // Database mutations are authoritative. Object cleanup is best-effort so a
+  // storage outage cannot turn a successful resource change into an error or
+  // expose provider details to a learner.
+  const cleanupPrivateVideo = async (resourceId: string, storageKey: string | null | undefined) => {
+    if (!storageKey) return;
+    try {
+      const { deletePrivateVideo } = await import("./r2-storage");
+      await deletePrivateVideo(storageKey);
+    } catch (error) {
+      console.error(`Failed to clean up private video for resource ${resourceId}:`, error);
+    }
+  };
+
   // Keep local development usable without making the fallback signing key
   // predictable. In production SESSION_SECRET is supplied by the environment.
   const playbackSigningSecret =
@@ -1747,6 +1760,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const data = insertResourceSchema.partial().parse(req.body);
       youtubeVideoResourceSchema.parse({ ...existing, ...data });
       const resource = await storage.updateResource(req.params.id, data);
+      if (resource && existing.videoStorageKey !== resource.videoStorageKey) {
+        await cleanupPrivateVideo(existing.id, existing.videoStorageKey);
+      }
       res.json(resource);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1758,7 +1774,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/resources/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
+      const existing = await storage.getResource(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Resource not found" });
       await storage.deleteResource(req.params.id);
+      await cleanupPrivateVideo(existing.id, existing.videoStorageKey);
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete resource" });
