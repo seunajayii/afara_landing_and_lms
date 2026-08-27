@@ -111,7 +111,7 @@ export default function Cohorts() {
                         {cohort.description && (
                           <p className="text-sm text-muted-foreground line-clamp-3">{cohort.description}</p>
                         )}
-                        {cohort.geography && (
+                        {cohort.geography && cohort.slug !== "dorewa" && (
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Globe className="w-4 h-4" />
                             <span>{cohort.geography}</span>

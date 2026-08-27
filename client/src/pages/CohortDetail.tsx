@@ -155,10 +155,10 @@ export default function CohortDetail() {
             </div>
 
             <div className="space-y-6">
-              {(cohort.geography || cohort.sector || cohort.sponsor) && (
+              {((cohort.geography && cohort.slug !== "dorewa") || cohort.sector || cohort.sponsor) && (
               <Card>
                 <CardContent className="pt-6 space-y-4">
-                  {cohort.geography && (
+                  {cohort.geography && cohort.slug !== "dorewa" && (
                     <div className="flex items-start gap-3">
                       <Globe className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
                       <div>
