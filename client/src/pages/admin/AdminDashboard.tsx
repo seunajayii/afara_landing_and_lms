@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { useAuth } from "@/lib/auth";
+import { PrivateVideoCleanupCard } from "@/components/admin/PrivateVideoCleanupCard";
 import { 
   Users, 
   BookOpen, 
@@ -239,6 +240,9 @@ export default function AdminDashboard() {
                     </Link>
                   </CardContent>
                 </Card>
+              </div>
+              <div className="mt-8">
+                <PrivateVideoCleanupCard />
               </div>
             </>
           )}

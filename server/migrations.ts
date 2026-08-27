@@ -109,12 +109,18 @@ export async function runSchemaMigrations() {
         uploaded_by_id VARCHAR REFERENCES users(id) ON DELETE SET NULL,
         resource_id VARCHAR REFERENCES resources(id) ON DELETE SET NULL,
         cleanup_requested_at TIMESTAMP,
+        cleanup_status TEXT NOT NULL DEFAULT 'active',
+        cleanup_attempt_count INTEGER NOT NULL DEFAULT 0,
+        last_cleanup_attempt_at TIMESTAMP,
         created_at TIMESTAMP NOT NULL DEFAULT NOW()
       )
     `);
     await db.execute(sql`
       ALTER TABLE private_video_uploads
-        ADD COLUMN IF NOT EXISTS cleanup_requested_at TIMESTAMP
+        ADD COLUMN IF NOT EXISTS cleanup_requested_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS cleanup_status TEXT NOT NULL DEFAULT 'active',
+        ADD COLUMN IF NOT EXISTS cleanup_attempt_count INTEGER NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS last_cleanup_attempt_at TIMESTAMP
     `);
     await db.execute(sql`
       CREATE INDEX IF NOT EXISTS private_video_uploads_created_at_idx

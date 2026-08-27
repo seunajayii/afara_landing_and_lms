@@ -491,6 +491,7 @@ export async function registerRoutes(
           continue;
         }
         try {
+          await storage.markPrivateVideoCleanupAttempt(storageKey);
           const deletePrivateVideo = dependencies.deletePrivateVideo ?? (async (key: string) => {
             const { deletePrivateVideo: deleteFromStorage } = await import("./r2-storage");
             await deleteFromStorage(key);
@@ -499,6 +500,14 @@ export async function registerRoutes(
           await storage.removePrivateVideoUpload(storageKey);
           deletedKeys.push(storageKey);
         } catch (error) {
+          try {
+            await storage.markPrivateVideoCleanupFailure(storageKey);
+          } catch (statusError) {
+            (dependencies.logError ?? console.error)(
+              `Failed to record private video cleanup status for upload ${upload.id}.`,
+              statusError instanceof Error ? statusError.message : "unknown error",
+            );
+          }
           failedKeys.push(storageKey);
           (dependencies.logError ?? console.error)(
             `Failed to reconcile private video upload ${upload.id}.`,
@@ -521,6 +530,87 @@ export async function registerRoutes(
       untrackedKeys,
     };
   };
+
+  const getPrivateVideoCleanupStatus = async () => {
+    const uploads = await storage.getPrivateVideoUploads();
+    const trackedKeys = new Set(uploads.map(upload => upload.storageKey));
+    let untracked = 0;
+
+    if (dependencies.listPrivateVideoFiles) {
+      const keys = await dependencies.listPrivateVideoFiles();
+      for (const key of keys.filter(key => isPrivateVideoStorageKey(key))) {
+        if (trackedKeys.has(key)) continue;
+        const attachedResource = await storage.getResourceByVideoStorageKey(key);
+        if (!attachedResource) untracked += 1;
+      }
+    } else {
+      const { isR2Configured, listPrivateVideoFiles } = await import("./r2-storage");
+      if (isR2Configured()) {
+        const keys = await listPrivateVideoFiles();
+        for (const key of keys.filter(key => isPrivateVideoStorageKey(key))) {
+          if (trackedKeys.has(key)) continue;
+          const attachedResource = await storage.getResourceByVideoStorageKey(key);
+          if (!attachedResource) untracked += 1;
+        }
+      }
+    }
+
+    const cutoff = new Date(Date.now() - PRIVATE_VIDEO_UPLOAD_RETENTION_MS);
+    const activeUploads = uploads.filter(upload => upload.cleanupStatus !== "removed");
+    const pending = activeUploads.filter(upload =>
+      !upload.resourceId && (
+        upload.cleanupStatus !== "failed" && (
+          upload.cleanupStatus === "pending" ||
+          Boolean(upload.cleanupRequestedAt) ||
+          upload.createdAt < cutoff
+        )
+      ),
+    ).length;
+    const failed = uploads.filter(upload => upload.cleanupStatus === "failed").length;
+    const removed = uploads.filter(upload => upload.cleanupStatus === "removed").length;
+    const totalAttempts = uploads.reduce(
+      (total, upload) => total + (upload.cleanupAttemptCount || 0),
+      0,
+    );
+    const lastAttemptAt = uploads
+      .map(upload => upload.lastCleanupAttemptAt)
+      .filter((attempt): attempt is Date => Boolean(attempt))
+      .sort((a, b) => b.getTime() - a.getTime())[0] || null;
+
+    return {
+      counts: { pending, failed, untracked, removed },
+      totalAttempts,
+      lastAttemptAt,
+    };
+  };
+
+  const sendPrivateVideoCleanupStatus = async (_req: Request, res: Response) => {
+    try {
+      res.json(await getPrivateVideoCleanupStatus());
+    } catch (error) {
+      (dependencies.logError ?? console.error)(
+        "Failed to load private video cleanup status.",
+        error instanceof Error ? error.message : "unknown error",
+      );
+      res.status(500).json({ error: "Private video cleanup status is unavailable." });
+    }
+  };
+
+  app.get(
+    "/api/admin/resources/private-videos/status",
+    requireAuth,
+    requireAdminRole,
+    sendPrivateVideoCleanupStatus,
+  );
+  // Keep status beside the existing reconciliation action for operators and
+  // clients that already know that route.
+  app.get(
+    "/api/admin/resources/private-videos/reconcile",
+    requireAuth,
+    requireAdminRole,
+    sendPrivateVideoCleanupStatus,
+  );
+
   void reconcilePrivateVideoObjects();
   const privateVideoCleanupTimer = setInterval(
     () => void reconcilePrivateVideoObjects(),

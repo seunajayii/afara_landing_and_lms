@@ -100,6 +100,8 @@ async function withResourceRoutes<T>(
   replace("removePrivateVideoUpload", async () => undefined);
   replace("claimPrivateVideoUpload", async () => undefined);
   replace("releasePrivateVideoUpload", async () => undefined);
+  replace("markPrivateVideoCleanupAttempt", async () => undefined);
+  replace("markPrivateVideoCleanupFailure", async () => undefined);
   configureStorage(resource);
 
   const app = express();
@@ -138,7 +140,7 @@ async function withResourceRoutes<T>(
 
 async function request(
   baseUrl: string,
-  method: "PATCH" | "DELETE",
+  method: "GET" | "PATCH" | "POST" | "DELETE",
   path: string,
   body?: Record<string, unknown>,
 ) {
@@ -259,6 +261,9 @@ test("a transient cleanup failure remains retryable through the admin reconcilia
     uploadedById: adminId,
     resourceId: "resource-1",
     cleanupRequestedAt: null as Date | null,
+    cleanupStatus: "active",
+    cleanupAttemptCount: 0,
+    lastCleanupAttemptAt: null as Date | null,
     createdAt: new Date("2026-08-25T00:00:00.000Z"),
   };
   const result = await withResourceRoutes(
@@ -283,6 +288,19 @@ test("a transient cleanup failure remains retryable through the admin reconcilia
         return resource;
       };
       mutableStorage.getPrivateVideoUploads = async () => upload ? [upload] : [];
+      mutableStorage.markPrivateVideoCleanupAttempt = async (key: string) => {
+        if (upload.storageKey === key) {
+          upload = {
+            ...upload,
+            cleanupStatus: "pending",
+            cleanupAttemptCount: upload.cleanupAttemptCount + 1,
+            lastCleanupAttemptAt: new Date(),
+          };
+        }
+      };
+      mutableStorage.markPrivateVideoCleanupFailure = async (key: string) => {
+        if (upload.storageKey === key) upload = { ...upload, cleanupStatus: "failed" };
+      };
       mutableStorage.releasePrivateVideoUpload = async (key: string, resourceId: string) => {
         events.push(`release:${resourceId}`);
         if (upload.storageKey === key && upload.resourceId === resourceId) {
@@ -291,7 +309,7 @@ test("a transient cleanup failure remains retryable through the admin reconcilia
       };
       mutableStorage.removePrivateVideoUpload = async key => {
         events.push(`remove:${key}`);
-        if (upload.storageKey === key) upload = undefined as never;
+        if (upload.storageKey === key) upload = { ...upload, cleanupStatus: "removed", resourceId: null };
       };
     },
     async baseUrl => {
@@ -311,6 +329,8 @@ test("a transient cleanup failure remains retryable through the admin reconcilia
         "/api/admin/resources/private-videos/reconcile",
       );
       assert.equal(failedRetry.status, 200);
+      assert.equal(upload.cleanupStatus, "failed");
+      assert.equal(upload.cleanupAttemptCount, 1);
       assert.deepEqual(JSON.parse(failedRetry.body), {
         scanned: 1,
         deletedKeys: [],
@@ -332,7 +352,8 @@ test("a transient cleanup failure remains retryable through the admin reconcilia
         failedKeys: [],
         untrackedKeys: [],
       });
-      assert.equal(upload, undefined);
+      assert.equal(upload.cleanupStatus, "removed");
+      assert.equal(upload.cleanupAttemptCount, 2);
       return { update, failedRetry, successfulRetry };
     },
   );
@@ -385,6 +406,81 @@ test("reconciliation reports only unattached private-video namespace keys", asyn
           privateKey,
         ],
       });
+      return response;
+    },
+  );
+
+  assert.equal(result.status, 200);
+});
+
+test("admin cleanup status reports durable outcomes without exposing storage keys", async () => {
+  const failedAt = new Date("2026-08-27T01:00:00.000Z");
+  const uploads = [
+    {
+      id: "pending-upload",
+      storageKey: "private/resources/private-videos/pending.mp4",
+      uploadedById: adminId,
+      resourceId: null,
+      cleanupRequestedAt: new Date("2026-08-26T01:00:00.000Z"),
+      cleanupStatus: "pending",
+      cleanupAttemptCount: 0,
+      lastCleanupAttemptAt: null,
+      createdAt: new Date("2026-08-25T00:00:00.000Z"),
+    },
+    {
+      id: "failed-upload",
+      storageKey: "private/resources/private-videos/failed.mp4",
+      uploadedById: adminId,
+      resourceId: null,
+      cleanupRequestedAt: new Date("2026-08-26T01:00:00.000Z"),
+      cleanupStatus: "failed",
+      cleanupAttemptCount: 2,
+      lastCleanupAttemptAt: failedAt,
+      createdAt: new Date("2026-08-25T00:00:00.000Z"),
+    },
+    {
+      id: "removed-upload",
+      storageKey: "private/resources/private-videos/removed.mp4",
+      uploadedById: adminId,
+      resourceId: null,
+      cleanupRequestedAt: new Date("2026-08-26T01:00:00.000Z"),
+      cleanupStatus: "removed",
+      cleanupAttemptCount: 1,
+      lastCleanupAttemptAt: new Date("2026-08-26T02:00:00.000Z"),
+      createdAt: new Date("2026-08-25T00:00:00.000Z"),
+    },
+  ];
+  const untrackedKey = "private/resources/private-videos/untracked.mp4";
+  const result = await withResourceRoutes(
+    {
+      listPrivateVideoFiles: async () => [untrackedKey],
+    },
+    () => {
+      const mutableStorage = storage as unknown as Record<string, StorageMethod>;
+      mutableStorage.getPrivateVideoUploads = async () => uploads;
+    },
+    async baseUrl => {
+      const response = await request(
+        baseUrl,
+        "GET",
+        "/api/admin/resources/private-videos/status",
+      );
+      assert.equal(response.status, 200);
+      const body = JSON.parse(response.body) as {
+        counts: { pending: number; failed: number; untracked: number; removed: number };
+        totalAttempts: number;
+        lastAttemptAt: string;
+      };
+      assert.deepEqual(body.counts, {
+        pending: 1,
+        failed: 1,
+        untracked: 1,
+        removed: 1,
+      });
+      assert.equal(body.totalAttempts, 3);
+      assert.equal(body.lastAttemptAt, failedAt.toISOString());
+      assert.equal(response.body.includes(untrackedKey), false);
+      assert.equal(response.body.includes("failed.mp4"), false);
       return response;
     },
   );

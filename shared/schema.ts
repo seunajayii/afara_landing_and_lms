@@ -268,6 +268,11 @@ export const privateVideoUploads = pgTable("private_video_uploads", {
   uploadedById: varchar("uploaded_by_id").references(() => users.id, { onDelete: "set null" }),
   resourceId: varchar("resource_id").references(() => resources.id, { onDelete: "set null" }),
   cleanupRequestedAt: timestamp("cleanup_requested_at"),
+  // Keep cleanup history after the provider object is removed so admins can
+  // distinguish pending, failed, and successfully completed cleanup work.
+  cleanupStatus: text("cleanup_status").notNull().default("active"),
+  cleanupAttemptCount: integer("cleanup_attempt_count").notNull().default(0),
+  lastCleanupAttemptAt: timestamp("last_cleanup_attempt_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

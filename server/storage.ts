@@ -130,6 +130,8 @@ export interface IStorage {
   trackPrivateVideoUpload(storageKey: string, uploadedById: string): Promise<PrivateVideoUpload>;
   claimPrivateVideoUpload(storageKey: string, resourceId: string): Promise<void>;
   releasePrivateVideoUpload(storageKey: string, resourceId: string): Promise<void>;
+  markPrivateVideoCleanupAttempt(storageKey: string): Promise<void>;
+  markPrivateVideoCleanupFailure(storageKey: string): Promise<void>;
   getPrivateVideoUploads(): Promise<PrivateVideoUpload[]>;
   getExpiredPrivateVideoUploads(cutoff: Date): Promise<PrivateVideoUpload[]>;
   getResourceByVideoStorageKey(storageKey: string): Promise<Resource | undefined>;
@@ -692,7 +694,7 @@ export class DatabaseStorage implements IStorage {
 
   async claimPrivateVideoUpload(storageKey: string, resourceId: string): Promise<void> {
     await db.update(privateVideoUploads)
-      .set({ resourceId, cleanupRequestedAt: null })
+      .set({ resourceId, cleanupRequestedAt: null, cleanupStatus: "active" })
       .where(and(
         eq(privateVideoUploads.storageKey, storageKey),
         isNull(privateVideoUploads.resourceId),
@@ -701,7 +703,7 @@ export class DatabaseStorage implements IStorage {
 
   async releasePrivateVideoUpload(storageKey: string, resourceId: string): Promise<void> {
     await db.update(privateVideoUploads)
-      .set({ resourceId: null, cleanupRequestedAt: new Date() })
+      .set({ resourceId: null, cleanupRequestedAt: new Date(), cleanupStatus: "pending" })
       .where(and(
         eq(privateVideoUploads.storageKey, storageKey),
         or(
@@ -709,6 +711,22 @@ export class DatabaseStorage implements IStorage {
           isNull(privateVideoUploads.resourceId),
         ),
       ));
+  }
+
+  async markPrivateVideoCleanupAttempt(storageKey: string): Promise<void> {
+    await db.update(privateVideoUploads)
+      .set({
+        cleanupStatus: "pending",
+        lastCleanupAttemptAt: new Date(),
+        cleanupAttemptCount: sql`${privateVideoUploads.cleanupAttemptCount} + 1`,
+      })
+      .where(eq(privateVideoUploads.storageKey, storageKey));
+  }
+
+  async markPrivateVideoCleanupFailure(storageKey: string): Promise<void> {
+    await db.update(privateVideoUploads)
+      .set({ cleanupStatus: "failed" })
+      .where(eq(privateVideoUploads.storageKey, storageKey));
   }
 
   async getPrivateVideoUploads(): Promise<PrivateVideoUpload[]> {
@@ -719,6 +737,7 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(privateVideoUploads).where(and(
       isNull(privateVideoUploads.resourceId),
       lt(privateVideoUploads.createdAt, cutoff),
+      ne(privateVideoUploads.cleanupStatus, "removed"),
     ));
   }
 
@@ -729,7 +748,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async removePrivateVideoUpload(storageKey: string): Promise<void> {
-    await db.delete(privateVideoUploads)
+    await db.update(privateVideoUploads)
+      .set({ cleanupStatus: "removed", resourceId: null })
       .where(eq(privateVideoUploads.storageKey, storageKey));
   }
 
