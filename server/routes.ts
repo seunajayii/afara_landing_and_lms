@@ -14,7 +14,15 @@ import {
   type Cohort
 } from "@shared/schema";
 import { z } from "zod";
-import { createHmac, randomUUID, timingSafeEqual } from "crypto";
+import { randomUUID } from "crypto";
+import {
+  authorizePlayback,
+  canAccessVisibility,
+  createPlaybackToken,
+  isPlaybackTokenAuthorized,
+  readPlaybackToken,
+  resourceIsRestricted,
+} from "./playback-auth";
 import {
   getYouTubeVideo,
   parseYouTubeVideoId,
@@ -342,15 +350,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   };
 
-  // Visibility filter helper
-  const canAccessVisibility = (visibility: string | null, userRole: string | null): boolean => {
-    const v = visibility || "community";
-    if (v === "public") return true;
-    if (v === "community") return userRole !== null;
-    if (v === "cohort_only") return userRole !== null && userRole !== "community_member";
-    return true;
-  };
-
   // Strip security-sensitive fields before returning a user object in an API response
   const sanitizeUser = (user: Record<string, any>) => {
     const { passwordHash, passwordResetToken, passwordResetExpiresAt, mustChangePassword, ...safe } = user;
@@ -361,9 +360,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const role = req.session?.userRole as string | undefined;
     return role === "admin" || role === "superadmin";
   };
-
-  const resourceIsRestricted = (resource: { resourceType: string; visibility: string | null }) =>
-    resource.resourceType === "video" && resource.visibility !== "public";
 
   // Never return provider IDs or storage keys for a restricted video. A
   // learner can still receive the resource metadata, but playback must go
@@ -386,68 +382,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const playbackSecret = () => playbackSigningSecret;
   const playbackTokenTtlSeconds = 15 * 60;
 
-  const createPlaybackToken = (resourceId: string, userId: string | null) => {
-    const payload = Buffer.from(JSON.stringify({
-      resourceId,
-      userId,
-      expiresAt: Math.floor(Date.now() / 1000) + playbackTokenTtlSeconds,
-    })).toString("base64url");
-    const signature = createHmac("sha256", playbackSecret()).update(payload).digest("base64url");
-    return `${payload}.${signature}`;
-  };
-
-  const readPlaybackToken = (token: string) => {
-    const parts = token.split(".");
-    if (parts.length !== 2) return null;
-    const [payload, signature] = parts;
-    if (!payload || !signature) return null;
-    const expected = createHmac("sha256", playbackSecret()).update(payload).digest();
-    let received: Buffer;
-    try {
-      received = Buffer.from(signature, "base64url");
-    } catch {
-      return null;
-    }
-    if (received.length !== expected.length || !timingSafeEqual(received, expected)) return null;
-    try {
-      const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
-        resourceId?: string;
-        userId?: string | null;
-        expiresAt?: number;
-      };
-      if (
-        typeof parsed.resourceId !== "string" ||
-        typeof parsed.expiresAt !== "number" ||
-        parsed.expiresAt <= Math.floor(Date.now() / 1000)
-      ) {
-        return null;
-      }
-      return parsed;
-    } catch {
-      return null;
-    }
-  };
-
   const getPlaybackAuthorization = async (req: Request, resource: any) => {
-    const sessionUser = req.session?.userId
-      ? await storage.getUser(req.session.userId)
+    const sessionUserId = req.session?.userId || null;
+    const sessionUser = sessionUserId
+      ? await storage.getUser(sessionUserId)
       : undefined;
-    if (req.session?.userId && (!sessionUser || !sessionUser.isActive)) {
-      return { status: 401 as const };
-    }
-    if (sessionUser?.mustChangePassword) {
-      return { status: 403 as const };
-    }
-    const userRole = sessionUser?.role || null;
-    const isAdminUser = userRole === "admin" || userRole === "superadmin";
-    if (!isAdminUser && resource.status !== "published") return { status: 404 as const };
-    if (!isAdminUser && !canAccessVisibility(resource.visibility, userRole)) {
-      return { status: 403 as const };
-    }
-    if (resourceIsRestricted(resource) && !req.session?.userId) {
-      return { status: 403 as const };
-    }
-    return { status: 200 as const, userId: req.session?.userId || null };
+    return authorizePlayback(resource, sessionUserId, sessionUser);
   };
 
   app.get("/api/users", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
@@ -1398,7 +1338,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (resource.resourceType !== "video" || resource.videoSource !== "upload" || !resource.videoStorageKey) {
         return res.status(409).json({ error: "This video is not configured for private hosted playback." });
       }
-      const token = createPlaybackToken(resource.id, authorization.userId);
+      const token = createPlaybackToken(resource.id, authorization.userId, playbackSecret());
       res.json({
         playbackUrl: `/api/resources/${resource.id}/playback/stream?token=${encodeURIComponent(token)}`,
         expiresAt: Math.floor(Date.now() / 1000) + playbackTokenTtlSeconds,
@@ -1411,7 +1351,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/resources/:id/playback/stream", async (req: Request, res: Response) => {
     try {
-      const token = typeof req.query.token === "string" ? readPlaybackToken(req.query.token) : null;
+      const token = typeof req.query.token === "string"
+        ? readPlaybackToken(req.query.token, playbackSecret())
+        : null;
       if (!token || token.resourceId !== req.params.id) {
         return res.status(403).json({ error: "Invalid or expired playback URL" });
       }
@@ -1434,7 +1376,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // A restricted token is bound to the session that requested it. Public
       // videos intentionally remain playable without a login, matching the
       // existing public visibility rule.
-      if (resourceIsRestricted(resource) && token.userId !== req.session?.userId) {
+      if (!isPlaybackTokenAuthorized(resource, token, req.session?.userId)) {
         return res.status(403).json({ error: "Access denied" });
       }
 
