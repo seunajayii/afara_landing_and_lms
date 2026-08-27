@@ -40,14 +40,15 @@ export async function getResendClient() {
   };
 }
 
-// Minimal cohort branding info needed for per-cohort email content. Callers
-// pass through whatever fields are available on their Cohort record; only
-// `name`/`sponsor`/`partnershipNote` are read here so this stays decoupled
-// from the full Cohort schema type.
+// Minimal cohort info needed for per-cohort email content. Callers pass
+// through only the fields needed here from their Cohort record so this stays
+// decoupled from the full Cohort schema type.
 export interface CohortEmailInfo {
   name?: string | null;
   sponsor?: string | null;
   partnershipNote?: string | null;
+  slug?: string | null;
+  extraQuestions?: unknown[] | null;
 }
 
 // Sponsored cohorts (cohorts with a `sponsor` set, e.g. DOREWA delivered with
@@ -1304,6 +1305,34 @@ const APPLICATION_STEPS = [
   { id: 7, title: "Preview",     description: "Review & submit" },
 ];
 
+// Keep the email's step list in sync with the public application form. DOREWA
+// omits the Financial, Project, and Support sections, while any cohort with
+// custom questions gets one additional step before Preview.
+function getVisibleApplicationSteps(cohort?: CohortEmailInfo | null) {
+  const hiddenStepIds = cohort?.slug === "dorewa" ? new Set([3, 4, 5]) : new Set<number>();
+  let visibleSteps = APPLICATION_STEPS.filter((step) => !hiddenStepIds.has(step.id));
+
+  if ((cohort?.extraQuestions?.length ?? 0) > 0) {
+    const previewIndex = visibleSteps.findIndex((step) => step.id === 7);
+    const extraStep = {
+      id: 8,
+      title: "Additional Questions",
+      description: "Cohort-specific questions",
+    };
+    visibleSteps = [
+      ...visibleSteps.slice(0, previewIndex),
+      extraStep,
+      ...visibleSteps.slice(previewIndex),
+    ];
+  }
+
+  return visibleSteps;
+}
+
+export function getApplicationStepCount(cohort?: CohortEmailInfo | null): number {
+  return getVisibleApplicationSteps(cohort).length;
+}
+
 // Builds the draft-save email's subject/HTML without sending it. Shared by
 // the real send path and the admin preview endpoint (see
 // buildApplicationConfirmationEmail above for why `inlineImages` exists).
@@ -1325,9 +1354,13 @@ function buildDraftSaveNotificationEmail(
       ? `data:image/jpeg;base64,${mastheadBuffer.toString('base64')}`
       : 'cid:afara-masthead';
 
-    const safeStep = Math.max(0, Math.min(currentStep, APPLICATION_STEPS.length - 1));
-    const currentStepInfo = APPLICATION_STEPS[safeStep];
-    const remainingSteps = APPLICATION_STEPS.slice(safeStep + 1);
+    const visibleSteps = getVisibleApplicationSteps(cohort);
+    const currentStepIndex = visibleSteps.findIndex((step) => step.id === currentStep);
+    const safeStep = currentStepIndex >= 0
+      ? currentStepIndex
+      : Math.max(0, Math.min(currentStep, visibleSteps.length - 1));
+    const currentStepInfo = visibleSteps[safeStep];
+    const remainingSteps = visibleSteps.slice(safeStep + 1);
     const applyUrl = resumeUrl || 'https://afaraaccelerator.org/apply';
 
     const remainingRowsHtml = remainingSteps.length > 0
@@ -1523,11 +1556,11 @@ export async function sendDraftSaveNotificationEmail(
 // sending anything. Uses placeholder step progress since no real applicant
 // draft is involved.
 export function renderDraftSaveNotificationEmailPreview(cohort?: CohortEmailInfo): { subject: string; html: string } {
-  const previewStep = Math.min(2, APPLICATION_STEPS.length - 1);
+  const previewStep = Math.min(2, getApplicationStepCount(cohort) - 1);
   const { subject, html } = buildDraftSaveNotificationEmail(
     'Jane Applicant',
     previewStep,
-    APPLICATION_STEPS.length,
+    getApplicationStepCount(cohort),
     undefined,
     cohort,
     { inlineImages: true }

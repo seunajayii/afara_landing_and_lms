@@ -1574,14 +1574,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/test-email", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const { type, email, firstName, cohortId } = req.body;
-      const { sendApplicationConfirmationEmail, sendWelcomeEmail, sendAcceptanceEmail, sendDraftSaveNotificationEmail } = await import("./email");
+      const { sendApplicationConfirmationEmail, sendWelcomeEmail, sendAcceptanceEmail, sendDraftSaveNotificationEmail, getApplicationStepCount } = await import("./email");
       const cohort = cohortId ? await storage.getCohort(cohortId) : undefined;
       if (cohortId && !cohort) return res.status(404).json({ error: "Cohort not found" });
       let result;
       if (type === "application") result = await sendApplicationConfirmationEmail(email, firstName, cohort);
       else if (type === "welcome") result = await sendWelcomeEmail(email, firstName);
       else if (type === "acceptance") result = await sendAcceptanceEmail(email, firstName, undefined, cohort);
-      else if (type === "draft-save") result = await sendDraftSaveNotificationEmail(email, firstName, 2, 8, undefined, cohort);
+      else if (type === "draft-save") result = await sendDraftSaveNotificationEmail(email, firstName, 2, getApplicationStepCount(cohort), undefined, cohort);
       else return res.status(400).json({ error: "Unknown type. Use: application | welcome | acceptance | draft-save" });
       res.json(result);
     } catch (error: any) {
@@ -1793,7 +1793,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const application = await storage.createApplication(data);
       const cohortEmailInfo = resolvedCohort
-        ? { name: resolvedCohort.displayName || resolvedCohort.name, sponsor: resolvedCohort.sponsor, partnershipNote: resolvedCohort.partnershipNote }
+        ? {
+            name: resolvedCohort.displayName || resolvedCohort.name,
+            sponsor: resolvedCohort.sponsor,
+            partnershipNote: resolvedCohort.partnershipNote,
+            slug: resolvedCohort.slug,
+            extraQuestions: resolvedCohort.extraQuestions,
+          }
         : undefined;
       const applyPath = resolvedCohort ? `/apply/${resolvedCohort.slug}` : "/apply";
 
@@ -1805,8 +1811,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const resumeUrl = token
           ? `${baseUrl}${applyPath}?token=${encodeURIComponent(token)}&email=${encodeURIComponent(application.email)}`
           : `${baseUrl}${applyPath}`;
-        import("./email").then(({ sendDraftSaveNotificationEmail }) => {
-          sendDraftSaveNotificationEmail(application.email, data.firstName, stepNumber, 8, resumeUrl, cohortEmailInfo)
+        import("./email").then(({ sendDraftSaveNotificationEmail, getApplicationStepCount }) => {
+          sendDraftSaveNotificationEmail(application.email, data.firstName, stepNumber, getApplicationStepCount(cohortEmailInfo), resumeUrl, cohortEmailInfo)
             .catch(err => console.error("Draft save notification email failed:", err));
         }).catch(err => console.error("Failed to import email module:", err));
       }
@@ -2023,7 +2029,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const applicationCohort = application.cohortId ? await storage.getCohort(application.cohortId) : undefined;
       const cohortEmailInfo = applicationCohort
-        ? { name: applicationCohort.displayName || applicationCohort.name, sponsor: applicationCohort.sponsor, partnershipNote: applicationCohort.partnershipNote }
+        ? {
+            name: applicationCohort.displayName || applicationCohort.name,
+            sponsor: applicationCohort.sponsor,
+            partnershipNote: applicationCohort.partnershipNote,
+            slug: applicationCohort.slug,
+            extraQuestions: applicationCohort.extraQuestions,
+          }
         : undefined;
       const applyPath = applicationCohort ? `/apply/${applicationCohort.slug}` : "/apply";
 
@@ -2036,8 +2048,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const resumeUrl = token
           ? `${baseUrl}${applyPath}?token=${encodeURIComponent(token)}&email=${encodeURIComponent(application.email)}`
           : `${baseUrl}${applyPath}`;
-        import("./email").then(({ sendDraftSaveNotificationEmail }) => {
-          sendDraftSaveNotificationEmail(application.email, firstName, stepNumber, 8, resumeUrl, cohortEmailInfo)
+        import("./email").then(({ sendDraftSaveNotificationEmail, getApplicationStepCount }) => {
+          sendDraftSaveNotificationEmail(application.email, firstName, stepNumber, getApplicationStepCount(cohortEmailInfo), resumeUrl, cohortEmailInfo)
             .catch(err => console.error("Draft save notification email failed:", err));
         }).catch(err => console.error("Failed to import email module:", err));
       }
