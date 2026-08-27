@@ -102,6 +102,11 @@ const youtubeResumableUploadSchema = youtubeUploadMetadataSchema.extend({
   contentType: z.string().trim().regex(/^video\//).max(100),
 });
 
+export interface ResourceLifecycleDependencies {
+  deletePrivateVideo?: (storageKey: string) => Promise<void>;
+  logError?: (...args: unknown[]) => void;
+}
+
 interface YouTubeUploadSession {
   userId: string;
   sessionPath: string;
@@ -151,7 +156,10 @@ const registerSchema = z.object({
   lastName: z.string().min(1)
 });
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export async function registerRoutes(
+  app: Express,
+  dependencies: ResourceLifecycleDependencies = {},
+): Promise<Server> {
   
   // Health check endpoint for Railway/production monitoring
   app.get("/api/health", (_req: Request, res: Response) => {
@@ -400,11 +408,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (attachedResource && attachedResource.id !== resourceId) {
         return;
       }
-      const { deletePrivateVideo } = await import("./r2-storage");
+      const deletePrivateVideo = dependencies.deletePrivateVideo ?? (async (key: string) => {
+        const { deletePrivateVideo: deleteFromStorage } = await import("./r2-storage");
+        await deleteFromStorage(key);
+      });
       await deletePrivateVideo(storageKey);
       await storage.removePrivateVideoUpload(storageKey);
     } catch (error) {
-      console.error(`Failed to clean up private video for resource ${resourceId}:`, error);
+      (dependencies.logError ?? console.error)(
+        `Failed to clean up private video for resource ${resourceId}:`,
+        error,
+      );
     }
   };
 
