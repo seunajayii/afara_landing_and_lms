@@ -1184,15 +1184,22 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/enrollments/user/:userId", async (req: Request, res: Response) => {
+  app.get("/api/enrollments/user/:userId", requireAuth, async (req: Request, res: Response) => {
     try {
+      if (req.params.userId !== req.session.userId && !isAdminSession(req)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const admin = isAdminSession(req);
       const userEnrollments = await storage.getEnrollmentsByUser(req.params.userId);
-      const enrollmentsWithCourses = await Promise.all(
+      const enrollmentsWithCourses = (await Promise.all(
         userEnrollments.map(async (enrollment) => {
           const course = await storage.getCourse(enrollment.courseId);
+          if (!course || (!admin && (course.status !== "published" || !(await canAccessCourse(req, course))))) {
+            return null;
+          }
           return { ...enrollment, course };
         })
-      );
+      )).filter((enrollment): enrollment is NonNullable<typeof enrollment> => Boolean(enrollment));
       res.json(enrollmentsWithCourses);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch enrollments" });
@@ -1208,9 +1215,18 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/enrollments", async (req: Request, res: Response) => {
+  app.post("/api/enrollments", requireAuth, async (req: Request, res: Response) => {
     try {
       const data = insertEnrollmentSchema.parse(req.body);
+      if (data.userId !== req.session.userId && !isAdminSession(req)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const course = await storage.getCourse(data.courseId);
+      if (!course || (!isAdminSession(req) && (
+        course.status !== "published" || !(await canAccessCourse(req, course))
+      ))) {
+        return res.status(404).json({ error: "Course not found" });
+      }
       const existing = await storage.getEnrollment(data.userId, data.courseId);
       if (existing) {
         return res.status(400).json({ error: "Already enrolled in this course" });

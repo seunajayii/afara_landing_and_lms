@@ -196,6 +196,21 @@ async function withCourseRoutes<T>(
     id: "progress-1",
     ...progress,
   }));
+  const enrollmentByKey = new Map<string, Record<string, unknown>>();
+  replace("getEnrollment", async (userId: string, courseId: string) => (
+    enrollmentByKey.get(`${userId}:${courseId}`)
+  ));
+  replace("createEnrollment", async (enrollment: Record<string, unknown>) => {
+    const created = {
+      id: `enrollment-${enrollmentByKey.size + 1}`,
+      ...enrollment,
+    };
+    enrollmentByKey.set(`${enrollment.userId}:${enrollment.courseId}`, created);
+    return created;
+  });
+  replace("getEnrollmentsByUser", async (userId: string) => (
+    Array.from(enrollmentByKey.values()).filter(enrollment => enrollment.userId === userId)
+  ));
 
   const app = express();
   app.use(express.json());
@@ -351,6 +366,7 @@ test("course and lesson routes keep selected cohorts isolated while sharing all-
   });
 });
 
+
 test("progress writes and protected playback reject a course outside the learner's cohort", async () => {
   await withCourseRoutes(async baseUrl => {
     const assignedProgress = await request(baseUrl, users.assignedToA.id, "/api/progress", {
@@ -385,5 +401,45 @@ test("progress writes and protected playback reject a course outside the learner
     );
     assert.equal(copiedPlayback.status, 403);
     assert.equal(copiedPlayback.body.error, "Access denied");
+  });
+});
+
+test("enrollment creation follows the learner's course access and hides restricted enrollment details", async () => {
+  await withCourseRoutes(async baseUrl => {
+    const enroll = async (userId: string, courseId: string) => request(baseUrl, userId, "/api/enrollments", {
+      method: "POST",
+      body: JSON.stringify({ userId, courseId }),
+    });
+
+    const sharedEnrollment = await enroll(users.assignedToA.id, "course-all");
+    assert.equal(sharedEnrollment.status, 201);
+    assert.equal(sharedEnrollment.body.courseId, "course-all");
+
+    const assignedEnrollment = await enroll(users.assignedToA.id, "course-a");
+    assert.equal(assignedEnrollment.status, 201);
+    assert.equal(assignedEnrollment.body.courseId, "course-a");
+
+    for (const [userId, courseId] of [
+      [users.assignedToA.id, "course-b"],
+      [users.assignedToB.id, "course-a"],
+      [users.withoutCohort.id, "course-a"],
+    ]) {
+      const rejected = await enroll(userId, courseId);
+      assert.equal(rejected.status, 404);
+      assert.deepEqual(rejected.body, { error: "Course not found" });
+      assert.equal(rejected.body.title, undefined);
+    }
+
+    const visibleEnrollments = await request(baseUrl, users.assignedToA.id, `/api/enrollments/user/${users.assignedToA.id}`);
+    assert.equal(visibleEnrollments.status, 200);
+    assert.deepEqual(
+      visibleEnrollments.body.map((enrollment: { courseId: string }) => enrollment.courseId).sort(),
+      ["course-a", "course-all"],
+    );
+    assert.equal(visibleEnrollments.body.find((enrollment: { courseId: string }) => enrollment.courseId === "course-a").course.title, "Cohort A course");
+
+    const crossUserEnrollments = await request(baseUrl, users.assignedToB.id, `/api/enrollments/user/${users.assignedToA.id}`);
+    assert.equal(crossUserEnrollments.status, 403);
+    assert.deepEqual(crossUserEnrollments.body, { error: "Access denied" });
   });
 });
