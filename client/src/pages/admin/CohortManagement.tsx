@@ -322,17 +322,6 @@ function CohortFormFields({ form, isEdit }: { form: ReturnType<typeof useForm<Co
       />
       <FormField
         control={form.control}
-        name="geography"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Geography</FormLabel>
-            <FormControl><Input {...field} placeholder="e.g. Nigeria" data-testid="input-cohort-geography" /></FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      <FormField
-        control={form.control}
         name="sector"
         render={({ field }) => (
           <FormItem>
@@ -804,7 +793,7 @@ function DuplicateCohortDialog({ cohort, onOpenChange }: { cohort: Cohort | null
         <DialogHeader>
           <DialogTitle>Duplicate "{cohort?.displayName || cohort?.name}"</DialogTitle>
           <DialogDescription>
-            Creates a new cohort with the same branding, sponsor, geography, sector, and eligibility criteria — useful for a recurring edition (e.g. "DOREWA 2.0").
+            Creates a new cohort with the same branding, sponsor, sector, and eligibility criteria — useful for a recurring edition (e.g. "DOREWA 2.0").
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -1067,7 +1056,6 @@ export default function CohortManagement() {
                     {c.tagline && <p className="text-sm italic text-muted-foreground">{c.tagline}</p>}
                     <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
                       {c.sponsor && <div><span className="text-muted-foreground">Sponsor:</span> {c.sponsor}</div>}
-                      {c.geography && <div><span className="text-muted-foreground">Geography:</span> {c.geography}</div>}
                       {c.sector && <div className="col-span-2"><span className="text-muted-foreground">Sector:</span> {c.sector}</div>}
                     </div>
                     {c.description && <p className="text-sm text-muted-foreground line-clamp-2">{c.description}</p>}
