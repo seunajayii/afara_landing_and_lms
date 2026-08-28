@@ -217,12 +217,25 @@ export async function runSchemaMigrations() {
             is_active, is_open, created_at
           ) VALUES (
             gen_random_uuid()::text, 'DOREWA COHORT', 'DOREWA', 'dorewa', '1.0', 'dorewa', 'sponsored', 'draft',
-            2026, 'Kingdom of the Netherlands', 'Nigeria', 'Agriculture + Renewable Energy',
-            'DOREWA is a sponsored cohort of the AFARA Africa Accelerator, delivered in collaboration with the Kingdom of the Netherlands.',
-            'The Women-Led Agri-Energy Cohort', 'An AFARA Africa Accelerator Cohort, in collaboration with the Kingdom of the Netherlands',
+            2026, 'Government of the Netherlands', 'Nigeria', 'Agriculture + Renewable Energy',
+            'DOREWA is an AFÁRÁ Africa Accelerator Cohort, in collaboration with the Government of the Netherlands and supported by Fundraising Clinic Africa.',
+            'The Women-Led Agri-Energy Cohort', 'An AFÁRÁ Africa Accelerator Cohort in collaboration with the Government of the Netherlands and supported by Fundraising Clinic Africa',
             true, false, NOW()
           );
         END IF;
+
+        -- Refresh the original DOREWA copy once while preserving any later admin edits.
+        UPDATE cohorts
+        SET
+          sponsor = 'Government of the Netherlands',
+          description = 'DOREWA is an AFÁRÁ Africa Accelerator Cohort, in collaboration with the Government of the Netherlands and supported by Fundraising Clinic Africa.',
+          partnership_note = 'An AFÁRÁ Africa Accelerator Cohort in collaboration with the Government of the Netherlands and supported by Fundraising Clinic Africa'
+        WHERE slug = 'dorewa'
+          AND (
+            sponsor = 'Kingdom of the Netherlands'
+            OR description = 'DOREWA is a sponsored cohort of the AFARA Africa Accelerator, delivered in collaboration with the Kingdom of the Netherlands.'
+            OR partnership_note = 'An AFARA Africa Accelerator Cohort, in collaboration with the Kingdom of the Netherlands'
+          );
 
         -- Assign all unassigned applications to the first (oldest) cohort, preserving prior behavior
         SELECT id INTO v_cohort_id FROM cohorts ORDER BY created_at ASC LIMIT 1;
