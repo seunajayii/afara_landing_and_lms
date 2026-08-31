@@ -237,6 +237,19 @@ export async function runSchemaMigrations() {
             OR partnership_note = 'An AFARA Africa Accelerator Cohort, in collaboration with the Kingdom of the Netherlands'
           );
 
+        -- Add the DOREWA referral question without replacing other custom questions.
+        UPDATE cohorts
+        SET extra_questions = COALESCE(extra_questions, '[]'::jsonb) || jsonb_build_array(
+          jsonb_build_object(
+            'id', 'dorewa-referring-organization',
+            'label', 'Which organization referred you to DOREWA?',
+            'type', 'short_text',
+            'required', false
+          )
+        )
+        WHERE slug = 'dorewa'
+          AND NOT (COALESCE(extra_questions, '[]'::jsonb) @> '[{"id":"dorewa-referring-organization"}]'::jsonb);
+
         -- Assign all unassigned applications to the first (oldest) cohort, preserving prior behavior
         SELECT id INTO v_cohort_id FROM cohorts ORDER BY created_at ASC LIMIT 1;
         UPDATE applications SET cohort_id = v_cohort_id WHERE cohort_id IS NULL;
