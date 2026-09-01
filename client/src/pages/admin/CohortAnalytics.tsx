@@ -314,7 +314,7 @@ export default function CohortAnalytics() {
 
   const evaluateAllMutation = useMutation({
     mutationFn: async () => {
-      const body = { force: true, ...(selectedCohortId ? { cohortId: selectedCohortId } : {}) };
+      const body = { force: false, ...(selectedCohortId ? { cohortId: selectedCohortId } : {}) };
       const res = await apiRequest("POST", "/api/admin/cohort-analytics/evaluate-all", body);
       if (!res.ok) throw new Error("Batch evaluation failed");
       return res.json();
@@ -430,9 +430,9 @@ export default function CohortAnalytics() {
                 {evaluateAllMutation.isPending ? (
                   <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Evaluating…</>
                 ) : unevaluatedCount > 0 ? (
-                  <><PlayCircle className="h-3.5 w-3.5" /> Evaluate All ({unevaluatedCount} pending)</>
+                  <><PlayCircle className="h-3.5 w-3.5" /> {selectedCohort ? "Evaluate Cohort" : "Evaluate All"} ({unevaluatedCount} pending)</>
                 ) : (
-                  <><PlayCircle className="h-3.5 w-3.5" /> Evaluate All</>
+                  <><PlayCircle className="h-3.5 w-3.5" /> {selectedCohort ? "Evaluate Cohort" : "Evaluate All"}</>
                 )}
               </Button>
               <Button

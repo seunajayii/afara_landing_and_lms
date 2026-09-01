@@ -3358,7 +3358,11 @@ export async function registerRoutes(
         storage.getAllCohorts(),
       ]);
       const applications = cohortId ? allApps.filter((a) => a.cohortId === cohortId) : allApps;
-      res.json({ applications, evaluations, cohorts: cohortsList });
+      const applicationIds = new Set(applications.map((application) => application.id));
+      const scopedEvaluations = cohortId
+        ? evaluations.filter((evaluation) => applicationIds.has(evaluation.applicationId))
+        : evaluations;
+      res.json({ applications, evaluations: scopedEvaluations, cohorts: cohortsList });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch cohort analytics" });
     }

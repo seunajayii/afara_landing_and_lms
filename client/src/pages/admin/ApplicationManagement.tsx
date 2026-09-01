@@ -911,6 +911,13 @@ export default function ApplicationManagement() {
 
   const openCohorts = cohortsData.filter((c) => c.isOpen);
 
+  const matchesSelectedCohort = (app: Application) =>
+    cohortFilter === "all" ||
+    (cohortFilter === "unassigned" && !app.cohortId) ||
+    app.cohortId === cohortFilter;
+
+  const cohortApplications = applications.filter(matchesSelectedCohort);
+
   const filteredApplications = applications.filter((app) => {
     const matchesSearch =
       app.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -927,10 +934,7 @@ export default function ApplicationManagement() {
       (langFilter === "non-en" && appLang !== "en") ||
       langFilter === appLang;
 
-    const matchesCohort =
-      cohortFilter === "all" ||
-      (cohortFilter === "unassigned" && !app.cohortId) ||
-      app.cohortId === cohortFilter;
+    const matchesCohort = matchesSelectedCohort(app);
 
     if (activeTab === "all") return matchesSearch && matchesLang && matchesCohort;
     if (activeTab === "pending") return matchesSearch && matchesLang && matchesCohort && (app.status === "submitted" || app.status === "under_review");
@@ -938,11 +942,11 @@ export default function ApplicationManagement() {
   });
 
   const stats = {
-    total: applications.length,
-    pending: applications.filter((a) => a.status === "submitted" || a.status === "under_review").length,
-    accepted: applications.filter((a) => a.status === "accepted").length,
-    rejected: applications.filter((a) => a.status === "rejected").length,
-    disqualified: applications.filter((a) => a.status === "disqualified").length,
+    total: cohortApplications.length,
+    pending: cohortApplications.filter((a) => a.status === "submitted" || a.status === "under_review").length,
+    accepted: cohortApplications.filter((a) => a.status === "accepted").length,
+    rejected: cohortApplications.filter((a) => a.status === "rejected").length,
+    disqualified: cohortApplications.filter((a) => a.status === "disqualified").length,
   };
 
   const openPreview = (app: Application) => {
@@ -1119,7 +1123,7 @@ export default function ApplicationManagement() {
             <CardContent>
               <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="mb-4">
-                  <TabsTrigger value="all" data-testid="tab-all">All ({applications.length})</TabsTrigger>
+                   <TabsTrigger value="all" data-testid="tab-all">All ({stats.total})</TabsTrigger>
                   <TabsTrigger value="pending" data-testid="tab-pending">Pending ({stats.pending})</TabsTrigger>
                   <TabsTrigger value="accepted" data-testid="tab-accepted">Accepted ({stats.accepted})</TabsTrigger>
                   <TabsTrigger value="rejected" data-testid="tab-rejected">Rejected ({stats.rejected})</TabsTrigger>
