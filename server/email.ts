@@ -51,17 +51,54 @@ export interface CohortEmailInfo {
   extraQuestions?: unknown[] | null;
 }
 
+const AFARA_GREEN = '#034a21';
+const DOREWA_EMAIL_IMAGE = 'Presentation_-_DOREWA_1787927679714.png';
+
+type EmailBrandAsset = {
+  buffer: Buffer;
+  filename: string;
+  contentId: string;
+  contentType: string;
+  src: string;
+};
+
+function getEmailBrandAsset(cohort?: CohortEmailInfo | null, inlineImages = false): EmailBrandAsset | null {
+  const isDorewa = cohort?.slug?.toLowerCase() === 'dorewa';
+  const filename = isDorewa ? DOREWA_EMAIL_IMAGE : 'afara-masthead-email.jpg';
+  const contentId = isDorewa ? 'dorewa-email-image' : 'afara-masthead';
+  const contentType = isDorewa ? 'image/png' : 'image/jpeg';
+  const moduleDir = path.dirname(new URL(import.meta.url).pathname);
+  const candidatePaths = [
+    path.join(process.cwd(), 'attached_assets', filename),
+    path.join(process.cwd(), 'server', 'assets', filename),
+    path.join(moduleDir, 'assets', filename),
+    path.join(moduleDir, '..', 'attached_assets', filename),
+    path.join(moduleDir, '..', 'server', 'assets', filename),
+  ];
+  const assetPath = candidatePaths.find((candidate) => fs.existsSync(candidate));
+  if (!assetPath) return null;
+
+  const buffer = fs.readFileSync(assetPath);
+  return {
+    buffer,
+    filename,
+    contentId,
+    contentType,
+    src: inlineImages
+      ? `data:${contentType};base64,${buffer.toString('base64')}`
+      : `cid:${contentId}`,
+  };
+}
+
 // Sponsored cohorts (cohorts with a `sponsor` set, e.g. DOREWA delivered with
-// the Kingdom of the Netherlands) get their own accent color and an explicit
-// partnership mention woven through the email; cohorts without a sponsor (or
-// no resolved cohort at all, e.g. legacy/unassigned applications) fall back
-// to the generic AFÁRÁ green template.
+// the Kingdom of the Netherlands) get an explicit partnership mention woven
+// through the email. All applicant emails use the AFÁRÁ green brand accent.
 function getCohortBranding(cohort?: CohortEmailInfo | null) {
   const name = cohort?.name || undefined;
   const sponsor = cohort?.sponsor || undefined;
   const partnershipNote = cohort?.partnershipNote || undefined;
   const isSponsored = !!sponsor;
-  const accentColor = isSponsored ? '#1a3c6e' : '#034a21';
+  const accentColor = AFARA_GREEN;
   const programLabel = name ? `${name} programme` : 'AFÁRÁ Accelerator Program';
   const partnershipBannerHtml = sponsor ? `
               <!-- Partnership banner -->
@@ -114,11 +151,10 @@ function buildApplicationConfirmationEmail(firstName: string | undefined, cohort
   const name = firstName || 'there';
   const branding = getCohortBranding(cohort);
   const { accentColor, programLabel, partnershipBannerHtml, isSponsored, sponsor } = branding;
-  const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
-  const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
-  const mastheadSrc = opts.inlineImages && mastheadBuffer
-    ? `data:image/jpeg;base64,${mastheadBuffer.toString('base64')}`
-    : 'cid:afara-masthead';
+  const brandAsset = getEmailBrandAsset(cohort, opts.inlineImages);
+  const mastheadHtml = brandAsset
+    ? `<img src="${brandAsset.src}" alt="${cohort?.slug?.toLowerCase() === 'dorewa' ? 'DOREWA' : 'AFÁRÁ'}" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />`
+    : '';
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -137,7 +173,7 @@ function buildApplicationConfirmationEmail(firstName: string | undefined, cohort
           <!-- Masthead Image -->
           <tr>
             <td style="padding:0;margin:0;">
-              <img src="${mastheadSrc}" alt="AFÁRÁ" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />
+              ${mastheadHtml}
             </td>
           </tr>
 
@@ -251,24 +287,25 @@ function buildApplicationConfirmationEmail(firstName: string | undefined, cohort
     ? `We\u2019ve received your ${programLabel} application \u2013 with ${sponsor}`
     : "We\u2019ve received your application \u2013 AF\u00C1R\u00C1 Accelerator";
 
-  return { subject, html, mastheadBuffer };
+  return { subject, html, brandAsset };
 }
 
 export async function sendApplicationConfirmationEmail(email: string, firstName?: string, cohort?: CohortEmailInfo): Promise<{ success: boolean; error?: string }> {
   try {
     const { client, fromEmail } = await getResendClient();
-    const { subject, html, mastheadBuffer } = buildApplicationConfirmationEmail(firstName, cohort);
+    const { subject, html, brandAsset } = buildApplicationConfirmationEmail(firstName, cohort);
 
     const { error } = await client.emails.send({
       from: fromEmail,
       to: email,
       subject,
       html,
-      attachments: mastheadBuffer ? [
+      attachments: brandAsset ? [
         {
-          filename: 'afara-masthead.jpg',
-          content: mastheadBuffer.toString('base64'),
-          content_id: 'afara-masthead',
+          filename: brandAsset.filename,
+          content: brandAsset.buffer.toString('base64'),
+          content_id: brandAsset.contentId,
+          content_type: brandAsset.contentType,
         }
       ] as any : [],
     });
@@ -299,9 +336,10 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
     const name = firstName || 'there';
     const branding = getCohortBranding(cohort);
     const { accentColor, programLabel, partnershipBannerHtml, isSponsored, sponsor } = branding;
-    const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
-    const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
-    const mastheadSrc = 'cid:afara-masthead';
+    const brandAsset = getEmailBrandAsset(cohort);
+    const mastheadHtml = brandAsset
+      ? `<img src="${brandAsset.src}" alt="${cohort?.slug?.toLowerCase() === 'dorewa' ? 'DOREWA' : 'AFÁRÁ'}" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />`
+      : '';
     const loginUrl = 'https://afaraaccelerator.org/lms/dashboard';
 
     const personalNoteBlock = reviewNotes ? `
@@ -333,7 +371,7 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
           <!-- Masthead Image -->
           <tr>
             <td style="padding:0;margin:0;">
-              <img src="${mastheadSrc}" alt="AFÁRÁ" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />
+              ${mastheadHtml}
             </td>
           </tr>
 
@@ -520,11 +558,12 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
       to: email,
       subject,
       html,
-      attachments: mastheadBuffer ? [
+      attachments: brandAsset ? [
         {
-          filename: 'afara-masthead.jpg',
-          content: mastheadBuffer.toString('base64'),
-          content_id: 'afara-masthead',
+          filename: brandAsset.filename,
+          content: brandAsset.buffer.toString('base64'),
+          content_id: brandAsset.contentId,
+          content_type: brandAsset.contentType,
         }
       ] as any : [],
     });
@@ -547,9 +586,10 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
     const name = firstName || 'there';
     const branding = getCohortBranding(cohort);
     const { accentColor, programLabel, partnershipBannerHtml, isSponsored, sponsor } = branding;
-    const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
-    const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
-    const mastheadSrc = 'cid:afara-masthead';
+    const brandAsset = getEmailBrandAsset(cohort);
+    const mastheadHtml = brandAsset
+      ? `<img src="${brandAsset.src}" alt="${cohort?.slug?.toLowerCase() === 'dorewa' ? 'DOREWA' : 'AFÁRÁ'}" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />`
+      : '';
 
     const personalNoteBlock = reviewNotes ? `
               <!-- Personal note from team -->
@@ -580,7 +620,7 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
           <!-- Masthead Image -->
           <tr>
             <td style="padding:0;margin:0;">
-              <img src="${mastheadSrc}" alt="AFÁRÁ" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />
+              ${mastheadHtml}
             </td>
           </tr>
 
@@ -692,11 +732,12 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
       to: email,
       subject,
       html,
-      attachments: mastheadBuffer ? [
+      attachments: brandAsset ? [
         {
-          filename: 'afara-masthead.jpg',
-          content: mastheadBuffer.toString('base64'),
-          content_id: 'afara-masthead',
+          filename: brandAsset.filename,
+          content: brandAsset.buffer.toString('base64'),
+          content_id: brandAsset.contentId,
+          content_type: brandAsset.contentType,
         }
       ] as any : [],
     });
@@ -713,13 +754,14 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
   }
 }
 
-export async function sendDisqualificationEmail(email: string, firstName?: string): Promise<{ success: boolean; error?: string }> {
+export async function sendDisqualificationEmail(email: string, firstName?: string, cohort?: CohortEmailInfo): Promise<{ success: boolean; error?: string }> {
   try {
     const { client, fromEmail } = await getResendClient();
     const name = firstName || 'there';
-    const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
-    const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
-    const mastheadSrc = 'cid:afara-masthead';
+    const brandAsset = getEmailBrandAsset(cohort);
+    const mastheadHtml = brandAsset
+      ? `<img src="${brandAsset.src}" alt="${cohort?.slug?.toLowerCase() === 'dorewa' ? 'DOREWA' : 'AFÁRÁ'}" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />`
+      : '';
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -738,7 +780,7 @@ export async function sendDisqualificationEmail(email: string, firstName?: strin
           <!-- Masthead Image -->
           <tr>
             <td style="padding:0;margin:0;">
-              <img src="${mastheadSrc}" alt="AFÁRÁ" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />
+              ${mastheadHtml}
             </td>
           </tr>
 
@@ -846,11 +888,12 @@ export async function sendDisqualificationEmail(email: string, firstName?: strin
       to: email,
       subject: "An update on your AF\u00C1R\u00C1 application",
       html,
-      attachments: mastheadBuffer ? [
+      attachments: brandAsset ? [
         {
-          filename: 'afara-masthead.jpg',
-          content: mastheadBuffer.toString('base64'),
-          content_id: 'afara-masthead',
+          filename: brandAsset.filename,
+          content: brandAsset.buffer.toString('base64'),
+          content_id: brandAsset.contentId,
+          content_type: brandAsset.contentType,
         }
       ] as any : [],
     });
@@ -867,13 +910,14 @@ export async function sendDisqualificationEmail(email: string, firstName?: strin
   }
 }
 
-export async function sendWaitlistEmail(email: string, firstName?: string): Promise<{ success: boolean; error?: string }> {
+export async function sendWaitlistEmail(email: string, firstName?: string, cohort?: CohortEmailInfo): Promise<{ success: boolean; error?: string }> {
   try {
     const { client, fromEmail } = await getResendClient();
     const name = firstName || 'there';
-    const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
-    const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
-    const mastheadSrc = 'cid:afara-masthead';
+    const brandAsset = getEmailBrandAsset(cohort);
+    const mastheadHtml = brandAsset
+      ? `<img src="${brandAsset.src}" alt="${cohort?.slug?.toLowerCase() === 'dorewa' ? 'DOREWA' : 'AFÁRÁ'}" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />`
+      : '';
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -891,7 +935,7 @@ export async function sendWaitlistEmail(email: string, firstName?: string): Prom
           <!-- Masthead Image -->
           <tr>
             <td style="padding:0;margin:0;">
-              <img src="${mastheadSrc}" alt="AFÁRÁ" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />
+              ${mastheadHtml}
             </td>
           </tr>
 
@@ -974,11 +1018,12 @@ export async function sendWaitlistEmail(email: string, firstName?: string): Prom
       to: email,
       subject: "You\u2019re invited \u2014 AF\u00C1R\u00C1 Immersive Launch, 19\u201320 May 2026",
       html,
-      attachments: mastheadBuffer ? [
+      attachments: brandAsset ? [
         {
-          filename: 'afara-masthead.jpg',
-          content: mastheadBuffer.toString('base64'),
-          content_id: 'afara-masthead',
+          filename: brandAsset.filename,
+          content: brandAsset.buffer.toString('base64'),
+          content_id: brandAsset.contentId,
+          content_type: brandAsset.contentType,
         }
       ] as any : [],
     });
@@ -1348,11 +1393,10 @@ function buildDraftSaveNotificationEmail(
     const branding = getCohortBranding(cohort);
     const { accentColor, partnershipBannerHtml, isSponsored, sponsor } = branding;
     const programLabel = branding.name ? `${branding.name} application` : 'AFÁRÁ Accelerator application';
-    const mastheadPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'assets', 'afara-masthead-email.jpg');
-    const mastheadBuffer = fs.existsSync(mastheadPath) ? fs.readFileSync(mastheadPath) : null;
-    const mastheadSrc = opts.inlineImages && mastheadBuffer
-      ? `data:image/jpeg;base64,${mastheadBuffer.toString('base64')}`
-      : 'cid:afara-masthead';
+    const brandAsset = getEmailBrandAsset(cohort, opts.inlineImages);
+    const mastheadHtml = brandAsset
+      ? `<img src="${brandAsset.src}" alt="${cohort?.slug?.toLowerCase() === 'dorewa' ? 'DOREWA' : 'AFÁRÁ'}" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />`
+      : '';
 
     const visibleSteps = getVisibleApplicationSteps(cohort);
     const currentStepIndex = visibleSteps.findIndex((step) => step.id === currentStep);
@@ -1392,7 +1436,7 @@ function buildDraftSaveNotificationEmail(
           <!-- Masthead Image -->
           <tr>
             <td style="padding:0;margin:0;">
-              <img src="${mastheadSrc}" alt="AFÁRÁ" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />
+              ${mastheadHtml}
             </td>
           </tr>
 
@@ -1511,7 +1555,7 @@ function buildDraftSaveNotificationEmail(
     ? `Your ${branding.name || 'AFÁRÁ'} application progress has been saved`
     : 'Your AFÁRÁ application progress has been saved';
 
-  return { subject, html, mastheadBuffer };
+  return { subject, html, brandAsset };
 }
 
 export async function sendDraftSaveNotificationEmail(
@@ -1524,18 +1568,19 @@ export async function sendDraftSaveNotificationEmail(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const { client, fromEmail } = await getResendClient();
-    const { subject, html, mastheadBuffer } = buildDraftSaveNotificationEmail(firstName, currentStep, totalSteps, resumeUrl, cohort);
+    const { subject, html, brandAsset } = buildDraftSaveNotificationEmail(firstName, currentStep, totalSteps, resumeUrl, cohort);
 
     const { error } = await client.emails.send({
       from: fromEmail,
       to: email,
       subject,
       html,
-      attachments: mastheadBuffer ? [
+      attachments: brandAsset ? [
         {
-          filename: 'afara-masthead-email.jpg',
-          content: mastheadBuffer.toString('base64'),
-          content_id: 'afara-masthead',
+          filename: brandAsset.filename,
+          content: brandAsset.buffer.toString('base64'),
+          content_id: brandAsset.contentId,
+          content_type: brandAsset.contentType,
         }
       ] as any : [],
     });

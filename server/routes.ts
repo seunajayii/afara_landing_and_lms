@@ -3113,7 +3113,13 @@ export async function registerRoutes(
     const { sendAcceptanceEmail, sendRejectionEmail, sendWaitlistEmail, sendDisqualificationEmail } = await import("./email");
     const applicationCohort = application.cohortId ? await storage.getCohort(application.cohortId) : undefined;
     const cohortEmailInfo = applicationCohort
-      ? { name: applicationCohort.displayName || applicationCohort.name, sponsor: applicationCohort.sponsor, partnershipNote: applicationCohort.partnershipNote }
+      ? {
+          name: applicationCohort.displayName || applicationCohort.name,
+          sponsor: applicationCohort.sponsor,
+          partnershipNote: applicationCohort.partnershipNote,
+          slug: applicationCohort.slug,
+          extraQuestions: applicationCohort.extraQuestions,
+        }
       : undefined;
     if (newStatus === "accepted") {
       try {
@@ -3140,13 +3146,13 @@ export async function registerRoutes(
       try {
         const user = await storage.getUserByEmail(application.email);
         if (user) await storage.updateUser(user.id, { role: "community_member" });
-        await sendWaitlistEmail(application.email, application.firstName);
+        await sendWaitlistEmail(application.email, application.firstName, cohortEmailInfo);
       } catch (err) {
         console.error("Failed to add to community or send waitlist email:", err);
       }
     } else if (newStatus === "disqualified") {
       try {
-        await sendDisqualificationEmail(application.email, application.firstName);
+        await sendDisqualificationEmail(application.email, application.firstName, cohortEmailInfo);
       } catch (err) {
         console.error("Failed to send disqualification email:", err);
       }
