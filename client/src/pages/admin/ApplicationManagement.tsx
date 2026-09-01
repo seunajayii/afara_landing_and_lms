@@ -1141,6 +1141,7 @@ export default function ApplicationManagement() {
                             <TableHead>Sector</TableHead>
                             <TableHead>Started</TableHead>
                             <TableHead>Submitted</TableHead>
+                            <TableHead>Cohort</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
@@ -1185,16 +1186,21 @@ export default function ApplicationManagement() {
                                 {app.submittedAt ? format(new Date(app.submittedAt), "MMM d, yyyy") : "—"}
                               </TableCell>
                               <TableCell>
-                                <div className="flex flex-col gap-1 items-start">
-                                  <Badge variant={statusConfig[app.status]?.variant || "secondary"}>
-                                    {statusConfig[app.status]?.label || app.status}
-                                  </Badge>
-                                  {app.cohortId && (
-                                    <span className="text-xs text-muted-foreground">
-                                      {cohortsData.find((c) => c.id === app.cohortId)?.name ?? ""}
-                                    </span>
-                                  )}
-                                </div>
+                                {(() => {
+                                  const cohort = cohortsData.find((c) => c.id === app.cohortId);
+                                  return cohort ? (
+                                    <Badge variant="outline" className="whitespace-nowrap">
+                                      {cohort.displayName || cohort.name}
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-sm text-muted-foreground">Unassigned</span>
+                                  );
+                                })()}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={statusConfig[app.status]?.variant || "secondary"}>
+                                  {statusConfig[app.status]?.label || app.status}
+                                </Badge>
                               </TableCell>
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-2">

@@ -2792,23 +2792,22 @@ export async function registerRoutes(
       const requestedSlug = typeof req.body.cohortSlug === "string" ? req.body.cohortSlug.trim() : "";
       let resolvedCohort = requestedSlug ? await storage.getCohortBySlug(requestedSlug) : undefined;
       if (requestedSlug && !resolvedCohort) {
-        console.warn(`Application submitted with unknown cohortSlug "${requestedSlug}"; falling back to auto-detection`);
+        return res.status(400).json({ error: "This application link is not associated with a valid cohort." });
       }
       if (resolvedCohort) {
         (data as any).cohortId = resolvedCohort.id;
       } else {
-        // Fallback for callers that don't send cohortSlug: only auto-assign when
-        // exactly one cohort is open — with concurrent open cohorts (e.g. Core +
-        // Dorewa) there is no way to know which one the applicant intends, so it
-        // leaves the application unassigned for manual admin assignment rather
-        // than guessing.
-        const openCohorts = await storage.getOpenCohorts();
-        if (openCohorts.length === 1) {
-          (data as any).cohortId = openCohorts[0].id;
+        // Never guess a cohort from whichever one happens to be open. A
+        // submitted application must come through an explicit cohort link.
+        if (data.status === "submitted") {
+          return res.status(400).json({ error: "Choose a cohort-specific application link before submitting." });
         }
       }
 
       if (data.status === "submitted") {
+        if (!resolvedCohort || !isCohortAcceptingApplications(resolvedCohort)) {
+          return res.status(400).json({ error: "Applications for this cohort are currently closed." });
+        }
         const validationError = validateExtraAnswers(resolvedCohort, (data as any).extraAnswers);
         if (validationError) {
           return res.status(400).json({ error: validationError });
@@ -2936,6 +2935,14 @@ export async function registerRoutes(
     "yearsOfExperience","incorporationYear","ownershipPercentage",
     "numberOfShareholders","hoursPerWeek","currentStep",
   ]);
+
+  function isCohortAcceptingApplications(cohort: Cohort): boolean {
+    if (cohort.status !== "open" || !cohort.isOpen) return false;
+    const now = Date.now();
+    if (cohort.applicationOpenAt && now < new Date(cohort.applicationOpenAt).getTime()) return false;
+    if (cohort.applicationCloseAt && now > new Date(cohort.applicationCloseAt).getTime()) return false;
+    return true;
+  }
 
   function normalizeApplicationBody(body: Record<string, unknown>): Record<string, unknown> {
     const out: Record<string, unknown> = {};
@@ -3565,6 +3572,10 @@ export async function registerRoutes(
       const application = await storage.getApplication(req.params.id);
       if (!application) return res.status(404).json({ error: "Application not found" });
       const cohortId = req.body.cohortId || null;
+      if (cohortId) {
+        const cohort = await storage.getCohort(cohortId);
+        if (!cohort) return res.status(404).json({ error: "Cohort not found" });
+      }
       await storage.assignApplicationToCohort(req.params.id, cohortId);
       res.json({ ok: true });
     } catch (error) {

@@ -250,6 +250,20 @@ export async function runSchemaMigrations() {
         WHERE slug = 'dorewa'
           AND NOT (COALESCE(extra_questions, '[]'::jsonb) @> '[{"id":"dorewa-referring-organization"}]'::jsonb);
 
+        -- Legacy applications predate the cohort records and were previously
+        -- attached to the first cohort by fallback. They belong to Core unless
+        -- they were created after the cohort system existed.
+        UPDATE applications AS legacy_application
+        SET cohort_id = core.id
+        FROM cohorts AS core, cohorts AS dorewa
+        WHERE core.slug = 'core'
+          AND dorewa.slug = 'dorewa'
+          AND legacy_application.created_at < LEAST(core.created_at, dorewa.created_at)
+          AND (
+            legacy_application.cohort_id IS NULL
+            OR legacy_application.cohort_id = dorewa.id
+          );
+
         -- Assign all unassigned applications to the first (oldest) cohort, preserving prior behavior
         SELECT id INTO v_cohort_id FROM cohorts ORDER BY created_at ASC LIMIT 1;
         UPDATE applications SET cohort_id = v_cohort_id WHERE cohort_id IS NULL;
