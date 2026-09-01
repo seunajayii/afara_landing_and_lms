@@ -277,7 +277,7 @@ function buildApplicationConfirmationEmail(firstName: string | undefined, cohort
             <td style="background-color:${accentColor};padding:24px 48px;">
               <p style="margin:0 0 6px 0;font-size:13px;line-height:1.6;color:#a8c4c4;">
                 AFÁRÁ is an initiative of
-                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces & Bridges Advisory (OPSB)</a>${isSponsored ? `, delivered in partnership with ${sponsor}` : ''}
+                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces & Bridges Advisory (OPSB)</a>
               </p>
               <p style="margin:0;font-size:12px;color:#6a9090;">
                 &copy; ${new Date().getFullYear()} AFÁRÁ. All rights reserved.
@@ -543,7 +543,7 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
             <td style="background-color:${accentColor};padding:24px 48px;">
               <p style="margin:0 0 6px 0;font-size:13px;line-height:1.6;color:#a8c4c4;">
                 AFÁRÁ is an initiative of
-                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>${isSponsored ? `, delivered in partnership with ${sponsor}` : ''}
+                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>
               </p>
               <p style="margin:0;font-size:12px;color:#6a9090;">
                 &copy; ${new Date().getFullYear()} AFÁRÁ. All rights reserved.
@@ -717,7 +717,7 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
             <td style="background-color:${accentColor};padding:24px 48px;">
               <p style="margin:0 0 6px 0;font-size:13px;line-height:1.6;color:#a8c4c4;">
                 AFÁRÁ is an initiative of
-                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>${isSponsored ? `, delivered in partnership with ${sponsor}` : ''}
+                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>
               </p>
               <p style="margin:0;font-size:12px;color:#6a9090;">
                 &copy; ${new Date().getFullYear()} AFÁRÁ. All rights reserved.
@@ -1545,7 +1545,7 @@ function buildDraftSaveNotificationEmail(
             <td style="background-color:${accentColor};padding:24px 48px;">
               <p style="margin:0 0 6px 0;font-size:13px;line-height:1.6;color:#a8c4c4;">
                 AFÁRÁ is an initiative of
-                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>${isSponsored ? `, delivered in partnership with ${sponsor}` : ''}
+                <a href="https://openspacesandbridges.com/" style="color:#a8c4c4;text-decoration:underline;">Open Spaces &amp; Bridges Advisory (OPSB)</a>
               </p>
               <p style="margin:0;font-size:12px;color:#6a9090;">
                 &copy; ${new Date().getFullYear()} AFÁRÁ. All rights reserved.
