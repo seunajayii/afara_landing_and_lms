@@ -2602,11 +2602,15 @@ export async function registerRoutes(
       const cohort = cohortId ? await storage.getCohort(cohortId) : undefined;
       if (cohortId && !cohort) return res.status(404).json({ error: "Cohort not found" });
       let result;
-      if (type === "application") result = await sendApplicationConfirmationEmail(email, firstName, cohort);
+      // The cohort preview dialog calls this email "confirmation"; keep
+      // "application" as a backwards-compatible alias for older callers.
+      if (type === "confirmation" || type === "application") {
+        result = await sendApplicationConfirmationEmail(email, firstName, cohort);
+      }
       else if (type === "welcome") result = await sendWelcomeEmail(email, firstName);
       else if (type === "acceptance") result = await sendAcceptanceEmail(email, firstName, undefined, cohort);
       else if (type === "draft-save") result = await sendDraftSaveNotificationEmail(email, firstName, 2, getApplicationStepCount(cohort), undefined, cohort);
-      else return res.status(400).json({ error: "Unknown type. Use: application | welcome | acceptance | draft-save" });
+      else return res.status(400).json({ error: "Unknown type. Use: confirmation | welcome | acceptance | draft-save" });
       res.json(result);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
