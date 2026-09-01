@@ -1806,7 +1806,7 @@ export async function registerRoutes(
 
   const privateVideoUpload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 250 * 1024 * 1024 },
+    limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (_req, file, callback) => {
       if (!file.mimetype.startsWith("video/")) {
         callback(new Error("Please upload a video file."));
@@ -2050,7 +2050,7 @@ export async function registerRoutes(
     (req: Request, res: Response, next: NextFunction) => {
       privateVideoUpload.single("video")(req, res, (err) => {
         if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
-          return res.status(400).json({ error: "Video exceeds the 250 MB upload limit. Compress the video before uploading." });
+          return res.status(400).json({ error: "Video exceeds the 10 MB upload limit. Compress the video before uploading." });
         }
         if (err) return res.status(400).json({ error: err.message || "Video upload failed." });
         next();

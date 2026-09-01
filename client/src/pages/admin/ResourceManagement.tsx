@@ -120,6 +120,7 @@ interface ResourceFileUploaderProps {
 }
 
 const MAX_RESOURCE_SIZE = 4 * 1024 * 1024; // 4 MB
+const MAX_PRIVATE_VIDEO_SIZE = 10 * 1024 * 1024; // 10 MB
 
 function ResourceFileUploader({ current, onUploaded, onCleared }: ResourceFileUploaderProps) {
   const { toast } = useToast();
@@ -617,6 +618,15 @@ function PrivateVideoFields({
   const [uploadProgress, setUploadProgress] = useState(0);
 
   function uploadVideo(file: File) {
+    if (file.size > MAX_PRIVATE_VIDEO_SIZE) {
+      toast({
+        title: "Video too large",
+        description: "Private hosted videos are limited to 10 MB. Compress or reduce the video size before uploading.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const title = form.getValues("title").trim();
     if (!title) {
       toast({ title: "Add a title first", description: "Enter a resource title before uploading a video.", variant: "destructive" });
@@ -662,7 +672,7 @@ function PrivateVideoFields({
         Private hosted video
       </div>
       <p className="text-xs text-muted-foreground">
-        Playback is served through a short-lived signed URL and checked against the viewer&apos;s current access. A copied URL cannot be used without the required LMS access.
+        Playback is served through a short-lived signed URL and checked against the viewer&apos;s current access. A copied URL cannot be used without the required LMS access. Private hosted videos are limited to 10 MB.
       </p>
       {form.watch("videoStorageKey") ? (
         <div className="flex items-center gap-3 rounded-md border bg-background p-3">
