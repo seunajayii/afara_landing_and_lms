@@ -3,3 +3,4 @@
 - [Resumable provider uploads](resumable-provider-uploads.md) — dropped responses require opaque server sessions and an authoritative provider status check before retrying a chunk
 - [Private video lifecycle](private-video-lifecycle.md) — save resource changes before best-effort deletion of replaced or removed private objects
 - [Course catalogue access](course-catalogue-access.md) — courses default to all participants; selected-course access follows the learner’s accepted application cohort
+- [Object Storage provisioning](object-storage-provisioning.md) — SDK variables can exist without a usable default bucket; probe availability and fail protected uploads explicitly

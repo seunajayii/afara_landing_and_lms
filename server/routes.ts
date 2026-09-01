@@ -33,6 +33,14 @@ import {
   type YouTubeVideoMetadata,
 } from "./youtube";
 import { isPrivateVideoStorageKey } from "./r2-storage";
+import {
+  isObjectStorageConfigured,
+  isObjectStorageAvailable as checkObjectStorageAvailable,
+  uploadPrivateVideo,
+  getObjectStorageFileStream,
+  deleteObjectStorageFile,
+  listObjectStoragePrivateVideoFiles,
+} from "./object-storage";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -422,8 +430,12 @@ export async function registerRoutes(
         return;
       }
       const deletePrivateVideo = dependencies.deletePrivateVideo ?? (async (key: string) => {
-        const { deletePrivateVideo: deleteFromStorage } = await import("./r2-storage");
-        await deleteFromStorage(key);
+        const { isR2Configured, deletePrivateVideo: deleteFromR2 } = await import("./r2-storage");
+        if (isR2Configured()) {
+          await deleteFromR2(key);
+        } else {
+          await deleteObjectStorageFile(key);
+        }
       });
       await deletePrivateVideo(storageKey);
       await storage.removePrivateVideoUpload(storageKey);
@@ -451,7 +463,10 @@ export async function registerRoutes(
       const cutoff = new Date(Date.now() - PRIVATE_VIDEO_UPLOAD_RETENTION_MS);
       if (!dependencies.listPrivateVideoFiles) {
         const { isR2Configured } = await import("./r2-storage");
-        if (!isR2Configured()) {
+        const objectStorageAvailable = isObjectStorageConfigured()
+          ? await checkObjectStorageAvailable()
+          : false;
+        if (!isR2Configured() && !objectStorageAvailable) {
           return { scanned: 0, deletedKeys, failedKeys, untrackedKeys };
         }
       }
@@ -459,6 +474,8 @@ export async function registerRoutes(
         dependencies.listPrivateVideoFiles
           ? dependencies.listPrivateVideoFiles()
           : (async () => {
+              const { isR2Configured } = await import("./r2-storage");
+              if (!isR2Configured()) return listObjectStoragePrivateVideoFiles();
               const { listPrivateVideoFiles } = await import("./r2-storage");
               return listPrivateVideoFiles();
             })(),
@@ -493,8 +510,12 @@ export async function registerRoutes(
         try {
           await storage.markPrivateVideoCleanupAttempt(storageKey);
           const deletePrivateVideo = dependencies.deletePrivateVideo ?? (async (key: string) => {
-            const { deletePrivateVideo: deleteFromStorage } = await import("./r2-storage");
-            await deleteFromStorage(key);
+            const { isR2Configured, deletePrivateVideo: deleteFromStorage } = await import("./r2-storage");
+            if (isR2Configured()) {
+              await deleteFromStorage(key);
+            } else {
+              await deleteObjectStorageFile(key);
+            }
           });
           await deletePrivateVideo(storageKey);
           await storage.removePrivateVideoUpload(storageKey);
@@ -535,6 +556,7 @@ export async function registerRoutes(
     const uploads = await storage.getPrivateVideoUploads();
     const trackedKeys = new Set(uploads.map(upload => upload.storageKey));
     let untracked = 0;
+    let storageAvailable = true;
 
     if (dependencies.listPrivateVideoFiles) {
       const keys = await dependencies.listPrivateVideoFiles();
@@ -552,6 +574,15 @@ export async function registerRoutes(
           const attachedResource = await storage.getResourceByVideoStorageKey(key);
           if (!attachedResource) untracked += 1;
         }
+      } else if (isObjectStorageConfigured() && await checkObjectStorageAvailable()) {
+        const keys = await listObjectStoragePrivateVideoFiles();
+        for (const key of keys.filter(key => isPrivateVideoStorageKey(key))) {
+          if (trackedKeys.has(key)) continue;
+          const attachedResource = await storage.getResourceByVideoStorageKey(key);
+          if (!attachedResource) untracked += 1;
+        }
+      } else if (isObjectStorageConfigured()) {
+        storageAvailable = false;
       }
     }
 
@@ -579,6 +610,7 @@ export async function registerRoutes(
 
     return {
       counts: { pending, failed, untracked, removed },
+      storageAvailable,
       totalAttempts,
       lastAttemptAt,
     };
@@ -1744,8 +1776,10 @@ export async function registerRoutes(
       if (range && !/^bytes=\d*-\d*$/.test(range)) {
         return res.status(416).setHeader("Content-Range", "bytes */*").end();
       }
-      const { getFileStream } = await import("./r2-storage");
-      const file = await getFileStream(resource.videoStorageKey, range);
+      const { isR2Configured, getFileStream } = await import("./r2-storage");
+      const file = isR2Configured()
+        ? await getFileStream(resource.videoStorageKey, range)
+        : await getObjectStorageFileStream(resource.videoStorageKey, range);
       res.setHeader("Content-Type", file.contentType || resource.videoContentType || "video/mp4");
       res.setHeader("Accept-Ranges", file.acceptRanges || "bytes");
       res.setHeader("Cache-Control", "private, no-store");
@@ -1802,6 +1836,22 @@ export async function registerRoutes(
         if (!video) return res.status(404).json({ error: "This YouTube video could not be found or accessed." });
         res.json(video);
       } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        if (/quota|exceeded/i.test(message)) {
+          // A valid YouTube ID is enough to embed and save the resource. The
+          // Data API lookup only enriches the form with title/thumbnail data,
+          // so quota exhaustion should not block adding an existing link.
+          return res.json({
+            videoId,
+            url: `https://www.youtube.com/watch?v=${videoId}`,
+            title: `YouTube video ${videoId}`,
+            description: "",
+            thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+            durationSeconds: null,
+            privacyStatus: null,
+            uploadStatus: null,
+          });
+        }
         console.error("YouTube video lookup failed:", error);
         res.status(502).json({ error: "Unable to retrieve this video from YouTube. Check the video and try again." });
       }
@@ -2010,29 +2060,30 @@ export async function registerRoutes(
       if (!req.file) return res.status(400).json({ error: "Choose a video file to upload." });
       const uploadedById = req.session.userId;
       if (!uploadedById) return res.status(401).json({ error: "Authentication required" });
+      const { isR2Configured, uploadFile, deletePrivateVideo: deleteR2PrivateVideo } = await import("./r2-storage");
       try {
-        const { isR2Configured, uploadFile } = await import("./r2-storage");
-        if (!isR2Configured()) {
+        if (!isR2Configured() && !isObjectStorageConfigured()) {
           return res.status(503).json({
-            error: "Private video hosting is not configured. Add the private storage settings before uploading protected videos.",
+            error: "Private video hosting is not configured. Connect Replit Object Storage or add the private storage settings before uploading protected videos.",
           });
         }
         const originalName = req.file.originalname || "video.mp4";
         const ext = originalName.includes(".") ? originalName.split(".").pop()! : "mp4";
         const key = `resources/private-videos/${randomUUID()}.${ext}`;
-        const result = await uploadFile(
-          key,
-          req.file.buffer,
-          req.file.mimetype || "video/mp4",
-          false,
-        );
+        const contentType = req.file.mimetype || "video/mp4";
+        const result = isR2Configured()
+          ? await uploadFile(key, req.file.buffer, contentType, false)
+          : await uploadPrivateVideo(key, req.file.buffer, contentType);
         let upload;
         try {
-          upload = await storage.trackPrivateVideoUpload(key, uploadedById);
+          upload = await storage.trackPrivateVideoUpload(result.key, uploadedById);
         } catch (error) {
           try {
-            const { deletePrivateVideo } = await import("./r2-storage");
-            await deletePrivateVideo(key);
+            if (isR2Configured()) {
+              await deleteR2PrivateVideo(result.key);
+            } else {
+              await deleteObjectStorageFile(result.key);
+            }
           } catch (cleanupError) {
             console.error("Failed to clean up untracked private video upload:", cleanupError);
           }
@@ -2048,7 +2099,11 @@ export async function registerRoutes(
         });
       } catch (error) {
         console.error("Private video upload failed:", error);
-        res.status(502).json({ error: "Private video hosting could not store this upload. Try again." });
+        res.status(isR2Configured() ? 502 : 503).json({
+          error: isR2Configured()
+            ? "Private video hosting could not store this upload. Try again."
+            : "Replit Object Storage is not available for private video uploads. Enable the project’s Object Storage bucket, then try again.",
+        });
       }
     },
   );
@@ -2106,7 +2161,9 @@ export async function registerRoutes(
     try {
       const data = youtubeVideoResourceSchema.parse(req.body);
       const resource = await storage.createResource(data);
-      await claimPrivateVideoUpload(data.videoStorageKey, resource.id);
+      if (data.videoStorageKey) {
+        await claimPrivateVideoUpload(data.videoStorageKey, resource.id);
+      }
       res.status(201).json(resource);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -2134,7 +2191,9 @@ export async function registerRoutes(
       ) {
         await cleanupPrivateVideo(existing.id, existing.videoStorageKey);
       }
-      if (resource) await claimPrivateVideoUpload(resource.videoStorageKey, resource.id);
+      if (resource?.videoStorageKey) {
+        await claimPrivateVideoUpload(resource.videoStorageKey, resource.id);
+      }
       res.json(resource);
     } catch (error) {
       if (error instanceof z.ZodError) {

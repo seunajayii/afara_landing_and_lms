@@ -223,7 +223,10 @@ export async function uploadYouTubeChunk(input: {
   return {
     status: "completed",
     nextByte: input.totalBytes,
-    video: (await getYouTubeVideo(uploaded.videoId)) || uploaded,
+    // The upload response is authoritative. Do not make a second Data API
+    // request here: quota exhaustion must not turn a completed upload into a
+    // failed upload.
+    video: uploaded,
   };
 }
 
@@ -255,7 +258,10 @@ export async function getYouTubeUploadStatus(input: {
   return {
     status: "completed",
     nextByte: input.totalBytes,
-    video: (await getYouTubeVideo(uploaded.videoId)) || uploaded,
+    // The upload response is authoritative. Do not make a second Data API
+    // request here: quota exhaustion must not turn a completed upload into a
+    // failed upload.
+    video: uploaded,
   };
 }
 
@@ -297,5 +303,8 @@ export async function uploadYouTubeVideo(input: UploadVideoInput): Promise<YouTu
   }
 
   const uploaded = toMetadata(await response.json() as Record<string, any>);
-  return (await getYouTubeVideo(uploaded.videoId)) || uploaded;
+  // The upload response is authoritative. Do not make a second Data API
+  // request here: quota exhaustion must not turn a completed upload into a
+  // failed upload.
+  return uploaded;
 }
