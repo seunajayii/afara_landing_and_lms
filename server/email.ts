@@ -112,7 +112,16 @@ function getCohortBranding(cohort?: CohortEmailInfo | null) {
                   </td>
                 </tr>
               </table>` : '';
-  return { name, sponsor, partnershipNote, isSponsored, accentColor, programLabel, partnershipBannerHtml };
+  return {
+    name,
+    sponsor,
+    partnershipNote,
+    isSponsored,
+    accentColor,
+    headingColor: AFARA_GREEN,
+    programLabel,
+    partnershipBannerHtml,
+  };
 }
 
 export async function sendNewsletter(
@@ -150,7 +159,7 @@ export async function sendNewsletter(
 function buildApplicationConfirmationEmail(firstName: string | undefined, cohort: CohortEmailInfo | undefined, opts: { inlineImages?: boolean } = {}) {
   const name = firstName || 'there';
   const branding = getCohortBranding(cohort);
-  const { accentColor, programLabel, partnershipBannerHtml, isSponsored, sponsor } = branding;
+  const { accentColor, headingColor, programLabel, partnershipBannerHtml, isSponsored, sponsor } = branding;
   const brandAsset = getEmailBrandAsset(cohort, opts.inlineImages);
   const mastheadHtml = brandAsset
     ? `<img src="${brandAsset.src}" alt="${cohort?.slug?.toLowerCase() === 'dorewa' ? 'DOREWA' : 'AFÁRÁ'}" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />`
@@ -186,7 +195,7 @@ function buildApplicationConfirmationEmail(firstName: string | undefined, cohort
           <tr>
             <td style="padding:48px 48px 32px 48px;">
 
-              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;font-style:normal;color:${accentColor};line-height:1.3;">
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;font-style:normal;color:${headingColor};line-height:1.3;">
                 We've received your application
               </h1>
 
@@ -335,7 +344,7 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
     const { client, fromEmail } = await getResendClient();
     const name = firstName || 'there';
     const branding = getCohortBranding(cohort);
-    const { accentColor, programLabel, partnershipBannerHtml, isSponsored, sponsor } = branding;
+    const { accentColor, headingColor, programLabel, partnershipBannerHtml, isSponsored, sponsor } = branding;
     const brandAsset = getEmailBrandAsset(cohort);
     const mastheadHtml = brandAsset
       ? `<img src="${brandAsset.src}" alt="${cohort?.slug?.toLowerCase() === 'dorewa' ? 'DOREWA' : 'AFÁRÁ'}" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />`
@@ -384,7 +393,7 @@ export async function sendAcceptanceEmail(email: string, firstName?: string, rev
           <tr>
             <td style="padding:48px 48px 32px 48px;">
 
-              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:${accentColor};line-height:1.3;">
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:${headingColor};line-height:1.3;">
                 Congratulations — you've been selected
               </h1>
 
@@ -585,7 +594,7 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
     const { client, fromEmail } = await getResendClient();
     const name = firstName || 'there';
     const branding = getCohortBranding(cohort);
-    const { accentColor, programLabel, partnershipBannerHtml, isSponsored, sponsor } = branding;
+    const { accentColor, headingColor, programLabel, partnershipBannerHtml, isSponsored, sponsor } = branding;
     const brandAsset = getEmailBrandAsset(cohort);
     const mastheadHtml = brandAsset
       ? `<img src="${brandAsset.src}" alt="${cohort?.slug?.toLowerCase() === 'dorewa' ? 'DOREWA' : 'AFÁRÁ'}" width="600" style="display:block;width:100%;max-width:600px;height:auto;" />`
@@ -633,7 +642,7 @@ export async function sendRejectionEmail(email: string, firstName?: string, revi
           <tr>
             <td style="padding:48px 48px 32px 48px;">
 
-              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:${accentColor};line-height:1.3;">
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:${headingColor};line-height:1.3;">
                 An update on your application
               </h1>
 
@@ -1391,7 +1400,7 @@ function buildDraftSaveNotificationEmail(
 ) {
     const name = firstName && firstName.trim() ? firstName.trim() : 'there';
     const branding = getCohortBranding(cohort);
-    const { accentColor, partnershipBannerHtml, isSponsored, sponsor } = branding;
+    const { accentColor, headingColor, partnershipBannerHtml, isSponsored, sponsor } = branding;
     const programLabel = branding.name ? `${branding.name} application` : 'AFÁRÁ Accelerator application';
     const brandAsset = getEmailBrandAsset(cohort, opts.inlineImages);
     const mastheadHtml = brandAsset
@@ -1449,7 +1458,7 @@ function buildDraftSaveNotificationEmail(
           <tr>
             <td style="padding:48px 48px 32px 48px;">
 
-              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:${accentColor};line-height:1.3;">
+              <h1 style="margin:0 0 28px 0;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;color:${headingColor};line-height:1.3;">
                 Your progress has been saved
               </h1>
 
