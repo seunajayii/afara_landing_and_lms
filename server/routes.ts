@@ -15,6 +15,8 @@ import {
   insertDiscussionThreadSchema, insertDiscussionPostSchema, insertCertificateSchema,
   insertNotificationSchema, insertApplicationSchema, insertCohortSchema,
   insertLearningPodSchema, insertLearningPodAssignmentSchema, insertLearningPodSubmissionSchema,
+  insertAssignmentSchema, insertAssignmentTargetSchema, insertAssignmentQuestionSchema,
+  type AssignmentFileEvidence,
   extraAnswersSchema,
   type Cohort, type Event
 } from "@shared/schema";
@@ -133,6 +135,56 @@ const learningPodReviewSchema = z.object({
   feedback: z.string().trim().min(1).max(10000),
 });
 
+const assignmentTargetSchema = z.object({
+  targetType: z.enum(["cohort", "pod", "course", "module"]),
+  targetId: z.string().min(1),
+});
+
+const assignmentQuestionSchema = z.object({
+  prompt: z.string().trim().min(1).max(10000),
+  questionType: z.enum(["single_choice", "multiple_choice", "short_text", "long_text", "reflection"]),
+  options: z.array(z.string().trim().min(1).max(500)).max(50).default([]),
+  correctAnswers: z.array(z.string().trim().min(1).max(500)).max(50).default([]),
+  points: z.number().int().min(1).max(10000).default(1),
+  orderIndex: z.number().int().min(0).default(0),
+});
+
+const assignmentPayloadSchema = insertAssignmentSchema.omit({ createdById: true }).extend({
+  cohortId: z.string().min(1),
+  title: z.string().trim().min(1).max(200),
+  instructions: z.string().trim().max(20000).nullable().optional(),
+  assignmentType: z.enum(["quiz", "submission", "reflection"]),
+  status: z.enum(["draft", "pending_review", "published", "archived"]).default("draft"),
+  dueAt: z.string().datetime().nullable().optional(),
+  maxScore: z.number().int().min(1).max(100000).default(100),
+  passingScore: z.number().int().min(0).max(100000).default(70),
+  targets: z.array(assignmentTargetSchema).min(1).max(20),
+  questions: z.array(assignmentQuestionSchema).max(100).default([]),
+});
+
+const assignmentSubmissionPayloadSchema = z.object({
+  responseText: z.string().trim().max(30000).nullable().optional(),
+  links: z.array(z.string().trim().url().max(2000)).max(20).default([]),
+  answers: z.array(z.object({
+    questionId: z.string().min(1),
+    answer: z.unknown().optional(),
+  })).max(100).default([]),
+  submit: z.boolean().default(false),
+});
+
+const assignmentReviewSchema = z.object({
+  score: z.number().int().min(0).max(100000).nullable().optional(),
+  passed: z.boolean().nullable().optional(),
+  feedback: z.string().trim().max(20000).nullable().optional(),
+  internalNotes: z.string().trim().max(20000).nullable().optional(),
+  questionReviews: z.array(z.object({
+    questionId: z.string().min(1),
+    isCorrect: z.boolean().nullable().optional(),
+    score: z.number().int().min(0).nullable().optional(),
+    feedback: z.string().trim().max(10000).nullable().optional(),
+  })).max(100).default([]),
+});
+
 const progressAreaUpdateSchema = z.object({
   status: z.enum(["not_started", "emerging", "progressing", "strong_progress", "achieved", "not_applicable"]),
   evidence: z.string().trim().max(5000).optional(),
@@ -165,6 +217,10 @@ const progressFeedbackPayloadSchema = z.object({
 });
 
 const activeLearningPodDistributions = new Set<string>();
+const assignmentEvidenceUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
+});
 
 const youtubeVideoResourceSchema = insertResourceSchema.superRefine((resource, ctx) => {
   if (resource.resourceType === "video") {
@@ -1774,6 +1830,101 @@ export async function registerRoutes(
     return Boolean(activeCohort && await storage.isCourseAssignedToCohort(course.id, activeCohort.id));
   };
 
+  const getCourseForModuleId = async (moduleId: string) => {
+    for (const course of await storage.getAllCourses()) {
+      const courseModules = await storage.getModulesByCourse(course.id);
+      if (courseModules.some((module) => module.id === moduleId)) return course;
+    }
+    return undefined;
+  };
+
+  const validateAssignmentTargets = async (cohortId: string, targets: Array<{ targetType: string; targetId: string }>) => {
+    const errors: string[] = [];
+    for (const target of targets) {
+      if (target.targetType === "cohort") {
+        if (target.targetId !== cohortId || !await storage.getCohort(target.targetId)) errors.push("The cohort target must match the assignment cohort.");
+      } else if (target.targetType === "pod") {
+        const pod = await storage.getLearningPod(target.targetId);
+        if (!pod || pod.cohortId !== cohortId) errors.push("Every pod target must belong to the assignment cohort.");
+      } else if (target.targetType === "course") {
+        if (!await storage.getCourse(target.targetId)) errors.push("One or more course targets could not be found.");
+      } else if (target.targetType === "module") {
+        const course = await getCourseForModuleId(target.targetId);
+        if (!course) errors.push("One or more module targets could not be found.");
+      }
+    }
+    return errors.length ? errors[0] : null;
+  };
+
+  const canAuthorAssignment = async (
+    req: Request,
+    cohortId: string,
+    targets: Array<{ targetType: string; targetId: string }>,
+  ) => {
+    if (isAdminSession(req)) return true;
+    if (!req.session.userId) return false;
+    if (req.session.userRole === "mentor") {
+      const podTargets = targets.filter((target) => target.targetType === "pod");
+      if (podTargets.length === 0) return false;
+      const pods = await Promise.all(podTargets.map((target) => storage.getLearningPod(target.targetId)));
+      return pods.every((pod) => pod?.cohortId === cohortId && pod.mentorId === req.session.userId);
+    }
+    if (req.session.userRole === "facilitator") {
+      const scopedTargets = targets.filter((target) => target.targetType === "course" || target.targetType === "module");
+      if (scopedTargets.length === 0) return false;
+      for (const target of scopedTargets) {
+        const course = target.targetType === "course"
+          ? await storage.getCourse(target.targetId)
+          : await getCourseForModuleId(target.targetId);
+        if (!course || course.instructorId !== req.session.userId) return false;
+      }
+      return true;
+    }
+    return false;
+  };
+
+  const assignmentMatchesUser = async (req: Request, assignment: any, targets: any[]) => {
+    if (!req.session.userId) return false;
+    if (isAdminSession(req)) return true;
+    const activeCohort = await storage.getActiveCohortForUser(req.session.userId);
+    if (!activeCohort || activeCohort.id !== assignment.cohortId) return false;
+    for (const target of targets) {
+      if (target.targetType === "cohort") return true;
+      if (target.targetType === "pod") {
+        const members = await storage.getLearningPodMembers(target.targetId);
+        if (members.some((member) => member.userId === req.session.userId && !member.removedAt)) return true;
+      }
+      if (target.targetType === "course") {
+        const course = await storage.getCourse(target.targetId);
+        if (course && await canAccessCourse(req, course)) return true;
+      }
+      if (target.targetType === "module") {
+        const course = await getCourseForModuleId(target.targetId);
+        if (course && await canAccessCourse(req, course)) return true;
+      }
+    }
+    return false;
+  };
+
+  const assignmentResponse = async (req: Request, assignment: any, includeAllSubmissions = false) => {
+    const [targets, questions] = await Promise.all([
+      storage.getAssignmentTargets(assignment.id),
+      storage.getAssignmentQuestions(assignment.id),
+    ]);
+    let submissions = await storage.getAssignmentSubmissions(assignment.id);
+    if (!includeAllSubmissions) submissions = submissions.filter((submission) => submission.userId === req.session.userId);
+    const submissionsWithAnswers = await Promise.all(submissions.map(async (submission) => {
+      const answers = await storage.getAssignmentAnswers(submission.id);
+      if (includeAllSubmissions) return { ...submission, answers };
+      const { internalNotes, reviewedById, ...participantSubmission } = submission;
+      return { ...participantSubmission, answers };
+    }));
+    const visibleQuestions = includeAllSubmissions
+      ? questions
+      : questions.map(({ correctAnswers, ...question }) => question);
+    return { ...assignment, targets, questions: visibleQuestions, submissions: submissionsWithAnswers };
+  };
+
   const getProgrammeCertificateProgress = async (userId: string, requestedCohortId?: string) => {
     const cohort = requestedCohortId
       ? await storage.getCohort(requestedCohortId)
@@ -1907,6 +2058,51 @@ export async function registerRoutes(
     return false;
   };
 
+  const getSharedAssignmentActivity = async (userId: string, cohortId: string) => {
+    const assignments = (await storage.getAssignmentsByCohort(cohortId)).filter((assignment) => assignment.status === "published");
+    let assigned = 0;
+    let submitted = 0;
+    let reviewed = 0;
+    const feedback: Array<{ id: string; content: string; sourceType: string; visibility: string; contextType: string; contextId: string; createdAt: Date }> = [];
+    for (const assignment of assignments) {
+      const targets = await storage.getAssignmentTargets(assignment.id);
+      let matches = targets.some((target) => target.targetType === "cohort" && target.targetId === cohortId);
+      if (!matches) {
+        for (const target of targets) {
+          if (target.targetType === "pod") {
+            const members = await storage.getLearningPodMembers(target.targetId);
+            matches = members.some((member) => member.userId === userId && !member.removedAt);
+          } else if (target.targetType === "course") {
+            const course = await storage.getCourse(target.targetId);
+            matches = Boolean(course && (course.audience === "all" || await storage.isCourseAssignedToCohort(course.id, cohortId)));
+          } else if (target.targetType === "module") {
+            const course = await getCourseForModuleId(target.targetId);
+            matches = Boolean(course && (course.audience === "all" || await storage.isCourseAssignedToCohort(course.id, cohortId)));
+          }
+          if (matches) break;
+        }
+      }
+      if (!matches) continue;
+      assigned += 1;
+      const submission = await storage.getLatestAssignmentSubmission(assignment.id, userId);
+      if (!submission || submission.status === "draft") continue;
+      submitted += 1;
+      if (submission.reviewedAt || submission.score !== null) reviewed += 1;
+      if (submission.feedback) {
+        feedback.push({
+          id: `assignment-${submission.id}`,
+          content: submission.feedback,
+          sourceType: "facilitator",
+          visibility: "participant",
+          contextType: "assignment_submission",
+          contextId: submission.id,
+          createdAt: submission.reviewedAt || submission.updatedAt,
+        });
+      }
+    }
+    return { assigned, submitted, reviewed, feedback };
+  };
+
   const getProgressReport = async (participant: any, includeInternal = false) => {
     const [user, cohort, application, evaluation, milestones, reviews, feedback, allCourses, enrollments, lessonProgress, sessions] = await Promise.all([
       storage.getUser(participant.userId),
@@ -2003,9 +2199,10 @@ export async function registerRoutes(
       }));
     const completedCourses = assignedCourses.filter((course) => course.completed).length;
     const courseCompletionPercent = assignedCourses.length ? Math.round((completedCourses / assignedCourses.length) * 100) : 0;
-    const assignmentCount = podReports.reduce((total, pod) => total + pod.assignmentCount, 0);
-    const submittedAssignments = podReports.reduce((total, pod) => total + pod.submittedAssignments, 0);
-    const reviewedAssignments = podReports.reduce((total, pod) => total + pod.reviewedAssignments, 0);
+    const sharedAssignmentActivity = await getSharedAssignmentActivity(participant.userId, participant.cohortId);
+    const assignmentCount = podReports.reduce((total, pod) => total + pod.assignmentCount, 0) + sharedAssignmentActivity.assigned;
+    const submittedAssignments = podReports.reduce((total, pod) => total + pod.submittedAssignments, 0) + sharedAssignmentActivity.submitted;
+    const reviewedAssignments = podReports.reduce((total, pod) => total + pod.reviewedAssignments, 0) + sharedAssignmentActivity.reviewed;
 
     return {
       participant: {
@@ -2039,7 +2236,7 @@ export async function registerRoutes(
       progressAreas,
       milestones,
       reviews,
-      feedback: [...feedback, ...submissionFeedback, ...sessionFeedback].sort(
+      feedback: [...feedback, ...sharedAssignmentActivity.feedback, ...submissionFeedback, ...sessionFeedback].sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       ),
       courses: assignedCourses,
@@ -2051,6 +2248,7 @@ export async function registerRoutes(
         assignments: assignmentCount,
         submittedAssignments,
         reviewedAssignments,
+        sharedAssignments: sharedAssignmentActivity,
         completedMentorshipSessions: completedSessions.length,
       },
     };
@@ -2677,6 +2875,288 @@ export async function registerRoutes(
     }
   });
 
+  // --- Shared assignments and assessments ---
+  app.get("/api/admin/assignments", requireAuth, async (req: Request, res: Response) => {
+    try {
+      if (!isAdminSession(req) && req.session.userRole !== "mentor" && req.session.userRole !== "facilitator") {
+        return res.status(403).json({ error: "Staff access required" });
+      }
+      const cohortId = typeof req.query.cohortId === "string" ? req.query.cohortId : undefined;
+      const all = await storage.getAssignmentsByCohort(cohortId);
+      const visible = [];
+      for (const assignment of all) {
+        const targets = await storage.getAssignmentTargets(assignment.id);
+        if (await canAuthorAssignment(req, assignment.cohortId, targets)) visible.push(assignment);
+      }
+      res.json(await Promise.all(visible.map((assignment) => assignmentResponse(req, assignment, true))));
+    } catch (error) {
+      console.error("Failed to fetch assignments:", error);
+      res.status(500).json({ error: "Failed to fetch assignments" });
+    }
+  });
+
+  app.post("/api/admin/assignments", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const data = assignmentPayloadSchema.parse(req.body);
+      if (!await storage.getCohort(data.cohortId)) return res.status(404).json({ error: "Cohort not found" });
+      const targetError = await validateAssignmentTargets(data.cohortId, data.targets);
+      if (targetError) return res.status(400).json({ error: targetError });
+      if (!await canAuthorAssignment(req, data.cohortId, data.targets)) return res.status(403).json({ error: "You do not have authoring access to these assignment contexts" });
+      if (data.assignmentType === "quiz" && data.questions.length === 0) return res.status(400).json({ error: "A quiz needs at least one question" });
+      const assignment = await storage.createAssignment({
+        cohortId: data.cohortId,
+        title: data.title,
+        instructions: data.instructions ?? null,
+        assignmentType: data.assignmentType,
+        status: isAdminSession(req) ? data.status : "draft",
+        dueAt: data.dueAt ? new Date(data.dueAt) : null,
+        maxScore: data.maxScore,
+        passingScore: data.passingScore,
+        createdById: req.session.userId!,
+      });
+      await storage.replaceAssignmentTargets(assignment.id, data.targets.map((target) => ({ assignmentId: assignment.id, ...target })));
+      await storage.replaceAssignmentQuestions(assignment.id, data.questions.map((question, index) => ({
+        assignmentId: assignment.id,
+        ...question,
+        orderIndex: index,
+      })));
+      res.status(201).json(await assignmentResponse(req, assignment, true));
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      console.error("Failed to create assignment:", error);
+      res.status(500).json({ error: "Failed to create assignment" });
+    }
+  });
+
+  app.patch("/api/admin/assignments/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const existing = await storage.getAssignment(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Assignment not found" });
+      const existingTargets = await storage.getAssignmentTargets(existing.id);
+      if (!await canAuthorAssignment(req, existing.cohortId, existingTargets)) return res.status(403).json({ error: "You do not have authoring access to this assignment" });
+      const data = z.object({
+        cohortId: z.string().min(1).optional(),
+        title: z.string().trim().min(1).max(200).optional(),
+        instructions: z.string().trim().max(20000).nullable().optional(),
+        assignmentType: z.enum(["quiz", "submission", "reflection"]).optional(),
+        status: z.enum(["draft", "pending_review", "published", "archived"]).optional(),
+        dueAt: z.string().datetime().nullable().optional(),
+        maxScore: z.number().int().min(1).max(100000).optional(),
+        passingScore: z.number().int().min(0).max(100000).optional(),
+        targets: z.array(assignmentTargetSchema).min(1).max(20).optional(),
+        questions: z.array(assignmentQuestionSchema).max(100).optional(),
+      }).parse(req.body);
+      const nextCohortId = data.cohortId ?? existing.cohortId;
+      const nextTargets = data.targets ?? existingTargets;
+      if (!await storage.getCohort(nextCohortId)) return res.status(404).json({ error: "Cohort not found" });
+      const targetError = await validateAssignmentTargets(nextCohortId, nextTargets);
+      if (targetError) return res.status(400).json({ error: targetError });
+      if (!await canAuthorAssignment(req, nextCohortId, nextTargets)) return res.status(403).json({ error: "You do not have authoring access to these assignment contexts" });
+      if (!isAdminSession(req) && data.status && data.status !== "draft") return res.status(403).json({ error: "Only administrators can publish or archive assignments" });
+      const updated = await storage.updateAssignment(existing.id, {
+        ...(data.cohortId !== undefined ? { cohortId: data.cohortId } : {}),
+        ...(data.title !== undefined ? { title: data.title } : {}),
+        ...(data.instructions !== undefined ? { instructions: data.instructions } : {}),
+        ...(data.assignmentType !== undefined ? { assignmentType: data.assignmentType } : {}),
+        ...(data.status !== undefined ? { status: data.status } : {}),
+        ...(data.dueAt !== undefined ? { dueAt: data.dueAt ? new Date(data.dueAt) : null } : {}),
+        ...(data.maxScore !== undefined ? { maxScore: data.maxScore } : {}),
+        ...(data.passingScore !== undefined ? { passingScore: data.passingScore } : {}),
+      });
+      if (data.targets) await storage.replaceAssignmentTargets(existing.id, data.targets.map((target) => ({ assignmentId: existing.id, ...target })));
+      if (data.questions) await storage.replaceAssignmentQuestions(existing.id, data.questions.map((question, index) => ({ assignmentId: existing.id, ...question, orderIndex: index })));
+      res.json(await assignmentResponse(req, updated!, true));
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      res.status(500).json({ error: "Failed to update assignment" });
+    }
+  });
+
+  app.delete("/api/admin/assignments/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      if (!await storage.getAssignment(req.params.id)) return res.status(404).json({ error: "Assignment not found" });
+      await storage.deleteAssignment(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete assignment" });
+    }
+  });
+
+  app.get("/api/assignments", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const cohortId = typeof req.query.cohortId === "string" ? req.query.cohortId : undefined;
+      const all = await storage.getAssignmentsByCohort(cohortId);
+      const visible = [];
+      for (const assignment of all.filter((item) => item.status === "published")) {
+        const targets = await storage.getAssignmentTargets(assignment.id);
+        if (await assignmentMatchesUser(req, assignment, targets)) visible.push(assignment);
+      }
+      res.json(await Promise.all(visible.map((assignment) => assignmentResponse(req, assignment))));
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch your assignments" });
+    }
+  });
+
+  app.get("/api/assignments/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const assignment = await storage.getAssignment(req.params.id);
+      if (!assignment) return res.status(404).json({ error: "Assignment not found" });
+      const targets = await storage.getAssignmentTargets(assignment.id);
+      const staff = await canAuthorAssignment(req, assignment.cohortId, targets);
+      if (assignment.status !== "published" && !staff) return res.status(404).json({ error: "Assignment not found" });
+      if (!staff && !await assignmentMatchesUser(req, assignment, targets)) return res.status(404).json({ error: "Assignment not found" });
+      res.json(await assignmentResponse(req, assignment, staff));
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch assignment" });
+    }
+  });
+
+  const canReviewAssignment = async (req: Request, assignment: any, submission: any) => {
+    if (isAdminSession(req)) return true;
+    const targets = await storage.getAssignmentTargets(assignment.id);
+    if (req.session.userRole === "mentor") {
+      const pods = await Promise.all(targets.filter((target) => target.targetType === "pod").map((target) => storage.getLearningPod(target.targetId)));
+      return Boolean(submission.podId && pods.some((pod) => pod?.id === submission.podId && pod?.mentorId === req.session.userId));
+    }
+    return req.session.userRole === "facilitator" && await canAuthorAssignment(req, assignment.cohortId, targets);
+  };
+
+  app.post("/api/assignments/:id/submissions", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const assignment = await storage.getAssignment(req.params.id);
+      if (!assignment || assignment.status !== "published") return res.status(404).json({ error: "Assignment not found" });
+      const targets = await storage.getAssignmentTargets(assignment.id);
+      if (!await assignmentMatchesUser(req, assignment, targets)) return res.status(403).json({ error: "You do not have access to this assignment" });
+      const data = assignmentSubmissionPayloadSchema.parse(req.body);
+      const questions = await storage.getAssignmentQuestions(assignment.id);
+      const questionIds = new Set(questions.map((question) => question.id));
+      if (data.answers.some((answer) => !questionIds.has(answer.questionId))) return res.status(400).json({ error: "One or more answers do not belong to this assignment" });
+      const podTarget = targets.find((target) => target.targetType === "pod");
+      const latest = await storage.getLatestAssignmentSubmission(assignment.id, req.session.userId!);
+      const draft = latest?.status === "draft" ? latest : undefined;
+      const answerMap = new Map(data.answers.map((answer) => [answer.questionId, answer.answer]));
+      const objectiveQuestions = questions.filter((question) => question.questionType === "single_choice" || question.questionType === "multiple_choice");
+      const autoRows = objectiveQuestions.map((question) => {
+        const expected = [...question.correctAnswers].map(String).sort();
+        const raw = answerMap.get(question.id);
+        const actual = (Array.isArray(raw) ? raw : raw == null ? [] : [raw]).map(String).sort();
+        const isCorrect = JSON.stringify(actual) === JSON.stringify(expected);
+        return { questionId: question.id, isCorrect, score: isCorrect ? question.points : 0 };
+      });
+      const allObjective = questions.length > 0 && objectiveQuestions.length === questions.length;
+      const autoScore = allObjective ? autoRows.reduce((sum, row) => sum + row.score, 0) : null;
+      const now = new Date();
+      const submissionValues = {
+        assignmentId: assignment.id,
+        userId: req.session.userId!,
+        podId: podTarget?.targetId || null,
+        status: (data.submit ? (allObjective ? "graded" : "submitted") : "draft") as "draft" | "submitted" | "graded",
+        responseText: data.responseText ?? null,
+        links: data.links,
+        fileEvidence: draft?.fileEvidence ?? [],
+        completedAt: data.submit ? now : null,
+        submittedAt: data.submit ? now : null,
+        score: autoScore,
+        passed: autoScore === null ? null : autoScore >= assignment.passingScore,
+        reviewedAt: allObjective && data.submit ? now : null,
+      };
+      const submission = draft
+        ? await storage.updateAssignmentSubmission(draft.id, submissionValues)
+        : await storage.createAssignmentSubmission({ ...submissionValues, attemptNumber: await storage.getNextAssignmentAttemptNumber(assignment.id, req.session.userId!) });
+      if (!submission) return res.status(500).json({ error: "Could not save submission" });
+      await storage.replaceAssignmentAnswers(submission.id, data.answers.map((answer) => {
+        const marked = autoRows.find((row) => row.questionId === answer.questionId);
+        return {
+          submissionId: submission.id,
+          questionId: answer.questionId,
+          answer: answer.answer as any,
+          isCorrect: marked?.isCorrect ?? null,
+          score: marked?.score ?? null,
+        };
+      }));
+      res.status(draft ? 200 : 201).json({ ...submission, answers: await storage.getAssignmentAnswers(submission.id) });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      res.status(500).json({ error: "Failed to save assignment submission" });
+    }
+  });
+
+  app.patch("/api/assignments/:assignmentId/submissions/:submissionId/review", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const assignment = await storage.getAssignment(req.params.assignmentId);
+      const submission = await storage.getAssignmentSubmission(req.params.submissionId);
+      if (!assignment || !submission || submission.assignmentId !== assignment.id) return res.status(404).json({ error: "Submission not found" });
+      if (!await canReviewAssignment(req, assignment, submission)) return res.status(403).json({ error: "You do not have grading access to this submission" });
+      const data = assignmentReviewSchema.parse(req.body);
+      if (data.score !== undefined && data.score !== null && data.score > assignment.maxScore) return res.status(400).json({ error: `Score cannot exceed ${assignment.maxScore}` });
+      const updated = await storage.updateAssignmentSubmission(submission.id, {
+        status: "graded",
+        score: data.score ?? submission.score,
+        passed: data.passed ?? (data.score !== undefined && data.score !== null ? data.score >= assignment.passingScore : submission.passed),
+        feedback: data.feedback ?? submission.feedback,
+        internalNotes: data.internalNotes ?? submission.internalNotes,
+        reviewedById: req.session.userId!,
+        reviewedAt: new Date(),
+      });
+      if (data.questionReviews.length) {
+        const current = await storage.getAssignmentAnswers(submission.id);
+        const reviews = new Map(data.questionReviews.map((review) => [review.questionId, review]));
+        await storage.replaceAssignmentAnswers(submission.id, current.map((item) => {
+          const review = reviews.get(item.questionId);
+          return {
+            submissionId: submission.id,
+            questionId: item.questionId,
+            answer: item.answer,
+            isCorrect: review?.isCorrect ?? item.isCorrect,
+            score: review?.score ?? item.score,
+            feedback: review?.feedback ?? item.feedback,
+          };
+        }));
+      }
+      res.json({ ...updated, answers: await storage.getAssignmentAnswers(submission.id) });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      res.status(500).json({ error: "Failed to review assignment" });
+    }
+  });
+
+  app.post("/api/assignments/:assignmentId/submissions/:submissionId/files", requireAuth, assignmentEvidenceUpload.single("file"), async (req: Request, res: Response) => {
+    try {
+      const assignment = await storage.getAssignment(req.params.assignmentId);
+      const submission = await storage.getAssignmentSubmission(req.params.submissionId);
+      if (!assignment || !submission || submission.assignmentId !== assignment.id) return res.status(404).json({ error: "Submission not found" });
+      const canReview = await canReviewAssignment(req, assignment, submission);
+      if (submission.userId !== req.session.userId && !canReview) return res.status(403).json({ error: "Access denied" });
+      if (!req.file) return res.status(400).json({ error: "Choose a file to upload" });
+      if (!await checkObjectStorageAvailable()) return res.status(503).json({ error: "Protected file storage is not available. Try again after storage is provisioned." });
+      const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(-120) || "evidence";
+      const uploaded = await uploadPrivateObject(`assignment-evidence/${submission.id}/${randomUUID()}-${safeName}`, req.file.buffer);
+      const evidence = [...(submission.fileEvidence || []), { key: uploaded.key, name: req.file.originalname, contentType: req.file.mimetype, size: req.file.size }] as AssignmentFileEvidence[];
+      res.status(201).json(await storage.updateAssignmentSubmission(submission.id, { fileEvidence: evidence }));
+    } catch (error) {
+      if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") return res.status(413).json({ error: "Files must be 25 MB or smaller" });
+      res.status(500).json({ error: "Failed to upload evidence file" });
+    }
+  });
+
+  app.get("/api/assignment-files/:submissionId/:fileIndex", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const submission = await storage.getAssignmentSubmission(req.params.submissionId);
+      const assignment = submission ? await storage.getAssignment(submission.assignmentId) : undefined;
+      if (!submission || !assignment) return res.status(404).json({ error: "File not found" });
+      const canReview = await canReviewAssignment(req, assignment, submission);
+      if (submission.userId !== req.session.userId && !canReview) return res.status(403).json({ error: "Access denied" });
+      const evidence = submission.fileEvidence?.[Number(req.params.fileIndex)];
+      if (!evidence) return res.status(404).json({ error: "File not found" });
+      const bytes = await downloadObjectStorageFileBytes(evidence.key);
+      res.setHeader("Content-Type", evidence.contentType || "application/octet-stream");
+      res.setHeader("Content-Disposition", `inline; filename="${evidence.name.replace(/"/g, "")}"`);
+      res.send(bytes);
+    } catch (error) {
+      res.status(404).json({ error: "File not found" });
+    }
+  });
+
   // --- Learning Pods ---
   // Admin routes intentionally sit before the parameterized route below so
   // `/eligible` cannot be interpreted as a pod id.
@@ -2878,7 +3358,26 @@ export async function registerRoutes(
         maxScore: data.maxScore,
         createdById: req.session.userId!,
       });
-      res.status(201).json(assignment);
+      const sharedAssignment = await storage.createAssignment({
+        cohortId: pod.cohortId,
+        title: data.title,
+        instructions: data.instructions ?? null,
+        assignmentType: "submission",
+        status: data.status,
+        dueAt: data.dueAt ? new Date(data.dueAt) : null,
+        maxScore: data.maxScore,
+        passingScore: data.maxScore,
+        createdById: req.session.userId!,
+      });
+      await storage.replaceAssignmentTargets(sharedAssignment.id, [{
+        assignmentId: sharedAssignment.id,
+        targetType: "pod",
+        targetId: pod.id,
+      }]);
+      const linkedAssignment = await storage.updateLearningPodAssignment(assignment.id, {
+        sharedAssignmentId: sharedAssignment.id,
+      });
+      res.status(201).json(linkedAssignment || assignment);
     } catch (error) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
       res.status(500).json({ error: "Failed to create pod assignment" });
@@ -2894,6 +3393,16 @@ export async function registerRoutes(
         ...data,
         dueAt: data.dueAt === undefined ? undefined : data.dueAt ? new Date(data.dueAt) : null,
       });
+      if (assignment.sharedAssignmentId) {
+        await storage.updateAssignment(assignment.sharedAssignmentId, {
+          title: data.title,
+          instructions: data.instructions,
+          status: data.status,
+          dueAt: data.dueAt === undefined ? undefined : data.dueAt ? new Date(data.dueAt) : null,
+          maxScore: data.maxScore,
+          passingScore: data.maxScore,
+        });
+      }
       res.json(updated);
     } catch (error) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
@@ -2905,6 +3414,9 @@ export async function registerRoutes(
     try {
       const assignment = await storage.getLearningPodAssignment(req.params.assignmentId);
       if (!assignment || assignment.podId !== req.params.podId) return res.status(404).json({ error: "Assignment not found" });
+      if (assignment.sharedAssignmentId) {
+        await storage.deleteAssignment(assignment.sharedAssignmentId);
+      }
       await storage.deleteLearningPodAssignment(assignment.id);
       res.status(204).send();
     } catch (error) {
@@ -2967,6 +3479,31 @@ export async function registerRoutes(
             submissionText: data.submissionText ?? null,
             submissionUrl: data.submissionUrl ?? null,
           });
+      if (assignment.sharedAssignmentId) {
+        const sharedExisting = existing?.sharedSubmissionId
+          ? await storage.getAssignmentSubmission(existing.sharedSubmissionId)
+          : await storage.getLatestAssignmentSubmission(assignment.sharedAssignmentId, req.session.userId!);
+        const sharedSubmission = sharedExisting
+          ? await storage.updateAssignmentSubmission(sharedExisting.id, {
+              status: "submitted",
+              responseText: data.submissionText ?? null,
+              links: data.submissionUrl ? [data.submissionUrl] : [],
+              submittedAt: new Date(),
+              completedAt: new Date(),
+            })
+          : await storage.createAssignmentSubmission({
+              assignmentId: assignment.sharedAssignmentId,
+              userId: req.session.userId!,
+              podId: pod.id,
+              status: "submitted",
+              responseText: data.submissionText ?? null,
+              links: data.submissionUrl ? [data.submissionUrl] : [],
+              fileEvidence: [],
+            });
+        if (submission && sharedSubmission) {
+          await storage.updateLearningPodSubmission(submission.id, { sharedSubmissionId: sharedSubmission.id });
+        }
+      }
       res.status(existing ? 200 : 201).json(submission);
     } catch (error) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
@@ -2996,6 +3533,16 @@ export async function registerRoutes(
         evaluatedById: req.session.userId!,
         evaluatedAt: new Date(),
       });
+      if (submission.sharedSubmissionId) {
+        await storage.updateAssignmentSubmission(submission.sharedSubmissionId, {
+          status: "graded",
+          score: data.score,
+          passed: data.score >= assignment.maxScore,
+          feedback: data.feedback,
+          reviewedById: req.session.userId!,
+          reviewedAt: new Date(),
+        });
+      }
       res.json(reviewed);
     } catch (error) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });

@@ -16,7 +16,7 @@ import {
   UserCheck,
   FileCheck
 } from "lucide-react";
-import type { Course, Event, Resource, User } from "@shared/schema";
+import type { Course, Event, Resource } from "@shared/schema";
 
 function StatCardSkeleton() {
   return (
@@ -46,18 +46,11 @@ export default function AdminDashboard() {
     queryKey: ["/api/resources"],
   });
 
-  const { data: users, isLoading: usersLoading } = useQuery<User[]>({
-    queryKey: ["/api/users"],
-  });
+  const isLoading = coursesLoading || eventsLoading || resourcesLoading;
 
-  const isLoading = coursesLoading || eventsLoading || resourcesLoading || usersLoading;
-
-  const totalUsers = users?.length || 0;
   const activeCourses = courses?.filter(c => c.status === "published").length || 0;
   const totalResources = resources?.length || 0;
   const upcomingEvents = events?.filter(e => new Date(e.startTime) > new Date()).length || 0;
-  const mentors = users?.filter(u => u.role === "mentor").length || 0;
-  const participants = users?.filter(u => u.role === "participant").length || 0;
 
   return (
     <div className="flex flex-col md:flex-row h-screen">
@@ -75,24 +68,13 @@ export default function AdminDashboard() {
 
           {isLoading ? (
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              {[...Array(8)].map((_, i) => (
+              {[...Array(3)].map((_, i) => (
                 <StatCardSkeleton key={i} />
               ))}
             </div>
           ) : (
             <>
               <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <Card className="hover-elevate">
-                  <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Total Users</CardTitle>
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold" data-testid="text-stat-total-users">{totalUsers}</div>
-                    <p className="text-xs text-muted-foreground">{participants} participants, {mentors} mentors</p>
-                  </CardContent>
-                </Card>
-
                 <Card className="hover-elevate">
                   <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground">Active Courses</CardTitle>

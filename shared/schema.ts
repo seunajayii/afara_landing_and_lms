@@ -53,6 +53,10 @@ export const progressReviewStatusEnum = pgEnum("progress_review_status", ["draft
 export const progressMilestoneStatusEnum = pgEnum("progress_milestone_status", ["planned", "in_progress", "completed", "blocked"]);
 export const progressFeedbackSourceEnum = pgEnum("progress_feedback_source", ["mentor", "facilitator", "participant", "admin"]);
 export const progressFeedbackVisibilityEnum = pgEnum("progress_feedback_visibility", ["participant", "internal"]);
+export const assignmentTypeEnum = pgEnum("assignment_type", ["quiz", "submission", "reflection"]);
+export const assignmentTargetTypeEnum = pgEnum("assignment_target_type", ["cohort", "pod", "course", "module"]);
+export const assignmentQuestionTypeEnum = pgEnum("assignment_question_type", ["single_choice", "multiple_choice", "short_text", "long_text", "reflection"]);
+export const assignmentSubmissionStatusEnum = pgEnum("assignment_submission_status", ["draft", "submitted", "graded", "returned"]);
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -501,6 +505,9 @@ export const learningPodAssignments = pgTable("learning_pod_assignments", {
   createdById: varchar("created_by_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  // Existing pod work is linked into the shared assessment model by the
+  // migration, so there is only one conceptual assignment system.
+  sharedAssignmentId: varchar("shared_assignment_id"),
 });
 
 export const learningPodSubmissions = pgTable("learning_pod_submissions", {
@@ -516,6 +523,7 @@ export const learningPodSubmissions = pgTable("learning_pod_submissions", {
   feedback: text("feedback"),
   evaluatedById: varchar("evaluated_by_id").references(() => users.id),
   evaluatedAt: timestamp("evaluated_at"),
+  sharedSubmissionId: varchar("shared_submission_id"),
 });
 
 // A durable, cohort-scoped journey record. Applications remain the historical
@@ -586,6 +594,86 @@ export const progressFeedback = pgTable("progress_feedback", {
   visibility: progressFeedbackVisibilityEnum("visibility").notNull().default("participant"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+// Shared assessment model. The older learningPodAssignments tables remain
+// available for existing pod work; these tables support reusable assessments
+// across cohorts, pods, courses, and modules.
+export const assignments = pgTable("assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  cohortId: varchar("cohort_id").notNull().references(() => cohorts.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  instructions: text("instructions"),
+  assignmentType: assignmentTypeEnum("assignment_type").notNull(),
+  status: contentStatusEnum("status").notNull().default("draft"),
+  dueAt: timestamp("due_at"),
+  maxScore: integer("max_score").notNull().default(100),
+  passingScore: integer("passing_score").notNull().default(70),
+  createdById: varchar("created_by_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const assignmentTargets = pgTable("assignment_targets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  assignmentId: varchar("assignment_id").notNull().references(() => assignments.id, { onDelete: "cascade" }),
+  targetType: assignmentTargetTypeEnum("target_type").notNull(),
+  targetId: varchar("target_id").notNull(),
+}, (table) => ({
+  assignmentTargetUnique: uniqueIndex("assignment_targets_assignment_type_id_idx").on(table.assignmentId, table.targetType, table.targetId),
+}));
+
+export const assignmentQuestions = pgTable("assignment_questions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  assignmentId: varchar("assignment_id").notNull().references(() => assignments.id, { onDelete: "cascade" }),
+  prompt: text("prompt").notNull(),
+  questionType: assignmentQuestionTypeEnum("question_type").notNull(),
+  options: jsonb("options").$type<string[]>().notNull().default([]),
+  correctAnswers: jsonb("correct_answers").$type<string[]>().notNull().default([]),
+  points: integer("points").notNull().default(1),
+  orderIndex: integer("order_index").notNull().default(0),
+});
+
+export type AssignmentFileEvidence = {
+  key: string;
+  name: string;
+  contentType: string;
+  size: number;
+};
+
+export const assignmentSubmissions = pgTable("assignment_submissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  assignmentId: varchar("assignment_id").notNull().references(() => assignments.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  podId: varchar("pod_id").references(() => learningPods.id, { onDelete: "set null" }),
+  attemptNumber: integer("attempt_number").notNull().default(1),
+  status: assignmentSubmissionStatusEnum("status").notNull().default("draft"),
+  responseText: text("response_text"),
+  links: text("links").array().notNull().default([]),
+  fileEvidence: jsonb("file_evidence").$type<AssignmentFileEvidence[]>().notNull().default([]),
+  completedAt: timestamp("completed_at"),
+  submittedAt: timestamp("submitted_at"),
+  reviewedAt: timestamp("reviewed_at"),
+  score: integer("score"),
+  passed: boolean("passed"),
+  feedback: text("feedback"),
+  internalNotes: text("internal_notes"),
+  reviewedById: varchar("reviewed_by_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const assignmentAnswers = pgTable("assignment_answers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  submissionId: varchar("submission_id").notNull().references(() => assignmentSubmissions.id, { onDelete: "cascade" }),
+  questionId: varchar("question_id").notNull().references(() => assignmentQuestions.id, { onDelete: "cascade" }),
+  answer: jsonb("answer").$type<any>(),
+  isCorrect: boolean("is_correct"),
+  score: integer("score"),
+  feedback: text("feedback"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  submissionQuestionUnique: uniqueIndex("assignment_answers_submission_question_idx").on(table.submissionId, table.questionId),
+}));
 
 export const applications = pgTable("applications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -835,6 +923,14 @@ export const insertCohortParticipantSchema = createInsertSchema(cohortParticipan
 export const insertProgressMilestoneSchema = createInsertSchema(progressMilestones).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertProgressReviewSchema = createInsertSchema(progressReviews).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertProgressFeedbackSchema = createInsertSchema(progressFeedback).omit({ id: true, createdAt: true });
+export const insertAssignmentSchema = createInsertSchema(assignments).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertAssignmentTargetSchema = createInsertSchema(assignmentTargets).omit({ id: true });
+export const insertAssignmentQuestionSchema = createInsertSchema(assignmentQuestions).omit({ id: true });
+export const insertAssignmentSubmissionSchema = createInsertSchema(assignmentSubmissions).omit({
+  id: true, attemptNumber: true, createdAt: true, updatedAt: true, completedAt: true, submittedAt: true,
+  reviewedAt: true, score: true, passed: true, feedback: true, internalNotes: true, reviewedById: true,
+});
+export const insertAssignmentAnswerSchema = createInsertSchema(assignmentAnswers).omit({ id: true, updatedAt: true });
 export type LearningPod = typeof learningPods.$inferSelect;
 export type InsertLearningPod = z.infer<typeof insertLearningPodSchema>;
 export type LearningPodMember = typeof learningPodMembers.$inferSelect;
@@ -851,3 +947,13 @@ export type ProgressReview = typeof progressReviews.$inferSelect;
 export type InsertProgressReview = z.infer<typeof insertProgressReviewSchema>;
 export type ProgressFeedback = typeof progressFeedback.$inferSelect;
 export type InsertProgressFeedback = z.infer<typeof insertProgressFeedbackSchema>;
+export type Assignment = typeof assignments.$inferSelect;
+export type InsertAssignment = z.infer<typeof insertAssignmentSchema>;
+export type AssignmentTarget = typeof assignmentTargets.$inferSelect;
+export type InsertAssignmentTarget = z.infer<typeof insertAssignmentTargetSchema>;
+export type AssignmentQuestion = typeof assignmentQuestions.$inferSelect;
+export type InsertAssignmentQuestion = z.infer<typeof insertAssignmentQuestionSchema>;
+export type AssignmentSubmission = typeof assignmentSubmissions.$inferSelect;
+export type InsertAssignmentSubmission = z.infer<typeof insertAssignmentSubmissionSchema>;
+export type AssignmentAnswer = typeof assignmentAnswers.$inferSelect;
+export type InsertAssignmentAnswer = z.infer<typeof insertAssignmentAnswerSchema>;

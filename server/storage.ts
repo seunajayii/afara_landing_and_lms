@@ -27,6 +27,9 @@ import {
   type LearningPodMember, type InsertLearningPodMember,
   type LearningPodAssignment, type InsertLearningPodAssignment,
   type LearningPodSubmission, type InsertLearningPodSubmission,
+  type Assignment, type InsertAssignment, type AssignmentTarget, type InsertAssignmentTarget,
+  type AssignmentQuestion, type InsertAssignmentQuestion, type AssignmentSubmission, type InsertAssignmentSubmission,
+  type AssignmentAnswer, type InsertAssignmentAnswer,
   type CohortParticipant, type InsertCohortParticipant,
   type ProgressMilestone, type InsertProgressMilestone,
   type ProgressReview, type InsertProgressReview,
@@ -39,7 +42,8 @@ import {
   certificates, achievements, userAchievements, notifications,
   newsletterSubscribers, newsletterCampaigns,
   applications, applicationEvaluations, cohorts, courseCohortAssignments,
-  learningPods, learningPodMembers, learningPodAssignments, learningPodSubmissions
+  learningPods, learningPodMembers, learningPodAssignments, learningPodSubmissions,
+  assignments, assignmentTargets, assignmentQuestions, assignmentSubmissions, assignmentAnswers
   , cohortParticipants, progressMilestones, progressReviews, progressFeedback
 } from "@shared/schema";
 import { db } from "./db";
@@ -290,6 +294,24 @@ export interface IStorage {
   getLearningPodSubmission(assignmentId: string, podId: string, submitterId?: string): Promise<LearningPodSubmission | undefined>;
   createLearningPodSubmission(data: InsertLearningPodSubmission): Promise<LearningPodSubmission>;
   updateLearningPodSubmission(id: string, data: Partial<LearningPodSubmission>): Promise<LearningPodSubmission | undefined>;
+
+  getAssignment(id: string): Promise<Assignment | undefined>;
+  getAssignmentsByCohort(cohortId?: string): Promise<Assignment[]>;
+  createAssignment(data: InsertAssignment): Promise<Assignment>;
+  updateAssignment(id: string, data: Partial<InsertAssignment>): Promise<Assignment | undefined>;
+  deleteAssignment(id: string): Promise<void>;
+  getAssignmentTargets(assignmentId: string): Promise<AssignmentTarget[]>;
+  replaceAssignmentTargets(assignmentId: string, targets: InsertAssignmentTarget[]): Promise<void>;
+  getAssignmentQuestions(assignmentId: string): Promise<AssignmentQuestion[]>;
+  replaceAssignmentQuestions(assignmentId: string, questions: InsertAssignmentQuestion[]): Promise<AssignmentQuestion[]>;
+  getAssignmentSubmissions(assignmentId: string): Promise<AssignmentSubmission[]>;
+  getAssignmentSubmission(id: string): Promise<AssignmentSubmission | undefined>;
+  getLatestAssignmentSubmission(assignmentId: string, userId: string): Promise<AssignmentSubmission | undefined>;
+  getNextAssignmentAttemptNumber(assignmentId: string, userId: string): Promise<number>;
+  createAssignmentSubmission(data: InsertAssignmentSubmission & { attemptNumber?: number }): Promise<AssignmentSubmission>;
+  updateAssignmentSubmission(id: string, data: Partial<AssignmentSubmission>): Promise<AssignmentSubmission | undefined>;
+  getAssignmentAnswers(submissionId: string): Promise<AssignmentAnswer[]>;
+  replaceAssignmentAnswers(submissionId: string, answers: InsertAssignmentAnswer[]): Promise<AssignmentAnswer[]>;
 
   getNewsletterSubscriber(id: string): Promise<NewsletterSubscriber | undefined>;
   getNewsletterSubscriberByEmail(email: string): Promise<NewsletterSubscriber | undefined>;
@@ -1722,6 +1744,115 @@ export class DatabaseStorage implements IStorage {
       .where(eq(learningPodSubmissions.id, id))
       .returning();
     return submission;
+  }
+
+  async getAssignment(id: string): Promise<Assignment | undefined> {
+    const [assignment] = await db.select().from(assignments).where(eq(assignments.id, id));
+    return assignment;
+  }
+
+  async getAssignmentsByCohort(cohortId?: string): Promise<Assignment[]> {
+    return db.select().from(assignments)
+      .where(cohortId ? eq(assignments.cohortId, cohortId) : undefined)
+      .orderBy(desc(assignments.createdAt));
+  }
+
+  async createAssignment(data: InsertAssignment): Promise<Assignment> {
+    const [assignment] = await db.insert(assignments).values(data).returning();
+    return assignment;
+  }
+
+  async updateAssignment(id: string, data: Partial<InsertAssignment>): Promise<Assignment | undefined> {
+    const [assignment] = await db.update(assignments)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(assignments.id, id))
+      .returning();
+    return assignment;
+  }
+
+  async deleteAssignment(id: string): Promise<void> {
+    await db.delete(assignments).where(eq(assignments.id, id));
+  }
+
+  async getAssignmentTargets(assignmentId: string): Promise<AssignmentTarget[]> {
+    return db.select().from(assignmentTargets)
+      .where(eq(assignmentTargets.assignmentId, assignmentId));
+  }
+
+  async replaceAssignmentTargets(assignmentId: string, targets: InsertAssignmentTarget[]): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.delete(assignmentTargets).where(eq(assignmentTargets.assignmentId, assignmentId));
+      if (targets.length > 0) await tx.insert(assignmentTargets).values(targets);
+    });
+  }
+
+  async getAssignmentQuestions(assignmentId: string): Promise<AssignmentQuestion[]> {
+    return db.select().from(assignmentQuestions)
+      .where(eq(assignmentQuestions.assignmentId, assignmentId))
+      .orderBy(asc(assignmentQuestions.orderIndex));
+  }
+
+  async replaceAssignmentQuestions(assignmentId: string, questions: InsertAssignmentQuestion[]): Promise<AssignmentQuestion[]> {
+    return db.transaction(async (tx) => {
+      await tx.delete(assignmentQuestions).where(eq(assignmentQuestions.assignmentId, assignmentId));
+      if (questions.length === 0) return [];
+      return tx.insert(assignmentQuestions).values(questions).returning();
+    });
+  }
+
+  async getAssignmentSubmissions(assignmentId: string): Promise<AssignmentSubmission[]> {
+    return db.select().from(assignmentSubmissions)
+      .where(eq(assignmentSubmissions.assignmentId, assignmentId))
+      .orderBy(desc(assignmentSubmissions.updatedAt));
+  }
+
+  async getAssignmentSubmission(id: string): Promise<AssignmentSubmission | undefined> {
+    const [submission] = await db.select().from(assignmentSubmissions)
+      .where(eq(assignmentSubmissions.id, id));
+    return submission;
+  }
+
+  async getLatestAssignmentSubmission(assignmentId: string, userId: string): Promise<AssignmentSubmission | undefined> {
+    const [submission] = await db.select().from(assignmentSubmissions)
+      .where(and(eq(assignmentSubmissions.assignmentId, assignmentId), eq(assignmentSubmissions.userId, userId)))
+      .orderBy(desc(assignmentSubmissions.attemptNumber), desc(assignmentSubmissions.updatedAt))
+      .limit(1);
+    return submission;
+  }
+
+  async getNextAssignmentAttemptNumber(assignmentId: string, userId: string): Promise<number> {
+    const [latest] = await db.select({ attemptNumber: assignmentSubmissions.attemptNumber })
+      .from(assignmentSubmissions)
+      .where(and(eq(assignmentSubmissions.assignmentId, assignmentId), eq(assignmentSubmissions.userId, userId)))
+      .orderBy(desc(assignmentSubmissions.attemptNumber))
+      .limit(1);
+    return (latest?.attemptNumber ?? 0) + 1;
+  }
+
+  async createAssignmentSubmission(data: InsertAssignmentSubmission & { attemptNumber?: number }): Promise<AssignmentSubmission> {
+    const [submission] = await db.insert(assignmentSubmissions).values(data).returning();
+    return submission;
+  }
+
+  async updateAssignmentSubmission(id: string, data: Partial<AssignmentSubmission>): Promise<AssignmentSubmission | undefined> {
+    const [submission] = await db.update(assignmentSubmissions)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(assignmentSubmissions.id, id))
+      .returning();
+    return submission;
+  }
+
+  async getAssignmentAnswers(submissionId: string): Promise<AssignmentAnswer[]> {
+    return db.select().from(assignmentAnswers)
+      .where(eq(assignmentAnswers.submissionId, submissionId));
+  }
+
+  async replaceAssignmentAnswers(submissionId: string, answers: InsertAssignmentAnswer[]): Promise<AssignmentAnswer[]> {
+    return db.transaction(async (tx) => {
+      await tx.delete(assignmentAnswers).where(eq(assignmentAnswers.submissionId, submissionId));
+      if (answers.length === 0) return [];
+      return tx.insert(assignmentAnswers).values(answers).returning();
+    });
   }
 
   async getNewsletterSubscriber(id: string): Promise<NewsletterSubscriber | undefined> {

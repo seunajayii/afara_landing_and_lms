@@ -9,7 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { Sparkles, BookOpen, FileText, Users, Settings, BarChart3 } from "lucide-react";
+import { Sparkles, BookOpen, FileText, Settings, BarChart3 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import type { Course, Event, Resource } from "@shared/schema";
 import { LearningPodSummary } from "./LearningPods";
@@ -125,18 +125,7 @@ export default function Dashboard() {
           </div>
 
           {isAdmin ? (
-            <div className="grid md:grid-cols-3 gap-6 mb-8">
-              <Card className="hover-elevate">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Total Users</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-2">
-                    <Users className="h-5 w-5 text-primary" />
-                    <span className="text-2xl font-bold" data-testid="text-total-users">--</span>
-                  </div>
-                </CardContent>
-              </Card>
+            <div className="grid md:grid-cols-2 gap-6 mb-8">
               <Card className="hover-elevate">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Active Courses</CardTitle>

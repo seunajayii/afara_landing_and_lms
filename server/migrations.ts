@@ -324,6 +324,192 @@ export async function runSchemaMigrations() {
       CREATE INDEX IF NOT EXISTS learning_pod_submissions_assignment_idx ON learning_pod_submissions (assignment_id);
       CREATE INDEX IF NOT EXISTS learning_pod_submissions_pod_idx ON learning_pod_submissions (pod_id);
     `);
+    // Shared assignments support quizzes, take-home work, and reflections
+    // across cohort, pod, course, and module contexts. Existing pod
+    // assignments remain untouched for backwards compatibility.
+    await db.execute(sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'assignment_type') THEN
+          CREATE TYPE assignment_type AS ENUM ('quiz', 'submission', 'reflection');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'assignment_target_type') THEN
+          CREATE TYPE assignment_target_type AS ENUM ('cohort', 'pod', 'course', 'module');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'assignment_question_type') THEN
+          CREATE TYPE assignment_question_type AS ENUM ('single_choice', 'multiple_choice', 'short_text', 'long_text', 'reflection');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'assignment_submission_status') THEN
+          CREATE TYPE assignment_submission_status AS ENUM ('draft', 'submitted', 'graded', 'returned');
+        END IF;
+      END
+      $$;
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS assignments (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        cohort_id VARCHAR NOT NULL REFERENCES cohorts(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        instructions TEXT,
+        assignment_type assignment_type NOT NULL,
+        status content_status NOT NULL DEFAULT 'draft',
+        due_at TIMESTAMP,
+        max_score INTEGER NOT NULL DEFAULT 100,
+        passing_score INTEGER NOT NULL DEFAULT 70,
+        created_by_id VARCHAR NOT NULL REFERENCES users(id),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS assignments_cohort_idx ON assignments (cohort_id);
+      CREATE INDEX IF NOT EXISTS assignments_status_idx ON assignments (status);
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS assignment_targets (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        assignment_id VARCHAR NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,
+        target_type assignment_target_type NOT NULL,
+        target_id VARCHAR NOT NULL,
+        UNIQUE (assignment_id, target_type, target_id)
+      );
+      CREATE INDEX IF NOT EXISTS assignment_targets_lookup_idx ON assignment_targets (target_type, target_id);
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS assignment_questions (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        assignment_id VARCHAR NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,
+        prompt TEXT NOT NULL,
+        question_type assignment_question_type NOT NULL,
+        options JSONB NOT NULL DEFAULT '[]'::jsonb,
+        correct_answers JSONB NOT NULL DEFAULT '[]'::jsonb,
+        points INTEGER NOT NULL DEFAULT 1,
+        order_index INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS assignment_questions_assignment_idx ON assignment_questions (assignment_id, order_index);
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS assignment_submissions (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        assignment_id VARCHAR NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,
+        user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        pod_id VARCHAR REFERENCES learning_pods(id) ON DELETE SET NULL,
+        attempt_number INTEGER NOT NULL DEFAULT 1,
+        status assignment_submission_status NOT NULL DEFAULT 'draft',
+        response_text TEXT,
+        links TEXT[] NOT NULL DEFAULT '{}',
+        file_evidence JSONB NOT NULL DEFAULT '[]'::jsonb,
+        completed_at TIMESTAMP,
+        submitted_at TIMESTAMP,
+        reviewed_at TIMESTAMP,
+        score INTEGER,
+        passed BOOLEAN,
+        feedback TEXT,
+        internal_notes TEXT,
+        reviewed_by_id VARCHAR REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS assignment_submissions_assignment_user_idx ON assignment_submissions (assignment_id, user_id, updated_at);
+      CREATE INDEX IF NOT EXISTS assignment_submissions_assignment_idx ON assignment_submissions (assignment_id);
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS assignment_answers (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        submission_id VARCHAR NOT NULL REFERENCES assignment_submissions(id) ON DELETE CASCADE,
+        question_id VARCHAR NOT NULL REFERENCES assignment_questions(id) ON DELETE CASCADE,
+        answer JSONB,
+        is_correct BOOLEAN,
+        score INTEGER,
+        feedback TEXT,
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE (submission_id, question_id)
+      );
+      CREATE INDEX IF NOT EXISTS assignment_answers_submission_idx ON assignment_answers (submission_id);
+    `);
+    await db.execute(sql`
+      ALTER TABLE learning_pod_assignments
+        ADD COLUMN IF NOT EXISTS shared_assignment_id VARCHAR,
+        ADD COLUMN IF NOT EXISTS shared_assignment_id_placeholder VARCHAR;
+      ALTER TABLE learning_pod_assignments DROP COLUMN IF EXISTS shared_assignment_id_placeholder;
+      ALTER TABLE learning_pod_submissions
+        ADD COLUMN IF NOT EXISTS shared_submission_id VARCHAR
+    `);
+    // Convert historical pod work into the shared model without deleting the
+    // legacy rows. The linkage columns allow old URLs and review screens to
+    // continue working while new reports see the same work.
+    await db.execute(sql`
+      DO $$
+      DECLARE
+        legacy_assignment RECORD;
+        legacy_submission RECORD;
+        v_shared_assignment_id VARCHAR;
+        v_shared_submission_id VARCHAR;
+      BEGIN
+        FOR legacy_assignment IN
+          SELECT lpa.*, lp.cohort_id
+          FROM learning_pod_assignments lpa
+          JOIN learning_pods lp ON lp.id = lpa.pod_id
+          WHERE lpa.shared_assignment_id IS NULL
+        LOOP
+          INSERT INTO assignments (
+            cohort_id, title, instructions, assignment_type, status, due_at,
+            max_score, passing_score, created_by_id, created_at, updated_at
+          ) VALUES (
+            legacy_assignment.cohort_id,
+            legacy_assignment.title,
+            legacy_assignment.instructions,
+            'submission',
+            legacy_assignment.status,
+            legacy_assignment.due_at,
+            legacy_assignment.max_score,
+            legacy_assignment.max_score,
+            legacy_assignment.created_by_id,
+            legacy_assignment.created_at,
+            legacy_assignment.updated_at
+          )
+          RETURNING id INTO v_shared_assignment_id;
+
+          INSERT INTO assignment_targets (assignment_id, target_type, target_id)
+          VALUES (v_shared_assignment_id, 'pod', legacy_assignment.pod_id);
+          UPDATE learning_pod_assignments
+          SET shared_assignment_id = v_shared_assignment_id
+          WHERE id = legacy_assignment.id;
+
+          FOR legacy_submission IN
+            SELECT * FROM learning_pod_submissions
+            WHERE assignment_id = legacy_assignment.id
+              AND shared_submission_id IS NULL
+          LOOP
+            INSERT INTO assignment_submissions (
+              assignment_id, user_id, pod_id, attempt_number, status,
+              response_text, links, completed_at, submitted_at, reviewed_at,
+              score, passed, feedback, reviewed_by_id, created_at, updated_at
+            ) VALUES (
+              v_shared_assignment_id,
+              legacy_submission.submitter_id,
+              legacy_submission.pod_id,
+              1,
+              CASE WHEN legacy_submission.score IS NULL THEN 'submitted'::assignment_submission_status ELSE 'graded'::assignment_submission_status END,
+              legacy_submission.submission_text,
+              CASE WHEN legacy_submission.submission_url IS NULL THEN '{}'::text[] ELSE ARRAY[legacy_submission.submission_url]::text[] END,
+              legacy_submission.submitted_at,
+              legacy_submission.submitted_at,
+              legacy_submission.evaluated_at,
+              legacy_submission.score,
+              CASE WHEN legacy_submission.score IS NULL THEN NULL ELSE legacy_submission.score >= legacy_assignment.max_score END,
+              legacy_submission.feedback,
+              legacy_submission.evaluated_by_id,
+              legacy_submission.submitted_at,
+              legacy_submission.updated_at
+            )
+            RETURNING id INTO v_shared_submission_id;
+            UPDATE learning_pod_submissions
+            SET shared_submission_id = v_shared_submission_id
+            WHERE id = legacy_submission.id;
+          END LOOP;
+        END LOOP;
+      END
+      $$;
+    `);
     // Cohort-scoped participant progress records keep the admissions
     // application as an immutable starting point while collecting project
     // milestones, qualitative reviews, and feedback throughout the programme.
