@@ -11,3 +11,4 @@
 - [Email blast audiences](email-blast-audiences.md) — campaign audiences are dynamic database criteria resolved and deduplicated at send time; legacy HTML remains sendable
 - [Email image delivery](email-image-delivery.md) — uploaded newsletter images stay private and are sent as inline CID attachments for client compatibility
 - [Postgres lock errors](postgres-lock-errors.md) — Drizzle may wrap provider error codes in a cause chain; inspect nested causes when mapping lock conflicts
+- [Participant progress reporting](progress-reporting-workflow.md) — use evidence and qualitative statuses across baseline, midpoint, and final reviews for individual, pod, and cohort reports
