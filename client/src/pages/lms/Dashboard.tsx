@@ -73,11 +73,6 @@ export default function Dashboard() {
       return response.json();
     },
     enabled: Boolean(user?.id),
-    queryFn: async () => {
-      const response = await fetch("/api/courses", { credentials: "include" });
-      if (!response.ok) throw new Error("Unable to load courses.");
-      return response.json();
-    },
   });
 
   const { data: events, isLoading: eventsLoading } = useQuery<Event[]>({

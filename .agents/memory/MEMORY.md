@@ -6,3 +6,4 @@
 - [Object Storage provisioning](object-storage-provisioning.md) — SDK variables can exist without a usable default bucket; probe availability and fail protected uploads explicitly
 - [Zoom webhook setup](zoom-webhooks.md) — Zoom OAuth callbacks and event webhooks use different public URLs; webhook validation requires the separate Secret Token
 - [Zoom OAuth connection](zoom-oauth.md) — meeting-management authorization must not depend on optional Zoom profile-read scopes
+- [Playwright E2E environment](playwright-e2e-environment.md) — Chromium needs explicit shared libraries here; Express 304 responses are not Playwright `response.ok()`

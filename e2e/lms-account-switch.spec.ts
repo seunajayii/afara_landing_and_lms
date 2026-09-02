@@ -1,13 +1,40 @@
 import { expect, test, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
-const participant = {
-  email: process.env.E2E_PARTICIPANT_EMAIL,
-  password: process.env.E2E_PARTICIPANT_PASSWORD,
+type Account = { email: string; password: string };
+type AccountSwitchCredentials = {
+  participant: Account;
+  superAdmin: Account;
 };
-const superAdmin = {
-  email: process.env.E2E_SUPERADMIN_EMAIL,
-  password: process.env.E2E_SUPERADMIN_PASSWORD,
-};
+
+function loadCredentials(): AccountSwitchCredentials | null {
+  const credentialsFile =
+    process.env.E2E_CREDENTIALS_FILE ||
+    resolve(process.cwd(), ".playwright/e2e-credentials.json");
+  try {
+    return JSON.parse(readFileSync(credentialsFile, "utf8")) as AccountSwitchCredentials;
+  } catch {
+    if (
+      process.env.E2E_PARTICIPANT_EMAIL &&
+      process.env.E2E_PARTICIPANT_PASSWORD &&
+      process.env.E2E_SUPERADMIN_EMAIL &&
+      process.env.E2E_SUPERADMIN_PASSWORD
+    ) {
+      return {
+        participant: {
+          email: process.env.E2E_PARTICIPANT_EMAIL,
+          password: process.env.E2E_PARTICIPANT_PASSWORD,
+        },
+        superAdmin: {
+          email: process.env.E2E_SUPERADMIN_EMAIL,
+          password: process.env.E2E_SUPERADMIN_PASSWORD,
+        },
+      };
+    }
+    return null;
+  }
+}
 
 async function signIn(page: Page, email: string, password: string) {
   await page.goto("/login");
@@ -18,54 +45,111 @@ async function signIn(page: Page, email: string, password: string) {
 }
 
 async function getCourses(page: Page) {
-  const responsePromise = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === "/api/courses" &&
-      response.request().method() === "GET" &&
-      response.ok(),
-  );
   await page.goto("/lms/courses");
-  return responsePromise.then((response) => response.json() as Promise<Array<{ id: string; title: string; status: string }>>);
+  return page.evaluate(async () => {
+    const response = await fetch(`/api/courses?e2e=${crypto.randomUUID()}`, {
+      cache: "no-store",
+      credentials: "include",
+    });
+    if (!response.ok) throw new Error(`Unable to load courses (${response.status}).`);
+    return response.json() as Promise<Array<{ id: string; title: string; status: string }>>;
+  });
 }
 
 test.describe("LMS account switching", () => {
-  test.skip(
-    !participant.email ||
-      !participant.password ||
-      !superAdmin.email ||
-      !superAdmin.password,
-    "Set E2E_PARTICIPANT_EMAIL, E2E_PARTICIPANT_PASSWORD, E2E_SUPERADMIN_EMAIL, and E2E_SUPERADMIN_PASSWORD to run the live account-switch check.",
-  );
+  test("refreshes course lists and details when switching participant to super admin", async ({
+    page,
+  }, testInfo) => {
+    const credentials = loadCredentials();
+    test.skip(
+      !credentials,
+      "Run npm run test:e2e for the seeded check, or provide the four E2E account variables.",
+    );
 
-  test("refreshes course lists and details when switching participant to super admin", async ({ page }) => {
-    await signIn(page, participant.email!, participant.password!);
-    const participantCourses = await getCourses(page);
-    expect(participantCourses.length).toBeGreaterThan(0);
+    const evidence: Record<string, unknown> = {
+      participant: { email: credentials!.participant.email },
+      superAdmin: { email: credentials!.superAdmin.email },
+      participantCourseList: null,
+      administratorCourseList: null,
+      participantDetailLoaded: false,
+      administratorDetailLoaded: false,
+    };
 
-    const participantCourse = participantCourses.find((course) => course.status === "published")!;
-    await expect(page.getByText(participantCourse.title, { exact: true })).toBeVisible();
-    await page.getByText(participantCourse.title, { exact: true }).click();
-    await expect(page.getByRole("heading", { name: participantCourse.title, exact: true })).toBeVisible();
+    try {
+      await test.step("Load the participant course list and detail", async () => {
+        await signIn(page, credentials!.participant.email, credentials!.participant.password);
+        const participantCourses = await getCourses(page);
+        evidence.participantCourseList = participantCourses.map(({ id, title, status }) => ({
+          id,
+          title,
+          status,
+        }));
+        expect(participantCourses.length).toBeGreaterThan(0);
 
-    await page.getByTestId("button-logout").click();
-    await expect(page).toHaveURL(/\/login$/);
+        const participantCourse = participantCourses.find((course) => course.status === "published");
+        expect(participantCourse).toBeDefined();
+        await expect(page.getByText(participantCourse!.title, { exact: true })).toBeVisible();
+        await page.getByText(participantCourse!.title, { exact: true }).click();
+        await expect(
+          page.getByRole("heading", { name: participantCourse!.title, exact: true }),
+        ).toBeVisible();
+        evidence.participantDetailLoaded = true;
+      });
 
-    await signIn(page, superAdmin.email!, superAdmin.password!);
-    const administratorCourses = await getCourses(page);
-    const publishedAdministratorCourses = administratorCourses.filter((course) => course.status === "published");
-    expect(publishedAdministratorCourses.length).toBeGreaterThan(0);
+      await test.step("Switch accounts and verify the refreshed administrator list", async () => {
+        await page.getByTestId("button-logout").click();
+        await expect(page).toHaveURL(/\/login$/);
 
-    const visibleCards = page.locator('[data-testid^="card-course-"]');
-    await expect(visibleCards).toHaveCount(publishedAdministratorCourses.length);
-    for (const course of publishedAdministratorCourses) {
-      await expect(page.getByText(course.title, { exact: true })).toBeVisible();
+        await signIn(page, credentials!.superAdmin.email, credentials!.superAdmin.password);
+        const administratorCourses = await getCourses(page);
+        const publishedAdministratorCourses = administratorCourses.filter(
+          (course) => course.status === "published",
+        );
+        evidence.administratorCourseList = publishedAdministratorCourses.map(
+          ({ id, title, status }) => ({ id, title, status }),
+        );
+
+        const participantCourseIds = new Set(
+          (evidence.participantCourseList as Array<{ id: string }>).map((course) => course.id),
+        );
+        expect(publishedAdministratorCourses.length).toBeGreaterThan(0);
+        expect(publishedAdministratorCourses.map((course) => course.id)).toEqual(
+          expect.arrayContaining([...participantCourseIds]),
+        );
+        expect(publishedAdministratorCourses.length).toBeGreaterThan(participantCourseIds.size);
+
+        const visibleCards = page.locator('[data-testid^="card-course-"]');
+        await expect(visibleCards).toHaveCount(publishedAdministratorCourses.length);
+        for (const course of publishedAdministratorCourses) {
+          await expect(page.getByText(course.title, { exact: true })).toBeVisible();
+        }
+      });
+
+      await test.step("Load an administrator-only course detail", async () => {
+        const participantCourseIds = new Set(
+          (evidence.participantCourseList as Array<{ id: string }>).map((course) => course.id),
+        );
+        const administratorCourses = evidence.administratorCourseList as Array<{
+          id: string;
+          title: string;
+        }>;
+        const administratorCourse = administratorCourses.find(
+          (course) => !participantCourseIds.has(course.id),
+        );
+        expect(administratorCourse).toBeDefined();
+
+        await page.goto(`/lms/courses/${administratorCourse!.id}`);
+        await expect(
+          page.getByRole("heading", { name: administratorCourse!.title, exact: true }),
+        ).toBeVisible();
+        await expect(page.getByText("Course content", { exact: true })).toBeVisible();
+        evidence.administratorDetailLoaded = true;
+      });
+    } finally {
+      await testInfo.attach("account-switch-evidence.json", {
+        body: JSON.stringify(evidence, null, 2),
+        contentType: "application/json",
+      });
     }
-
-    const administratorCourse =
-      publishedAdministratorCourses.find((course) => course.id === participantCourse.id) ||
-      publishedAdministratorCourses[0];
-    await page.goto(`/lms/courses/${administratorCourse.id}`);
-    await expect(page.getByRole("heading", { name: administratorCourse.title, exact: true })).toBeVisible();
-    await expect(page.getByText("Course content", { exact: true })).toBeVisible();
   });
 });
