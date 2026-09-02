@@ -56,7 +56,7 @@ import {
   Clock,
   ExternalLink,
 } from "lucide-react";
-import type { Event } from "@shared/schema";
+import type { Course, Event } from "@shared/schema";
 
 function EventCardSkeleton() {
   return (
@@ -85,7 +85,9 @@ const eventFormSchema = z.object({
   durationMinutes: z.coerce.number().min(1).optional(),
   meetingPlatform: z.string().optional(),
   meetingLink: z.string().url("Please enter a valid URL").optional().or(z.literal("")),
+  zoomMeetingId: z.string().trim().optional(),
   recordingUrl: z.string().url("Please enter a valid URL").optional().or(z.literal("")),
+  recordingLessonId: z.string().optional(),
   maxAttendees: z.coerce.number().min(1).optional(),
   isPublic: z.boolean().default(true),
   visibility: z.enum(["public", "community", "cohort_only"]).default("community"),
@@ -93,6 +95,13 @@ const eventFormSchema = z.object({
 });
 
 type EventFormData = z.infer<typeof eventFormSchema>;
+type AdminCourse = Course & {
+  modules?: Array<{
+    id: string;
+    title: string;
+    lessons?: Array<{ id: string; title: string; lessonType: string }>;
+  }>;
+};
 
 const eventTypes = [
   { value: "webinar", label: "Webinar" },
@@ -165,7 +174,9 @@ export default function EventManagement() {
       durationMinutes: 60,
       meetingPlatform: "Zoom",
       meetingLink: "",
+      zoomMeetingId: "",
       recordingUrl: "",
+      recordingLessonId: undefined,
       maxAttendees: 100,
       isPublic: true,
       visibility: "community",
@@ -184,7 +195,9 @@ export default function EventManagement() {
       durationMinutes: 60,
       meetingPlatform: "Zoom",
       meetingLink: "",
+      zoomMeetingId: "",
       recordingUrl: "",
+      recordingLessonId: undefined,
       maxAttendees: 100,
       isPublic: true,
       visibility: "community",
@@ -195,6 +208,19 @@ export default function EventManagement() {
   const { data: events, isLoading } = useQuery<Event[]>({
     queryKey: ["/api/events"],
   });
+  const { data: courses } = useQuery<AdminCourse[]>({
+    queryKey: ["/api/courses"],
+  });
+  const lessonOptions = (courses || []).flatMap((course) =>
+    (course.modules || []).flatMap((module) =>
+      (module.lessons || [])
+        .filter((lesson) => lesson.lessonType === "video")
+        .map((lesson) => ({
+          id: lesson.id,
+          label: `${course.title} / ${module.title} / ${lesson.title}`,
+        })),
+    ),
+  );
 
   function parseApiError(error: Error): string {
     const colonIdx = error.message.indexOf(": ");
@@ -227,12 +253,14 @@ export default function EventManagement() {
 
   const createMutation = useMutation({
     mutationFn: async (data: EventFormData) => {
-      const cleanedData = Object.fromEntries(
+      const cleanedData: Record<string, unknown> = Object.fromEntries(
         Object.entries(data).map(([key, value]) => [
           key,
           value === "" ? undefined : value
         ])
       );
+      cleanedData.zoomMeetingId = data.zoomMeetingId?.trim() || null;
+      cleanedData.recordingLessonId = data.recordingLessonId || null;
       const response = await apiRequest("POST", "/api/events", cleanedData);
       return response.json();
     },
@@ -256,12 +284,14 @@ export default function EventManagement() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: EventFormData }) => {
-      const cleanedData = Object.fromEntries(
+      const cleanedData: Record<string, unknown> = Object.fromEntries(
         Object.entries(data).map(([key, value]) => [
           key,
           value === "" ? undefined : value
         ])
       );
+      cleanedData.zoomMeetingId = data.zoomMeetingId?.trim() || null;
+      cleanedData.recordingLessonId = data.recordingLessonId || null;
       const response = await apiRequest("PATCH", `/api/events/${id}`, cleanedData);
       return response.json();
     },
@@ -316,7 +346,9 @@ export default function EventManagement() {
       durationMinutes: event.durationMinutes || 60,
       meetingPlatform: event.meetingPlatform || "Zoom",
       meetingLink: event.meetingLink || "",
+      zoomMeetingId: event.zoomMeetingId || "",
       recordingUrl: event.recordingUrl || "",
+      recordingLessonId: event.recordingLessonId || undefined,
       maxAttendees: event.maxAttendees || 100,
       isPublic: event.isPublic ?? true,
       visibility: (event.visibility as EventFormData["visibility"]) || "community",
@@ -576,6 +608,50 @@ export default function EventManagement() {
                     )}
                   />
                 </div>
+                <div className="rounded-md border p-4 space-y-4">
+                  <div>
+                    <p className="font-medium text-sm">Automatic Zoom recording</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Add the Zoom meeting ID so completed recordings can be imported into protected storage.
+                    </p>
+                  </div>
+                  <FormField
+                    control={createForm.control}
+                    name="zoomMeetingId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Zoom Meeting ID (Optional)</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. 87565330005" {...field} data-testid="input-create-zoom-meeting-id" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={createForm.control}
+                    name="recordingLessonId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Course video lesson (Optional)</FormLabel>
+                        <Select value={field.value || "none"} onValueChange={(value) => field.onChange(value === "none" ? undefined : value)}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-create-recording-lesson">
+                              <SelectValue placeholder="Attach recording to a lesson" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">Event recording only</SelectItem>
+                            {lessonOptions.map((lesson) => (
+                              <SelectItem key={lesson.id} value={lesson.id}>{lesson.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
                 <FormField
                   control={createForm.control}
                   name="visibility"
@@ -677,6 +753,50 @@ export default function EventManagement() {
                         <FormControl>
                           <Input placeholder="https://..." {...field} data-testid="input-create-meeting-link" />
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="rounded-md border p-4 space-y-4">
+                  <div>
+                    <p className="font-medium text-sm">Automatic Zoom recording</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Completed recordings are downloaded into protected storage and attached after Zoom notifies AFÁRÁ.
+                    </p>
+                  </div>
+                  <FormField
+                    control={editForm.control}
+                    name="zoomMeetingId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Zoom Meeting ID (Optional)</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. 87565330005" {...field} data-testid="input-edit-zoom-meeting-id" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={editForm.control}
+                    name="recordingLessonId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Course video lesson (Optional)</FormLabel>
+                        <Select value={field.value || "none"} onValueChange={(value) => field.onChange(value === "none" ? undefined : value)}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-edit-recording-lesson">
+                              <SelectValue placeholder="Attach recording to a lesson" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">Event recording only</SelectItem>
+                            {lessonOptions.map((lesson) => (
+                              <SelectItem key={lesson.id} value={lesson.id}>{lesson.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}

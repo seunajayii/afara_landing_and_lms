@@ -12,7 +12,7 @@ import {
   type MentorshipSession, type InsertMentorshipSession,
   type Event, type InsertEvent,
   type EventRegistration, type InsertEventRegistration,
-  type Resource, type InsertResource, type PrivateVideoUpload,
+  type Resource, type InsertResource, type PrivateVideoUpload, type ZoomWebhookEvent,
   type DiscussionThread, type InsertDiscussionThread,
   type DiscussionPost, type InsertDiscussionPost,
   type Certificate, type InsertCertificate,
@@ -136,12 +136,17 @@ export interface IStorage {
   getExpiredPrivateVideoUploads(cutoff: Date): Promise<PrivateVideoUpload[]>;
   getResourceByVideoStorageKey(storageKey: string): Promise<Resource | undefined>;
   removePrivateVideoUpload(storageKey: string): Promise<void>;
+  getPrivateVideoUpload(storageKey: string): Promise<PrivateVideoUpload | undefined>;
 
   recordZoomWebhookEvent(event: {
     eventId: string;
     eventType: string;
     payload: unknown;
   }): Promise<boolean>;
+  getZoomWebhookEvent(eventId: string): Promise<ZoomWebhookEvent | undefined>;
+  claimZoomWebhookEvent(eventId: string): Promise<ZoomWebhookEvent | undefined>;
+  markZoomWebhookEventCompleted(eventId: string): Promise<void>;
+  markZoomWebhookEventFailed(eventId: string, error: string): Promise<void>;
   
   getDiscussionThread(id: string): Promise<DiscussionThread | undefined>;
   getAllDiscussionThreads(): Promise<DiscussionThread[]>;
@@ -691,11 +696,15 @@ export class DatabaseStorage implements IStorage {
     await db.delete(resources).where(eq(resources.id, id));
   }
 
-  async trackPrivateVideoUpload(storageKey: string, uploadedById: string): Promise<PrivateVideoUpload> {
+  async trackPrivateVideoUpload(storageKey: string, uploadedById: string | null): Promise<PrivateVideoUpload> {
     const [upload] = await db.insert(privateVideoUploads)
       .values({ storageKey, uploadedById })
+      .onConflictDoNothing({ target: privateVideoUploads.storageKey })
       .returning();
-    return upload;
+    if (upload) return upload;
+    const existing = await this.getPrivateVideoUpload(storageKey);
+    if (!existing) throw new Error("Private video upload could not be tracked.");
+    return existing;
   }
 
   async claimPrivateVideoUpload(storageKey: string, resourceId: string): Promise<void> {
@@ -759,6 +768,12 @@ export class DatabaseStorage implements IStorage {
       .where(eq(privateVideoUploads.storageKey, storageKey));
   }
 
+  async getPrivateVideoUpload(storageKey: string): Promise<PrivateVideoUpload | undefined> {
+    const [upload] = await db.select().from(privateVideoUploads)
+      .where(eq(privateVideoUploads.storageKey, storageKey));
+    return upload;
+  }
+
   async recordZoomWebhookEvent(event: {
     eventId: string;
     eventType: string;
@@ -773,6 +788,58 @@ export class DatabaseStorage implements IStorage {
       .onConflictDoNothing({ target: zoomWebhookEvents.eventId })
       .returning({ id: zoomWebhookEvents.id });
     return inserted.length > 0;
+  }
+
+  async getZoomWebhookEvent(eventId: string): Promise<ZoomWebhookEvent | undefined> {
+    const [event] = await db.select().from(zoomWebhookEvents)
+      .where(eq(zoomWebhookEvents.eventId, eventId));
+    return event;
+  }
+
+  async claimZoomWebhookEvent(eventId: string): Promise<ZoomWebhookEvent | undefined> {
+    const staleProcessingCutoff = new Date(Date.now() - 10 * 60 * 1000);
+    const [claimed] = await db.update(zoomWebhookEvents)
+      .set({
+        status: "processing",
+        processingStartedAt: new Date(),
+        error: null,
+      })
+      .where(and(
+        eq(zoomWebhookEvents.eventId, eventId),
+        or(
+          inArray(zoomWebhookEvents.status, ["received", "failed"]),
+          and(
+            eq(zoomWebhookEvents.status, "processing"),
+            or(
+              isNull(zoomWebhookEvents.processingStartedAt),
+              lt(zoomWebhookEvents.processingStartedAt, staleProcessingCutoff),
+            ),
+          ),
+        ),
+      ))
+      .returning();
+    return claimed;
+  }
+
+  async markZoomWebhookEventCompleted(eventId: string): Promise<void> {
+    await db.update(zoomWebhookEvents)
+      .set({
+        status: "completed",
+        processedAt: new Date(),
+        processingStartedAt: null,
+        error: null,
+      })
+      .where(eq(zoomWebhookEvents.eventId, eventId));
+  }
+
+  async markZoomWebhookEventFailed(eventId: string, error: string): Promise<void> {
+    await db.update(zoomWebhookEvents)
+      .set({
+        status: "failed",
+        processingStartedAt: null,
+        error: error.slice(0, 2000),
+      })
+      .where(eq(zoomWebhookEvents.eventId, eventId));
   }
 
   async incrementResourceDownload(id: string): Promise<void> {

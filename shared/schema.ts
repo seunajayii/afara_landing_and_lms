@@ -209,7 +209,12 @@ export const events = pgTable("events", {
   durationMinutes: integer("duration_minutes"),
   meetingPlatform: text("meeting_platform"),
   meetingLink: text("meeting_link"),
+  // A stable Zoom meeting identifier lets recording webhooks find the
+  // corresponding AFÁRÁ event without relying on a mutable title or URL.
+  zoomMeetingId: text("zoom_meeting_id"),
   recordingUrl: text("recording_url"),
+  recordingResourceId: varchar("recording_resource_id").references(() => resources.id, { onDelete: "set null" }),
+  recordingLessonId: varchar("recording_lesson_id").references(() => lessons.id, { onDelete: "set null" }),
   maxAttendees: integer("max_attendees"),
   isPublic: boolean("is_public").default(true),
   visibility: visibilityEnum("visibility").notNull().default("community"),
@@ -283,6 +288,7 @@ export const zoomWebhookEvents = pgTable("zoom_webhook_events", {
   payload: jsonb("payload").notNull(),
   status: text("status").notNull().default("received"),
   receivedAt: timestamp("received_at").notNull().defaultNow(),
+  processingStartedAt: timestamp("processing_started_at"),
   processedAt: timestamp("processed_at"),
   error: text("error"),
 });
@@ -640,6 +646,7 @@ export type InsertResource = z.infer<typeof insertResourceSchema>;
 export type Resource = typeof resources.$inferSelect;
 export type PrivateVideoUpload = typeof privateVideoUploads.$inferSelect;
 export type InsertPrivateVideoUpload = typeof privateVideoUploads.$inferInsert;
+export type ZoomWebhookEvent = typeof zoomWebhookEvents.$inferSelect;
 export type InsertDiscussionThread = z.infer<typeof insertDiscussionThreadSchema>;
 export type DiscussionThread = typeof discussionThreads.$inferSelect;
 export type InsertDiscussionPost = z.infer<typeof insertDiscussionPostSchema>;

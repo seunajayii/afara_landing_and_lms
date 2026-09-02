@@ -16,6 +16,11 @@ import {
 import { z } from "zod";
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
 import {
+  downloadZoomRecording as downloadZoomRecordingFile,
+  type ZoomRecordingDownloadInput,
+  type ZoomRecordingDownload,
+} from "./zoom";
+import {
   authorizePlayback,
   canAccessVisibility,
   createPlaybackToken,
@@ -114,6 +119,8 @@ const youtubeResumableUploadSchema = youtubeUploadMetadataSchema.extend({
 export interface ResourceLifecycleDependencies {
   deletePrivateVideo?: (storageKey: string) => Promise<void>;
   listPrivateVideoFiles?: () => Promise<string[]>;
+  downloadZoomRecording?: (input: ZoomRecordingDownloadInput) => Promise<ZoomRecordingDownload>;
+  uploadPrivateVideo?: (key: string, body: Buffer, contentType: string) => Promise<{ key: string }>;
   logError?: (...args: unknown[]) => void;
 }
 
@@ -185,6 +192,218 @@ function hasValidZoomWebhookSignature(req: Request, rawBody: Buffer, secret: str
     timingSafeEqual(expectedBuffer, actualBuffer);
 }
 
+type ZoomRecordingFilePayload = {
+  id?: unknown;
+  meeting_id?: unknown;
+  file_type?: unknown;
+  file_extension?: unknown;
+  file_size?: unknown;
+  download_url?: unknown;
+  download_token?: unknown;
+  status?: unknown;
+  recording_type?: unknown;
+};
+
+function asRecord(value: unknown): Record<string, any> | null {
+  return typeof value === "object" && value !== null ? value as Record<string, any> : null;
+}
+
+function normalizedMeetingIdentifier(value: unknown): string | null {
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  const normalized = String(value).trim().toLowerCase();
+  return normalized || null;
+}
+
+function getZoomMeetingIdentifiers(value: unknown): Set<string> {
+  const identifiers = new Set<string>();
+  const add = (candidate: unknown) => {
+    const normalized = normalizedMeetingIdentifier(candidate);
+    if (normalized) identifiers.add(normalized);
+  };
+  add(value);
+  if (typeof value === "string") {
+    try {
+      const url = new URL(value);
+      for (const key of ["id", "meetingId", "meeting_id", "confno"]) add(url.searchParams.get(key));
+      const pathParts = url.pathname.split("/").filter(Boolean);
+      for (const part of pathParts) {
+        if (/^\d{6,}$/.test(part)) add(part);
+      }
+    } catch {
+      // A stored meeting ID is allowed to be a plain string.
+    }
+  }
+  return identifiers;
+}
+
+function normalizeTopic(value: unknown): string {
+  return typeof value === "string"
+    ? value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
+    : "";
+}
+
+function selectZoomVideoFile(files: ZoomRecordingFilePayload[]): ZoomRecordingFilePayload | undefined {
+  return files
+    .filter((file) => {
+      const status = typeof file.status === "string" ? file.status.toLowerCase() : "completed";
+      const type = typeof file.file_type === "string" ? file.file_type.toLowerCase() : "";
+      const extension = typeof file.file_extension === "string" ? file.file_extension.toLowerCase() : "";
+      return status === "completed" && (type === "mp4" || extension === "mp4") &&
+        typeof file.download_url === "string" && file.download_url.length > 0;
+    })
+    .sort((left, right) => Number(right.file_size || 0) - Number(left.file_size || 0))[0];
+}
+
+async function uploadProtectedZoomVideo(
+  dependencies: ResourceLifecycleDependencies,
+  key: string,
+  body: Buffer,
+  contentType: string,
+): Promise<{ key: string }> {
+  if (dependencies.uploadPrivateVideo) {
+    return dependencies.uploadPrivateVideo(key, body, contentType);
+  }
+  const { isR2Configured, uploadFile } = await import("./r2-storage");
+  if (isR2Configured()) {
+    const result = await uploadFile(key, body, contentType, false);
+    return { key: result.key };
+  }
+  if (!isObjectStorageConfigured() || !(await checkObjectStorageAvailable())) {
+    throw new Error("Protected video storage is not available.");
+  }
+  return uploadPrivateVideo(key, body, contentType);
+}
+
+export async function processZoomRecordingWebhook(
+  eventId: string,
+  dependencies: ResourceLifecycleDependencies,
+): Promise<void> {
+  let claimed: Awaited<ReturnType<typeof storage.claimZoomWebhookEvent>>;
+  try {
+    claimed = await storage.claimZoomWebhookEvent(eventId);
+  } catch (error) {
+    (dependencies.logError ?? console.error)(
+      `Failed to claim Zoom webhook ${eventId}.`,
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return;
+  }
+  if (!claimed) return;
+
+  try {
+    const payload = asRecord(claimed.payload);
+    const zoomPayload = asRecord(payload?.payload);
+    const zoomObject = asRecord(zoomPayload?.object);
+    if (!zoomObject) throw new Error("Zoom recording payload is missing its meeting object.");
+
+    const recordingFiles = Array.isArray(zoomObject.recording_files)
+      ? zoomObject.recording_files as ZoomRecordingFilePayload[]
+      : [];
+    const recordingFile = selectZoomVideoFile(recordingFiles);
+    if (!recordingFile || typeof recordingFile.download_url !== "string") {
+      throw new Error("Zoom recording payload does not contain a completed MP4 file.");
+    }
+
+    const zoomIdentifiers = new Set<string>();
+    for (const candidate of [zoomObject.id, zoomObject.uuid, recordingFile.meeting_id]) {
+      getZoomMeetingIdentifiers(candidate).forEach((identifier) => zoomIdentifiers.add(identifier));
+    }
+    const topic = normalizeTopic(zoomObject.topic);
+    const allEvents = await storage.getAllEvents();
+    const matchingEvents = allEvents.filter((event) => {
+      const eventIdentifiers = new Set<string>();
+      for (const identifierSource of [event.zoomMeetingId, event.meetingLink]) {
+        getZoomMeetingIdentifiers(identifierSource).forEach((identifier) => eventIdentifiers.add(identifier));
+      }
+      return Array.from(zoomIdentifiers).some((identifier) => eventIdentifiers.has(identifier));
+    });
+    let event = matchingEvents[0];
+    if (!event && topic) {
+      const topicMatches = allEvents.filter((candidate) => normalizeTopic(candidate.title) === topic);
+      if (topicMatches.length === 1) event = topicMatches[0];
+    }
+    if (!event) throw new Error("No AFÁRÁ event matches this Zoom meeting.");
+
+    const sourceId = typeof recordingFile.id === "string" && recordingFile.id
+      ? recordingFile.id
+      : recordingFile.download_url;
+    const storageKey = `resources/private-videos/zoom-${createHash("sha256").update(sourceId).digest("hex")}.mp4`;
+    let resource = event.recordingResourceId
+      ? await storage.getResource(event.recordingResourceId)
+      : undefined;
+    if (!resource) resource = await storage.getResourceByVideoStorageKey(`private/${storageKey}`);
+
+    if (!resource) {
+      const downloadToken = [
+        recordingFile.download_token,
+        zoomObject.download_token,
+        zoomPayload?.download_token,
+        payload?.download_token,
+      ].find((value): value is string => typeof value === "string" && value.length > 0);
+      const downloaded = await (dependencies.downloadZoomRecording || downloadZoomRecordingFile)({
+        downloadUrl: recordingFile.download_url,
+        downloadToken,
+      });
+      const stored = await uploadProtectedZoomVideo(
+        dependencies,
+        storageKey,
+        downloaded.body,
+        downloaded.contentType,
+      );
+      await storage.trackPrivateVideoUpload(stored.key, null);
+      resource = await storage.createResource({
+        title: `${event.title} — Zoom recording`,
+        description: `Automatically imported from Zoom after the ${event.title} session.`,
+        resourceType: "video",
+        category: "event-recording",
+        fileUrl: null,
+        fileName: `${event.title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "event"}-recording.mp4`,
+        fileSize: downloaded.fileSize,
+        thumbnailUrl: null,
+        uploadedById: null,
+        visibility: event.visibility,
+        status: "published",
+        videoSource: "upload",
+        videoStorageKey: stored.key,
+        videoContentType: downloaded.contentType,
+        videoFileSize: downloaded.fileSize,
+      });
+    }
+
+    if (resource.resourceType !== "video" || resource.videoSource !== "upload" || !resource.videoStorageKey) {
+      throw new Error("The existing Zoom recording resource is not configured for protected playback.");
+    }
+    await storage.claimPrivateVideoUpload(resource.videoStorageKey, resource.id);
+
+    if (event.recordingLessonId) {
+      const lesson = await storage.getLesson(event.recordingLessonId);
+      if (!lesson) throw new Error("The selected course lesson no longer exists.");
+      if (lesson.lessonType !== "video") throw new Error("The selected course lesson is not a video lesson.");
+      if (lesson.resourceId && lesson.resourceId !== resource.id) {
+        throw new Error("The selected course lesson already has a different resource.");
+      }
+      if (lesson.resourceId !== resource.id) {
+        await storage.updateLesson(lesson.id, { resourceId: resource.id, videoSource: null, videoUrl: null, videoId: null });
+      }
+    }
+
+    const updatedEvent = await storage.updateEvent(event.id, { recordingResourceId: resource.id });
+    if (!updatedEvent) throw new Error("The matching AFÁRÁ event could not be updated.");
+    await storage.markZoomWebhookEventCompleted(eventId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Zoom recording import failed.";
+    try {
+      await storage.markZoomWebhookEventFailed(eventId, message);
+    } catch (statusError) {
+      (dependencies.logError ?? console.error)(
+        "Failed to record Zoom webhook processing failure.",
+        statusError instanceof Error ? statusError.message : "unknown error",
+      );
+    }
+    (dependencies.logError ?? console.error)(`Failed to import Zoom recording webhook ${eventId}.`, message);
+  }
+}
+
 const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
@@ -230,7 +449,9 @@ export async function registerRoutes(
       const eventType = typeof req.body?.event === "string"
         ? req.body.event
         : "unknown";
-      const eventId = createHash("sha256").update(rawBody).digest("hex");
+      const eventId = typeof req.body?.event_id === "string" && req.body.event_id
+        ? req.body.event_id
+        : createHash("sha256").update(rawBody).digest("hex");
       const inserted = await storage.recordZoomWebhookEvent({
         eventId,
         eventType,
@@ -242,6 +463,10 @@ export async function registerRoutes(
           eventId,
           meetingUuid: req.body?.payload?.object?.uuid,
         });
+        // Acknowledge Zoom before doing network and object-storage work. The
+        // durable receipt claim below makes both new deliveries and retries
+        // safe, including a process restart during the import.
+        void processZoomRecordingWebhook(eventId, dependencies);
       }
 
       return res.status(200).json({ received: true });

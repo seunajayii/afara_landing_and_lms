@@ -144,6 +144,23 @@ export async function runSchemaMigrations() {
       CREATE INDEX IF NOT EXISTS zoom_webhook_events_received_at_idx
         ON zoom_webhook_events (received_at)
     `);
+    await db.execute(sql`
+      ALTER TABLE zoom_webhook_events
+        ADD COLUMN IF NOT EXISTS processing_started_at TIMESTAMP
+    `);
+    // Zoom recording delivery is configured per event. Keep the provider
+    // meeting ID and the optional curriculum lesson mapping separate from the
+    // existing manual recording URL for backwards compatibility.
+    await db.execute(sql`
+      ALTER TABLE events
+        ADD COLUMN IF NOT EXISTS zoom_meeting_id TEXT,
+        ADD COLUMN IF NOT EXISTS recording_resource_id VARCHAR REFERENCES resources(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS recording_lesson_id VARCHAR REFERENCES lessons(id) ON DELETE SET NULL
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS events_zoom_meeting_id_idx
+        ON events (zoom_meeting_id)
+    `);
     // Course curriculum additions are nullable/defaulted so existing courses
     // and seeded lessons keep working. Existing lessons are treated as
     // published to preserve the learner experience they already had.

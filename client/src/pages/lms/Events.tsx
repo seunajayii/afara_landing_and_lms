@@ -13,7 +13,7 @@ function getEventType(event: Event): "live" | "recorded" | "upcoming" {
   const startTime = new Date(event.startTime);
   const endTime = event.endTime ? new Date(event.endTime) : null;
   
-  if (event.recordingUrl) return "recorded";
+  if (event.recordingUrl || event.recordingResourceId) return "recorded";
   if (startTime <= now && (!endTime || endTime >= now)) return "live";
   return "upcoming";
 }

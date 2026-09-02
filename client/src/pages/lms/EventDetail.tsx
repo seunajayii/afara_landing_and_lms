@@ -77,13 +77,26 @@ export default function EventDetail() {
       return res.json();
     },
   });
+  const { data: protectedPlayback, isLoading: isPlaybackLoading } = useQuery<{
+    playbackUrl: string;
+    expiresAt: number;
+  }>({
+    queryKey: ["/api/resources", event?.recordingResourceId, "playback"],
+    queryFn: async () => {
+      const res = await fetch(`/api/resources/${event?.recordingResourceId}/playback`, { credentials: "include" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Unable to load recording");
+      return body;
+    },
+    enabled: Boolean(event?.recordingResourceId),
+  });
 
   const isCohortRestricted =
     typeof error === "object" && error !== null && "status" in error && (error as { status: number }).status === 403;
 
   const getTypeBadge = () => {
     if (!event) return null;
-    if (event.recordingUrl) return <Badge variant="secondary">Recorded</Badge>;
+    if (event.recordingUrl || event.recordingResourceId) return <Badge variant="secondary">Recorded</Badge>;
     const now = new Date();
     const start = new Date(event.startTime);
     const end = event.endTime ? new Date(event.endTime) : null;
@@ -170,7 +183,7 @@ export default function EventDetail() {
                       Join {event.meetingPlatform || "Session"}
                     </a>
                   </Button>
-                ) : !event.recordingUrl ? (
+                ) : !event.recordingUrl && !event.recordingResourceId ? (
                   <div
                     className="rounded-md border border-dashed px-4 py-2 text-sm text-muted-foreground"
                     role="status"
@@ -198,6 +211,21 @@ export default function EventDetail() {
                   </Button>
                 )}
               </div>
+              {event.recordingResourceId && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Session recording</p>
+                  {isPlaybackLoading && <Skeleton className="h-48 w-full rounded-md" />}
+                  {protectedPlayback?.playbackUrl && (
+                    <video
+                      className="w-full rounded-md bg-black"
+                      controls
+                      preload="metadata"
+                      src={protectedPlayback.playbackUrl}
+                      data-testid="video-event-recording"
+                    />
+                  )}
+                </div>
+              )}
               <p className="text-xs text-muted-foreground">
                 Add the event to your calendar to choose a reminder notification.
               </p>
