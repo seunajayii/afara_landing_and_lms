@@ -4,9 +4,63 @@ import { useParams, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Lock, Calendar, MapPin, ExternalLink } from "lucide-react";
+import { ArrowLeft, Lock, Calendar, CalendarPlus, MapPin, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import type { Event } from "@shared/schema";
+
+function escapeIcsText(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/\r?\n/g, "\\n")
+    .replace(/,/g, "\\,")
+    .replace(/;/g, "\\;");
+}
+
+function formatIcsDate(date: Date): string {
+  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+function downloadCalendarInvite(event: Event): void {
+  const start = new Date(event.startTime);
+  const end = event.endTime
+    ? new Date(event.endTime)
+    : new Date(start.getTime() + (event.durationMinutes || 60) * 60 * 1000);
+  const eventUrl = `${window.location.origin}/lms/events/${event.id}`;
+  const location = event.meetingLink || (event.meetingPlatform
+    ? `Virtual (${event.meetingPlatform})`
+    : "AFÁRÁ event");
+  const description = [
+    event.description,
+    event.meetingLink ? `Join link: ${event.meetingLink}` : "Join link will be shared by the organizer.",
+    `Event page: ${eventUrl}`,
+  ].filter(Boolean).join("\n\n");
+  const ics = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//AFARA//LMS Events//EN",
+    "CALSCALE:GREGORIAN",
+    "BEGIN:VEVENT",
+    `UID:${event.id}@afara`,
+    `DTSTAMP:${formatIcsDate(new Date())}`,
+    `DTSTART:${formatIcsDate(start)}`,
+    `DTEND:${formatIcsDate(end)}`,
+    `SUMMARY:${escapeIcsText(event.title)}`,
+    `DESCRIPTION:${escapeIcsText(description)}`,
+    `LOCATION:${escapeIcsText(location)}`,
+    `URL:${eventUrl}`,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+  const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+  const downloadUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = downloadUrl;
+  link.download = `${event.title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "afara-event"}.ics`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(downloadUrl);
+}
 
 export default function EventDetail() {
   const { id } = useParams<{ id: string }>();
@@ -108,22 +162,45 @@ export default function EventDetail() {
                 )}
               </div>
 
-              {event.meetingLink && (
-                <Button asChild className="gap-2" data-testid="button-join-event">
-                  <a href={event.meetingLink} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="w-4 h-4" />
-                    Join Session
-                  </a>
+              <div className="flex flex-wrap items-center gap-3">
+                {event.meetingLink ? (
+                  <Button asChild className="gap-2" data-testid="button-join-event">
+                    <a href={event.meetingLink} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="w-4 h-4" />
+                      Join {event.meetingPlatform || "Session"}
+                    </a>
+                  </Button>
+                ) : !event.recordingUrl ? (
+                  <div
+                    className="rounded-md border border-dashed px-4 py-2 text-sm text-muted-foreground"
+                    role="status"
+                    data-testid="notice-event-link-missing"
+                  >
+                    The organizer has not added a join link yet.
+                  </div>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => downloadCalendarInvite(event)}
+                  data-testid="button-add-event-reminder"
+                >
+                  <CalendarPlus className="w-4 h-4" />
+                  Add to Calendar
                 </Button>
-              )}
-              {event.recordingUrl && (
-                <Button asChild variant="outline" className="gap-2" data-testid="button-watch-recording">
-                  <a href={event.recordingUrl} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="w-4 h-4" />
-                    Watch Recording
-                  </a>
-                </Button>
-              )}
+                {event.recordingUrl && (
+                  <Button asChild variant="outline" className="gap-2" data-testid="button-watch-recording">
+                    <a href={event.recordingUrl} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="w-4 h-4" />
+                      Watch Recording
+                    </a>
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Add the event to your calendar to choose a reminder notification.
+              </p>
             </div>
           )}
         </div>

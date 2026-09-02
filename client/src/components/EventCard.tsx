@@ -44,7 +44,7 @@ export function EventCard({ title, date, time, type, location }: EventCardProps)
           )}
         </div>
         <Button size="sm" className="w-full" data-testid={`button-join-${title.toLowerCase().replace(/\s+/g, "-")}`}>
-          {type === "live" ? "Join Now" : type === "upcoming" ? "Set Reminder" : "Watch Recording"}
+          {type === "live" ? "View Live Session" : type === "upcoming" ? "View Event & Set Reminder" : "Watch Recording"}
         </Button>
       </CardContent>
     </Card>
