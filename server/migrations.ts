@@ -227,6 +227,82 @@ export async function runSchemaMigrations() {
         UNIQUE (course_id, cohort_id)
       )
     `);
+    // Learning pods group accepted cohort participants around one assigned
+    // mentor. Work and submissions are kept separate from one-to-one
+    // mentorship sessions so both experiences can coexist.
+    await db.execute(sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'learning_pod_status') THEN
+          CREATE TYPE learning_pod_status AS ENUM ('active', 'archived');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'pod_work_type') THEN
+          CREATE TYPE pod_work_type AS ENUM ('individual', 'group');
+        END IF;
+      END
+      $$;
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS learning_pods (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        cohort_id VARCHAR NOT NULL REFERENCES cohorts(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        description TEXT,
+        mentor_id VARCHAR NOT NULL REFERENCES users(id),
+        status learning_pod_status NOT NULL DEFAULT 'active',
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE (cohort_id, name)
+      );
+      CREATE INDEX IF NOT EXISTS learning_pods_cohort_idx ON learning_pods (cohort_id);
+      CREATE INDEX IF NOT EXISTS learning_pods_mentor_idx ON learning_pods (mentor_id);
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS learning_pod_members (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        pod_id VARCHAR NOT NULL REFERENCES learning_pods(id) ON DELETE CASCADE,
+        user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        joined_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        removed_at TIMESTAMP,
+        UNIQUE (pod_id, user_id)
+      );
+      CREATE INDEX IF NOT EXISTS learning_pod_members_user_idx ON learning_pod_members (user_id);
+      CREATE INDEX IF NOT EXISTS learning_pod_members_pod_idx ON learning_pod_members (pod_id);
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS learning_pod_assignments (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        pod_id VARCHAR NOT NULL REFERENCES learning_pods(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        instructions TEXT,
+        work_type pod_work_type NOT NULL DEFAULT 'individual',
+        status content_status NOT NULL DEFAULT 'published',
+        due_at TIMESTAMP,
+        max_score INTEGER NOT NULL DEFAULT 100,
+        created_by_id VARCHAR NOT NULL REFERENCES users(id),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS learning_pod_assignments_pod_idx ON learning_pod_assignments (pod_id);
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS learning_pod_submissions (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        assignment_id VARCHAR NOT NULL REFERENCES learning_pod_assignments(id) ON DELETE CASCADE,
+        pod_id VARCHAR NOT NULL REFERENCES learning_pods(id) ON DELETE CASCADE,
+        submitter_id VARCHAR NOT NULL REFERENCES users(id),
+        submission_text TEXT,
+        submission_url TEXT,
+        submitted_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        score INTEGER,
+        feedback TEXT,
+        evaluated_by_id VARCHAR REFERENCES users(id),
+        evaluated_at TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS learning_pod_submissions_assignment_idx ON learning_pod_submissions (assignment_id);
+      CREATE INDEX IF NOT EXISTS learning_pod_submissions_pod_idx ON learning_pod_submissions (pod_id);
+    `);
     log("Schema migrations applied successfully");
 
     // Data migration: backfill slugs/status for pre-existing cohorts, seed the two

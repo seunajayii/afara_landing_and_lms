@@ -93,7 +93,7 @@ function LMSViewNotice({ onNavigate }: { onNavigate?: () => void }) {
 const navItems = [
   { path: "/lms/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { path: "/lms/courses", label: "My Courses", icon: BookOpen },
-  { path: "/lms/mentorship", label: "Mentorship", icon: Users },
+  { path: "/lms/mentorship", label: "Learning Pods", icon: Users },
   { path: "/lms/events", label: "Events", icon: Calendar },
   { path: "/lms/resources", label: "Resources", icon: FolderOpen },
   { path: "/lms/community", label: "Community", icon: MessageSquare },

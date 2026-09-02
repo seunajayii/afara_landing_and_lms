@@ -16,6 +16,7 @@ import Dashboard from "@/pages/lms/Dashboard";
 import Courses from "@/pages/lms/Courses";
 import CourseDetail from "@/pages/lms/CourseDetail";
 import Mentorship from "@/pages/lms/Mentorship";
+import LearningPodManagement from "@/pages/admin/LearningPodManagement";
 import Events from "@/pages/lms/Events";
 import EventDetail from "@/pages/lms/EventDetail";
 import Resources from "@/pages/lms/Resources";
@@ -148,6 +149,7 @@ function Router() {
       <Route path="/admin/cohort-analytics">{() => <AdminProtectedRoute component={CohortAnalytics} />}</Route>
       <Route path="/admin/cohorts">{() => <AdminProtectedRoute component={CohortManagement} />}</Route>
       <Route path="/admin/cohort-report">{() => <AdminProtectedRoute component={CohortReport} />}</Route>
+      <Route path="/admin/learning-pods">{() => <AdminProtectedRoute component={LearningPodManagement} />}</Route>
       
       <Route component={NotFound} />
     </Switch>

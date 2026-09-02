@@ -10,6 +10,7 @@ import {
   insertEventSchema, insertEventRegistrationSchema, insertResourceSchema,
   insertDiscussionThreadSchema, insertDiscussionPostSchema, insertCertificateSchema,
   insertNotificationSchema, insertApplicationSchema, insertCohortSchema,
+  insertLearningPodSchema, insertLearningPodAssignmentSchema, insertLearningPodSubmissionSchema,
   extraAnswersSchema,
   type Cohort, type Event
 } from "@shared/schema";
@@ -74,6 +75,46 @@ const courseAssignmentSchema = z.object({
       message: "Select at least one cohort, or make the course available to all participants.",
     });
   }
+});
+
+const learningPodPayloadSchema = insertLearningPodSchema.extend({
+  cohortId: z.string().min(1),
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(2000).nullable().optional(),
+  mentorId: z.string().min(1),
+  status: z.enum(["active", "archived"]).default("active"),
+});
+
+const learningPodMembersSchema = z.object({
+  userIds: z.array(z.string().min(1)).max(100),
+});
+
+const learningPodAutoDistributeSchema = z.object({
+  cohortId: z.string().min(1),
+  podSize: z.number().int().min(3).max(5),
+  mentorIds: z.array(z.string().min(1)).min(1).max(50),
+  namePrefix: z.string().trim().min(1).max(80).default("Learning Pod"),
+});
+
+const learningPodAssignmentPayloadSchema = insertLearningPodAssignmentSchema.extend({
+  title: z.string().trim().min(1).max(200),
+  instructions: z.string().trim().max(10000).nullable().optional(),
+  workType: z.enum(["individual", "group"]).default("individual"),
+  status: z.enum(["draft", "published"]).default("published"),
+  dueAt: z.string().datetime().nullable().optional(),
+  maxScore: z.number().int().min(1).max(10000).default(100),
+});
+
+const learningPodSubmissionPayloadSchema = insertLearningPodSubmissionSchema.extend({
+  submissionText: z.string().trim().max(20000).nullable().optional(),
+  submissionUrl: z.string().trim().url().max(2000).nullable().optional(),
+}).refine((value) => Boolean(value.submissionText || value.submissionUrl), {
+  message: "Add written work or a submission link.",
+});
+
+const learningPodReviewSchema = z.object({
+  score: z.number().int().min(0).max(10000),
+  feedback: z.string().trim().min(1).max(10000),
 });
 
 const youtubeVideoResourceSchema = insertResourceSchema.superRefine((resource, ctx) => {
@@ -1690,6 +1731,76 @@ export async function registerRoutes(
     return courses.length === 0 || (await Promise.all(courses.map((course) => canAccessCourse(req, course)))).some(Boolean);
   };
 
+  const getAcceptedCohortParticipants = async (cohortId: string) => {
+    const acceptedApplications = (await storage.getApplicationsByStatus("accepted"))
+      .filter((application) => application.cohortId === cohortId);
+    const seen = new Set<string>();
+    const participants = [];
+    for (const application of acceptedApplications) {
+      const user = await storage.getUserByEmail(application.email);
+      if (!user || seen.has(user.id) || !user.isActive) continue;
+      seen.add(user.id);
+      participants.push({
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        applicationId: application.id,
+      });
+    }
+    return participants;
+  };
+
+  const getLearningPodResponse = async (pod: any, req: Request, includeAllSubmissions = false) => {
+    const cohort = await storage.getCohort(pod.cohortId);
+    const mentor = await storage.getUser(pod.mentorId);
+    const memberRows = await storage.getLearningPodMembers(pod.id);
+    const members = (await Promise.all(memberRows.map(async (member) => {
+      const user = await storage.getUser(member.userId);
+      return user ? sanitizeUser(user) : null;
+    }))).filter(Boolean);
+    const isPodMentor = req.session.userId === pod.mentorId;
+    const assignments = (await storage.getLearningPodAssignments(pod.id))
+      .filter((assignment) => isAdminSession(req) || isPodMentor || assignment.status === "published");
+    const assignmentsWithSubmissions = await Promise.all(assignments.map(async (assignment) => {
+      const allSubmissions = await storage.getLearningPodSubmissions(assignment.id, pod.id);
+      const submissions = includeAllSubmissions || isAdminSession(req) || isPodMentor || assignment.workType === "group"
+        ? allSubmissions
+        : allSubmissions.filter((submission) => submission.submitterId === req.session.userId);
+      return { ...assignment, submissions };
+    }));
+    return {
+      ...pod,
+      cohort: cohort ? { id: cohort.id, name: cohort.name, displayName: cohort.displayName } : null,
+      mentor: mentor ? sanitizeUser(mentor) : null,
+      members,
+      assignments: assignmentsWithSubmissions,
+    };
+  };
+
+  const canAccessLearningPod = async (req: Request, pod: any) => {
+    if (isAdminSession(req) || pod.mentorId === req.session.userId) return true;
+    const members = await storage.getLearningPodMembers(pod.id);
+    return members.some((member) => member.userId === req.session.userId);
+  };
+
+  const validateLearningPodMentor = async (mentorId: string) => {
+    const mentor = await storage.getUser(mentorId);
+    return mentor && mentor.isActive && mentor.role === "mentor" ? mentor : undefined;
+  };
+
+  const getActivePodMemberIdsForCohort = async (cohortId: string, excludingPodId?: string) => {
+    const pods = (await storage.getLearningPodsByCohort(cohortId))
+      .filter((pod) => pod.id !== excludingPodId);
+    const assigned = new Set<string>();
+    for (const pod of pods) {
+      const members = await storage.getLearningPodMembers(pod.id);
+      members.forEach((member) => assigned.add(member.userId));
+    }
+    return assigned;
+  };
+
   const validateCourseCohorts = async (cohortIds: string[]): Promise<string | null> => {
     const uniqueCohortIds = Array.from(new Set(cohortIds));
     const cohorts = await Promise.all(uniqueCohortIds.map((cohortId) => storage.getCohort(cohortId)));
@@ -2043,6 +2154,289 @@ export async function registerRoutes(
       res.status(201).json(progress);
     } catch (error) {
       res.status(500).json({ error: "Failed to update progress" });
+    }
+  });
+
+  // --- Learning Pods ---
+  // Admin routes intentionally sit before the parameterized route below so
+  // `/eligible` cannot be interpreted as a pod id.
+  app.get("/api/admin/learning-pods", requireAuth, requireAdminRole, async (_req: Request, res: Response) => {
+    try {
+      const pods = await storage.getAllLearningPods();
+      const responses = await Promise.all(pods.map((pod) => getLearningPodResponse(pod, _req, true)));
+      res.json(responses);
+    } catch (error) {
+      console.error("Failed to fetch learning pods:", error);
+      res.status(500).json({ error: "Failed to fetch learning pods" });
+    }
+  });
+
+  app.get("/api/admin/learning-pods/eligible", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const cohortId = z.string().min(1).parse(req.query.cohortId);
+      const cohort = await storage.getCohort(cohortId);
+      if (!cohort) return res.status(404).json({ error: "Cohort not found" });
+      res.json(await getAcceptedCohortParticipants(cohortId));
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: "A cohort is required" });
+      res.status(500).json({ error: "Failed to fetch eligible participants" });
+    }
+  });
+
+  app.post("/api/admin/learning-pods", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const data = learningPodPayloadSchema.parse(req.body);
+      const cohort = await storage.getCohort(data.cohortId);
+      if (!cohort) return res.status(404).json({ error: "Cohort not found" });
+      if (!await validateLearningPodMentor(data.mentorId)) {
+        return res.status(400).json({ error: "The selected mentor is not available" });
+      }
+      const pod = await storage.createLearningPod(data);
+      const members = Array.isArray(req.body.userIds) ? z.array(z.string()).parse(req.body.userIds) : [];
+      const eligibleIds = new Set((await getAcceptedCohortParticipants(data.cohortId)).map((participant) => participant.id));
+      if (members.some((userId) => !eligibleIds.has(userId))) {
+        await storage.deleteLearningPod(pod.id);
+        return res.status(400).json({ error: "Every pod member must be an accepted participant in the selected cohort" });
+      }
+      const alreadyAssigned = await getActivePodMemberIdsForCohort(data.cohortId, pod.id);
+      if (members.some((userId) => alreadyAssigned.has(userId))) {
+        await storage.deleteLearningPod(pod.id);
+        return res.status(400).json({ error: "A participant can only belong to one active pod in a cohort" });
+      }
+      await storage.setLearningPodMembers(pod.id, members);
+      res.status(201).json(await getLearningPodResponse(pod, req, true));
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      res.status(500).json({ error: "Failed to create learning pod" });
+    }
+  });
+
+  app.post("/api/admin/learning-pods/auto-distribute", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const data = learningPodAutoDistributeSchema.parse(req.body);
+      const cohort = await storage.getCohort(data.cohortId);
+      if (!cohort) return res.status(404).json({ error: "Cohort not found" });
+      for (const mentorId of data.mentorIds) {
+        if (!await validateLearningPodMentor(mentorId)) {
+          return res.status(400).json({ error: "One or more selected mentors are not available" });
+        }
+      }
+      const alreadyAssigned = await getActivePodMemberIdsForCohort(data.cohortId);
+      const participants = (await getAcceptedCohortParticipants(data.cohortId))
+        .filter((participant) => !alreadyAssigned.has(participant.id));
+      if (participants.length === 0) return res.status(400).json({ error: "No accepted participants are available for this cohort" });
+      const existingPods = await storage.getAllLearningPods();
+      const existingNames = new Set(existingPods.filter((pod) => pod.cohortId === data.cohortId).map((pod) => pod.name));
+      let nextPodNumber = 1;
+      const created = [];
+      for (let offset = 0; offset < participants.length; offset += data.podSize) {
+        let name = `${data.namePrefix} ${nextPodNumber}`;
+        while (existingNames.has(name)) {
+          nextPodNumber += 1;
+          name = `${data.namePrefix} ${nextPodNumber}`;
+        }
+        existingNames.add(name);
+        const pod = await storage.createLearningPod({
+          cohortId: data.cohortId,
+          name,
+          description: `Automatically distributed pod for ${cohort.displayName || cohort.name}.`,
+          mentorId: data.mentorIds[created.length % data.mentorIds.length],
+          status: "active",
+        });
+        nextPodNumber += 1;
+        await storage.setLearningPodMembers(pod.id, participants.slice(offset, offset + data.podSize).map((participant) => participant.id));
+        created.push(await getLearningPodResponse(pod, req, true));
+      }
+      res.status(201).json({ pods: created });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      console.error("Failed to auto-distribute learning pods:", error);
+      res.status(500).json({ error: "Failed to auto-distribute learning pods" });
+    }
+  });
+
+  app.patch("/api/admin/learning-pods/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const existing = await storage.getLearningPod(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Learning pod not found" });
+      const data = learningPodPayloadSchema.partial().parse(req.body);
+      if (data.cohortId && !await storage.getCohort(data.cohortId)) return res.status(404).json({ error: "Cohort not found" });
+      if (data.mentorId && !await validateLearningPodMentor(data.mentorId)) {
+        return res.status(400).json({ error: "The selected mentor is not available" });
+      }
+      const pod = await storage.updateLearningPod(existing.id, data);
+      res.json(await getLearningPodResponse(pod!, req, true));
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      res.status(500).json({ error: "Failed to update learning pod" });
+    }
+  });
+
+  app.put("/api/admin/learning-pods/:id/members", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const pod = await storage.getLearningPod(req.params.id);
+      if (!pod) return res.status(404).json({ error: "Learning pod not found" });
+      const { userIds } = learningPodMembersSchema.parse(req.body);
+      const eligibleIds = new Set((await getAcceptedCohortParticipants(pod.cohortId)).map((participant) => participant.id));
+      if (userIds.some((userId) => !eligibleIds.has(userId))) {
+        return res.status(400).json({ error: "Every pod member must be an accepted participant in the pod cohort" });
+      }
+      const alreadyAssigned = await getActivePodMemberIdsForCohort(pod.cohortId, pod.id);
+      if (userIds.some((userId) => alreadyAssigned.has(userId))) {
+        return res.status(400).json({ error: "A participant can only belong to one active pod in a cohort" });
+      }
+      await storage.setLearningPodMembers(pod.id, userIds);
+      res.json(await getLearningPodResponse(pod, req, true));
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      res.status(500).json({ error: "Failed to update pod members" });
+    }
+  });
+
+  app.delete("/api/admin/learning-pods/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const pod = await storage.getLearningPod(req.params.id);
+      if (!pod) return res.status(404).json({ error: "Learning pod not found" });
+      await storage.deleteLearningPod(pod.id);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete learning pod" });
+    }
+  });
+
+  app.post("/api/admin/learning-pods/:podId/assignments", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const pod = await storage.getLearningPod(req.params.podId);
+      if (!pod) return res.status(404).json({ error: "Learning pod not found" });
+      const data = learningPodAssignmentPayloadSchema.parse(req.body);
+      const assignment = await storage.createLearningPodAssignment({
+        podId: pod.id,
+        title: data.title,
+        instructions: data.instructions,
+        workType: data.workType,
+        status: data.status,
+        dueAt: data.dueAt ? new Date(data.dueAt) : null,
+        maxScore: data.maxScore,
+        createdById: req.session.userId!,
+      });
+      res.status(201).json(assignment);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      res.status(500).json({ error: "Failed to create pod assignment" });
+    }
+  });
+
+  app.patch("/api/admin/learning-pods/:podId/assignments/:assignmentId", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const assignment = await storage.getLearningPodAssignment(req.params.assignmentId);
+      if (!assignment || assignment.podId !== req.params.podId) return res.status(404).json({ error: "Assignment not found" });
+      const data = learningPodAssignmentPayloadSchema.partial().parse(req.body);
+      const updated = await storage.updateLearningPodAssignment(assignment.id, {
+        ...data,
+        dueAt: data.dueAt === undefined ? undefined : data.dueAt ? new Date(data.dueAt) : null,
+      });
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      res.status(500).json({ error: "Failed to update pod assignment" });
+    }
+  });
+
+  app.delete("/api/admin/learning-pods/:podId/assignments/:assignmentId", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const assignment = await storage.getLearningPodAssignment(req.params.assignmentId);
+      if (!assignment || assignment.podId !== req.params.podId) return res.status(404).json({ error: "Assignment not found" });
+      await storage.deleteLearningPodAssignment(assignment.id);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete pod assignment" });
+    }
+  });
+
+  app.get("/api/learning-pods", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const pods = isAdminSession(req)
+        ? await storage.getAllLearningPods()
+        : await storage.getLearningPodsByUser(req.session.userId!);
+      res.json(await Promise.all(pods.map((pod) => getLearningPodResponse(pod, req))));
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch your learning pods" });
+    }
+  });
+
+  app.get("/api/learning-pods/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const pod = await storage.getLearningPod(req.params.id);
+      if (!pod || !(await canAccessLearningPod(req, pod))) return res.status(404).json({ error: "Learning pod not found" });
+      res.json(await getLearningPodResponse(pod, req, isAdminSession(req) || pod.mentorId === req.session.userId));
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch learning pod" });
+    }
+  });
+
+  app.post("/api/learning-pods/:podId/assignments/:assignmentId/submissions", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const pod = await storage.getLearningPod(req.params.podId);
+      const assignment = await storage.getLearningPodAssignment(req.params.assignmentId);
+      if (!pod || !assignment || assignment.podId !== pod.id || !(await canAccessLearningPod(req, pod))) {
+        return res.status(404).json({ error: "Assignment not found" });
+      }
+      if (isAdminSession(req) || pod.mentorId === req.session.userId) {
+        return res.status(403).json({ error: "Mentors and administrators review work; only pod members submit it" });
+      }
+      if (assignment.status !== "published") return res.status(400).json({ error: "This assignment is not open for submissions" });
+      const data = learningPodSubmissionPayloadSchema.parse(req.body);
+      const existing = await storage.getLearningPodSubmission(
+        assignment.id,
+        pod.id,
+        assignment.workType === "individual" ? req.session.userId : undefined,
+      );
+      const submission = existing
+        ? await storage.updateLearningPodSubmission(existing.id, {
+            submissionText: data.submissionText ?? null,
+            submissionUrl: data.submissionUrl ?? null,
+            submitterId: req.session.userId!,
+          })
+        : await storage.createLearningPodSubmission({
+            assignmentId: assignment.id,
+            podId: pod.id,
+            submitterId: req.session.userId!,
+            submissionText: data.submissionText ?? null,
+            submissionUrl: data.submissionUrl ?? null,
+          });
+      res.status(existing ? 200 : 201).json(submission);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      res.status(500).json({ error: "Failed to submit pod work" });
+    }
+  });
+
+  app.patch("/api/learning-pods/:podId/assignments/:assignmentId/submissions/:submissionId/review", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const pod = await storage.getLearningPod(req.params.podId);
+      const assignment = await storage.getLearningPodAssignment(req.params.assignmentId);
+      const submission = await storage.getLearningPodSubmissionById(req.params.submissionId);
+      if (!pod || !assignment || assignment.podId !== pod.id || !submission ||
+          submission.id !== req.params.submissionId ||
+          submission.assignmentId !== assignment.id ||
+          submission.podId !== pod.id) {
+        return res.status(404).json({ error: "Submission not found" });
+      }
+      if (!isAdminSession(req) && pod.mentorId !== req.session.userId) {
+        return res.status(403).json({ error: "Only the assigned mentor can review pod work" });
+      }
+      const data = learningPodReviewSchema.parse(req.body);
+      if (data.score > assignment.maxScore) return res.status(400).json({ error: `Score cannot exceed ${assignment.maxScore}` });
+      const reviewed = await storage.updateLearningPodSubmission(submission.id, {
+        score: data.score,
+        feedback: data.feedback,
+        evaluatedById: req.session.userId!,
+        evaluatedAt: new Date(),
+      });
+      res.json(reviewed);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      res.status(500).json({ error: "Failed to review pod work" });
     }
   });
 

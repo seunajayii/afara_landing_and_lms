@@ -5,6 +5,7 @@ import { Calendar, Clock, CheckCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User, Profile, MentorProfile } from "@shared/schema";
+import LearningPods from "./LearningPods";
 
 interface MentorWithProfile extends User {
   profile?: Profile;
@@ -63,7 +64,12 @@ export default function Mentorship() {
       <LMSSidebar />
       <main className="flex-1 overflow-auto">
         <div className="p-8">
-          <h1 className="text-3xl font-bold mb-6">Mentorship</h1>
+          <LearningPods />
+
+          <div className="border-t my-10 pt-10">
+            <h2 className="text-2xl font-bold mb-2">One-to-one mentorship</h2>
+            <p className="text-muted-foreground mb-6">Learning Pods are the primary experience. Use the directory below when you need additional individual support.</p>
+          </div>
 
           <div className="grid lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2">

@@ -44,6 +44,8 @@ export const visibilityEnum = pgEnum("content_visibility", ["public", "community
 export const cohortTypeEnum = pgEnum("cohort_type", ["core", "sponsored"]);
 export const cohortStatusEnum = pgEnum("cohort_status", ["draft", "open", "closed", "archived"]);
 export const courseAudienceEnum = pgEnum("course_audience", ["all", "selected"]);
+export const learningPodStatusEnum = pgEnum("learning_pod_status", ["active", "archived"]);
+export const podWorkTypeEnum = pgEnum("pod_work_type", ["individual", "group"]);
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -452,6 +454,58 @@ export const courseCohortAssignments = pgTable("course_cohort_assignments", {
   courseCohortUnique: uniqueIndex("course_cohort_assignments_course_cohort_idx").on(table.courseId, table.cohortId),
 }));
 
+export const learningPods = pgTable("learning_pods", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  cohortId: varchar("cohort_id").notNull().references(() => cohorts.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  mentorId: varchar("mentor_id").notNull().references(() => users.id),
+  status: learningPodStatusEnum("status").notNull().default("active"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  cohortIdx: uniqueIndex("learning_pods_cohort_name_idx").on(table.cohortId, table.name),
+}));
+
+export const learningPodMembers = pgTable("learning_pod_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  podId: varchar("pod_id").notNull().references(() => learningPods.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  joinedAt: timestamp("joined_at").notNull().defaultNow(),
+  removedAt: timestamp("removed_at"),
+}, (table) => ({
+  podUserUnique: uniqueIndex("learning_pod_members_pod_user_idx").on(table.podId, table.userId),
+}));
+
+export const learningPodAssignments = pgTable("learning_pod_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  podId: varchar("pod_id").notNull().references(() => learningPods.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  instructions: text("instructions"),
+  workType: podWorkTypeEnum("work_type").notNull().default("individual"),
+  status: contentStatusEnum("status").notNull().default("published"),
+  dueAt: timestamp("due_at"),
+  maxScore: integer("max_score").notNull().default(100),
+  createdById: varchar("created_by_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const learningPodSubmissions = pgTable("learning_pod_submissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  assignmentId: varchar("assignment_id").notNull().references(() => learningPodAssignments.id, { onDelete: "cascade" }),
+  podId: varchar("pod_id").notNull().references(() => learningPods.id, { onDelete: "cascade" }),
+  submitterId: varchar("submitter_id").notNull().references(() => users.id),
+  submissionText: text("submission_text"),
+  submissionUrl: text("submission_url"),
+  submittedAt: timestamp("submitted_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  score: integer("score"),
+  feedback: text("feedback"),
+  evaluatedById: varchar("evaluated_by_id").references(() => users.id),
+  evaluatedAt: timestamp("evaluated_at"),
+});
+
 export const applications = pgTable("applications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   
@@ -692,3 +746,15 @@ export const insertCohortSchema = createInsertSchema(cohorts)
   });
 export type InsertCohort = z.infer<typeof insertCohortSchema>;
 export type Cohort = typeof cohorts.$inferSelect;
+export const insertLearningPodSchema = createInsertSchema(learningPods).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertLearningPodMemberSchema = createInsertSchema(learningPodMembers).omit({ id: true, joinedAt: true, removedAt: true });
+export const insertLearningPodAssignmentSchema = createInsertSchema(learningPodAssignments).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertLearningPodSubmissionSchema = createInsertSchema(learningPodSubmissions).omit({ id: true, submittedAt: true, updatedAt: true, score: true, feedback: true, evaluatedById: true, evaluatedAt: true });
+export type LearningPod = typeof learningPods.$inferSelect;
+export type InsertLearningPod = z.infer<typeof insertLearningPodSchema>;
+export type LearningPodMember = typeof learningPodMembers.$inferSelect;
+export type InsertLearningPodMember = z.infer<typeof insertLearningPodMemberSchema>;
+export type LearningPodAssignment = typeof learningPodAssignments.$inferSelect;
+export type InsertLearningPodAssignment = z.infer<typeof insertLearningPodAssignmentSchema>;
+export type LearningPodSubmission = typeof learningPodSubmissions.$inferSelect;
+export type InsertLearningPodSubmission = z.infer<typeof insertLearningPodSubmissionSchema>;

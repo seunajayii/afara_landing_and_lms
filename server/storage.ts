@@ -23,6 +23,10 @@ import {
   type Application, type InsertApplication,
   type ApplicationEvaluation, type InsertApplicationEvaluation,
   type Cohort, type InsertCohort,
+  type LearningPod, type InsertLearningPod,
+  type LearningPodMember, type InsertLearningPodMember,
+  type LearningPodAssignment, type InsertLearningPodAssignment,
+  type LearningPodSubmission, type InsertLearningPodSubmission,
   users, profiles, mentorProfiles, facilitatorProfiles,
   courses, modules, lessons, enrollments, lessonProgress,
   mentorshipRequests, mentorshipSessions,
@@ -30,7 +34,8 @@ import {
   discussionThreads, discussionPosts, postLikes,
   certificates, achievements, userAchievements, notifications,
   newsletterSubscribers, newsletterCampaigns,
-  applications, applicationEvaluations, cohorts, courseCohortAssignments
+  applications, applicationEvaluations, cohorts, courseCohortAssignments,
+  learningPods, learningPodMembers, learningPodAssignments, learningPodSubmissions
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, ne, desc, asc, sql, or, inArray, isNull, lt } from "drizzle-orm";
@@ -211,6 +216,26 @@ export interface IStorage {
   setOpenCohort(id: string, open: boolean): Promise<Cohort | undefined>;
   deleteCohort(id: string): Promise<void>;
   assignApplicationToCohort(applicationId: string, cohortId: string | null): Promise<void>;
+
+  getAllLearningPods(): Promise<LearningPod[]>;
+  getLearningPodsByCohort(cohortId: string): Promise<LearningPod[]>;
+  getLearningPodsByUser(userId: string): Promise<LearningPod[]>;
+  getLearningPod(id: string): Promise<LearningPod | undefined>;
+  createLearningPod(data: InsertLearningPod): Promise<LearningPod>;
+  updateLearningPod(id: string, data: Partial<InsertLearningPod>): Promise<LearningPod | undefined>;
+  deleteLearningPod(id: string): Promise<void>;
+  getLearningPodMembers(podId: string): Promise<LearningPodMember[]>;
+  setLearningPodMembers(podId: string, userIds: string[]): Promise<void>;
+  getLearningPodAssignments(podId: string): Promise<LearningPodAssignment[]>;
+  getLearningPodAssignment(id: string): Promise<LearningPodAssignment | undefined>;
+  createLearningPodAssignment(data: InsertLearningPodAssignment): Promise<LearningPodAssignment>;
+  updateLearningPodAssignment(id: string, data: Partial<InsertLearningPodAssignment>): Promise<LearningPodAssignment | undefined>;
+  deleteLearningPodAssignment(id: string): Promise<void>;
+  getLearningPodSubmissions(assignmentId: string, podId: string): Promise<LearningPodSubmission[]>;
+  getLearningPodSubmissionById(id: string): Promise<LearningPodSubmission | undefined>;
+  getLearningPodSubmission(assignmentId: string, podId: string, submitterId?: string): Promise<LearningPodSubmission | undefined>;
+  createLearningPodSubmission(data: InsertLearningPodSubmission): Promise<LearningPodSubmission>;
+  updateLearningPodSubmission(id: string, data: Partial<LearningPodSubmission>): Promise<LearningPodSubmission | undefined>;
 
   getNewsletterSubscriber(id: string): Promise<NewsletterSubscriber | undefined>;
   getNewsletterSubscriberByEmail(email: string): Promise<NewsletterSubscriber | undefined>;
@@ -1210,6 +1235,138 @@ export class DatabaseStorage implements IStorage {
 
   async assignApplicationToCohort(applicationId: string, cohortId: string | null): Promise<void> {
     await db.update(applications).set({ cohortId }).where(eq(applications.id, applicationId));
+  }
+
+  async getAllLearningPods(): Promise<LearningPod[]> {
+    return db.select().from(learningPods).orderBy(desc(learningPods.createdAt));
+  }
+
+  async getLearningPodsByCohort(cohortId: string): Promise<LearningPod[]> {
+    return db.select().from(learningPods)
+      .where(and(eq(learningPods.cohortId, cohortId), eq(learningPods.status, "active")))
+      .orderBy(asc(learningPods.name));
+  }
+
+  async getLearningPodsByUser(userId: string): Promise<LearningPod[]> {
+    const memberPods = await db.select({ pod: learningPods })
+      .from(learningPodMembers)
+      .innerJoin(learningPods, eq(learningPodMembers.podId, learningPods.id))
+      .where(and(eq(learningPodMembers.userId, userId), isNull(learningPodMembers.removedAt), eq(learningPods.status, "active")));
+    const mentorPods = await db.select({ pod: learningPods })
+      .from(learningPods)
+      .where(and(eq(learningPods.mentorId, userId), eq(learningPods.status, "active")));
+    const byId = new Map([...memberPods, ...mentorPods].map(({ pod }) => [pod.id, pod]));
+    return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async getLearningPod(id: string): Promise<LearningPod | undefined> {
+    const [pod] = await db.select().from(learningPods).where(eq(learningPods.id, id));
+    return pod;
+  }
+
+  async createLearningPod(data: InsertLearningPod): Promise<LearningPod> {
+    const [pod] = await db.insert(learningPods).values(data).returning();
+    return pod;
+  }
+
+  async updateLearningPod(id: string, data: Partial<InsertLearningPod>): Promise<LearningPod | undefined> {
+    const [pod] = await db.update(learningPods)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(learningPods.id, id))
+      .returning();
+    return pod;
+  }
+
+  async deleteLearningPod(id: string): Promise<void> {
+    await db.delete(learningPods).where(eq(learningPods.id, id));
+  }
+
+  async getLearningPodMembers(podId: string): Promise<LearningPodMember[]> {
+    return db.select().from(learningPodMembers)
+      .where(and(eq(learningPodMembers.podId, podId), isNull(learningPodMembers.removedAt)))
+      .orderBy(asc(learningPodMembers.joinedAt));
+  }
+
+  async setLearningPodMembers(podId: string, userIds: string[]): Promise<void> {
+    const uniqueUserIds = Array.from(new Set(userIds));
+    await db.transaction(async (tx) => {
+      await tx.delete(learningPodMembers).where(eq(learningPodMembers.podId, podId));
+      if (uniqueUserIds.length > 0) {
+        await tx.insert(learningPodMembers).values(
+          uniqueUserIds.map((userId) => ({ podId, userId })),
+        );
+      }
+    });
+  }
+
+  async getLearningPodAssignments(podId: string): Promise<LearningPodAssignment[]> {
+    return db.select().from(learningPodAssignments)
+      .where(eq(learningPodAssignments.podId, podId))
+      .orderBy(asc(learningPodAssignments.dueAt), asc(learningPodAssignments.createdAt));
+  }
+
+  async getLearningPodAssignment(id: string): Promise<LearningPodAssignment | undefined> {
+    const [assignment] = await db.select().from(learningPodAssignments)
+      .where(eq(learningPodAssignments.id, id));
+    return assignment;
+  }
+
+  async createLearningPodAssignment(data: InsertLearningPodAssignment): Promise<LearningPodAssignment> {
+    const [assignment] = await db.insert(learningPodAssignments).values(data).returning();
+    return assignment;
+  }
+
+  async updateLearningPodAssignment(id: string, data: Partial<InsertLearningPodAssignment>): Promise<LearningPodAssignment | undefined> {
+    const [assignment] = await db.update(learningPodAssignments)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(learningPodAssignments.id, id))
+      .returning();
+    return assignment;
+  }
+
+  async deleteLearningPodAssignment(id: string): Promise<void> {
+    await db.delete(learningPodAssignments).where(eq(learningPodAssignments.id, id));
+  }
+
+  async getLearningPodSubmissions(assignmentId: string, podId: string): Promise<LearningPodSubmission[]> {
+    return db.select().from(learningPodSubmissions)
+      .where(and(
+        eq(learningPodSubmissions.assignmentId, assignmentId),
+        eq(learningPodSubmissions.podId, podId),
+      ))
+      .orderBy(desc(learningPodSubmissions.updatedAt));
+  }
+
+  async getLearningPodSubmissionById(id: string): Promise<LearningPodSubmission | undefined> {
+    const [submission] = await db.select().from(learningPodSubmissions)
+      .where(eq(learningPodSubmissions.id, id));
+    return submission;
+  }
+
+  async getLearningPodSubmission(assignmentId: string, podId: string, submitterId?: string): Promise<LearningPodSubmission | undefined> {
+    const conditions = [
+      eq(learningPodSubmissions.assignmentId, assignmentId),
+      eq(learningPodSubmissions.podId, podId),
+    ];
+    if (submitterId) conditions.push(eq(learningPodSubmissions.submitterId, submitterId));
+    const [submission] = await db.select().from(learningPodSubmissions)
+      .where(and(...conditions))
+      .orderBy(desc(learningPodSubmissions.updatedAt))
+      .limit(1);
+    return submission;
+  }
+
+  async createLearningPodSubmission(data: InsertLearningPodSubmission): Promise<LearningPodSubmission> {
+    const [submission] = await db.insert(learningPodSubmissions).values(data).returning();
+    return submission;
+  }
+
+  async updateLearningPodSubmission(id: string, data: Partial<LearningPodSubmission>): Promise<LearningPodSubmission | undefined> {
+    const [submission] = await db.update(learningPodSubmissions)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(learningPodSubmissions.id, id))
+      .returning();
+    return submission;
   }
 
   async getNewsletterSubscriber(id: string): Promise<NewsletterSubscriber | undefined> {

@@ -12,6 +12,7 @@ import { format } from "date-fns";
 import { Sparkles, BookOpen, FileText, Users, Settings, BarChart3 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import type { Course, Event, Resource } from "@shared/schema";
+import { LearningPodSummary } from "./LearningPods";
 
 interface RecommendationsResponse {
   courses: (Course & { score: number; type: "course" })[];
@@ -163,6 +164,10 @@ export default function Dashboard() {
             <ProgressDashboard />
           )}
 
+          <div className="mt-8">
+            <LearningPodSummary />
+          </div>
+
           <div className="grid lg:grid-cols-2 gap-8 mt-8">
             <div>
               <h2 className="text-2xl font-bold mb-4">Active Courses</h2>
@@ -226,7 +231,7 @@ export default function Dashboard() {
                 <CardContent className="space-y-2">
                   <Link href="/lms/mentorship">
                     <Button variant="outline" className="w-full justify-start" data-testid="button-find-mentor">
-                      Find a Mentor
+                       Open Learning Pods
                     </Button>
                   </Link>
                   <Link href="/lms/community">
