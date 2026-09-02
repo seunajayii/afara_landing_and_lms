@@ -49,3 +49,6 @@ timeoutMs = 20000
 
 [userenv.production]
 ZOOM_REDIRECT_URI = "https://afaraaccelerator.org/api/integrations/zoom/callback"
+
+[userenv.development]
+ZOOM_REDIRECT_URI = "https://8b9ab373-9765-405e-8e49-29ebe59d9861-00-1smbskd5kvyk8.kirk.replit.dev/api/integrations/zoom/callback"
