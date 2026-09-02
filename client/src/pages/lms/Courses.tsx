@@ -39,6 +39,11 @@ export default function Courses() {
 
   const { data: courses, isLoading } = useQuery<CourseWithModules[]>({
     queryKey: ["/api/courses", user?.id, user?.role],
+    queryFn: async () => {
+      const response = await fetch("/api/courses", { credentials: "include" });
+      if (!response.ok) throw new Error("Unable to load courses.");
+      return response.json();
+    },
     enabled: Boolean(user?.id),
   });
 
