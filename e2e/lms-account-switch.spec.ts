@@ -254,4 +254,84 @@ test.describe("LMS account switching", () => {
       });
     }
   });
+
+  test("blocks a captured administrator course URL after switching to a participant", async ({
+    page,
+  }, testInfo) => {
+    const credentials = loadCredentials();
+    test.skip(
+      !credentials,
+      "Run npm run test:e2e for the seeded check, or provide the four E2E account variables.",
+    );
+
+    const evidence: Record<string, unknown> = {
+      direction: "super-admin-to-participant-direct-url",
+      participant: { email: credentials!.participant.email },
+      superAdmin: { email: credentials!.superAdmin.email },
+      administratorCourseUrl: null,
+      directUrlBlocked: false,
+      safeCourseViewLoaded: false,
+    };
+
+    try {
+      let administratorCourseUrl = "";
+      let administratorCourseId = "";
+      let administratorCourseTitle = "";
+
+      await test.step("Capture an administrator-only course URL", async () => {
+        await signIn(page, credentials!.superAdmin.email, credentials!.superAdmin.password);
+        const administratorCourses = await getCourses(page);
+        const administratorCourse = administratorCourses.find(
+          (course) =>
+            course.title ===
+            (credentials!.fixture?.adminCourseTitle ?? "E2E Admin Course"),
+        );
+        expect(administratorCourse).toBeDefined();
+        administratorCourseId = administratorCourse!.id;
+        administratorCourseTitle = administratorCourse!.title;
+
+        await page.goto(`/lms/courses/${administratorCourseId}`);
+        await expect(
+          page.getByRole("heading", { name: administratorCourseTitle, exact: true }),
+        ).toBeVisible();
+        await expect(page.getByText("Course content", { exact: true })).toBeVisible();
+        administratorCourseUrl = page.url();
+        evidence.administratorCourseUrl = administratorCourseUrl;
+      });
+
+      await test.step("Switch accounts and reject the captured URL", async () => {
+        await page.getByTestId("button-logout").click();
+        await expect(page).toHaveURL(/\/login$/);
+        await signIn(page, credentials!.participant.email, credentials!.participant.password);
+
+        const courseResponsePromise = page.waitForResponse(
+          (response) =>
+            response.url() ===
+              new URL(`/api/courses/${administratorCourseId}`, page.url()).toString() &&
+            response.request().method() === "GET",
+        );
+        await page.goto(administratorCourseUrl);
+        const courseResponse = await courseResponsePromise;
+        expect(courseResponse.status()).toBe(404);
+
+        await expect(page.getByRole("heading", { name: "Course unavailable", exact: true })).toBeVisible();
+        await expect(page.getByText("Course content", { exact: true })).not.toBeVisible();
+        await expect(page.getByText(administratorCourseTitle, { exact: true })).not.toBeVisible();
+        evidence.directUrlBlocked = true;
+      });
+
+      await test.step("Return the participant to the safe course view", async () => {
+        await page.getByRole("button", { name: "Return to courses", exact: true }).click();
+        await expect(page).toHaveURL(/\/lms\/courses$/);
+        await expect(page.getByRole("heading", { name: "My Courses", exact: true })).toBeVisible();
+        await expect(page.getByText(administratorCourseTitle, { exact: true })).not.toBeVisible();
+        evidence.safeCourseViewLoaded = true;
+      });
+    } finally {
+      await testInfo.attach("account-switch-evidence-super-admin-to-participant-direct-url.json", {
+        body: JSON.stringify(evidence, null, 2),
+        contentType: "application/json",
+      });
+    }
+  });
 });
