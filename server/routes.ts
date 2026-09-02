@@ -214,7 +214,14 @@ async function getConnectedZoomAccessToken(): Promise<string> {
   let accessToken = decryptZoomToken(connection.accessToken);
   if (connection.accessTokenExpiresAt.getTime() <= Date.now() + 60_000) {
     const refreshToken = decryptZoomToken(connection.refreshToken);
-    const refreshed = await refreshZoomAccessToken(refreshToken);
+    let refreshed;
+    try {
+      refreshed = await refreshZoomAccessToken(refreshToken);
+    } catch {
+      throw new Error(
+        "Zoom authorization has expired or is invalid. Reconnect the AFÁRÁ Zoom account and try again.",
+      );
+    }
     await storage.saveZoomOAuthConnection({
       accessToken: encryptZoomToken(refreshed.accessToken),
       refreshToken: encryptZoomToken(refreshed.refreshToken),
@@ -2250,7 +2257,14 @@ export async function registerRoutes(
 
       try {
         const event = await storage.updateEvent(req.params.id, updateData);
-        if (!event) return res.status(404).json({ error: "Event not found" });
+        if (!event) {
+          // A newly provisioned meeting must not be left behind when the
+          // corresponding AFÁRÁ event disappears before the update commits.
+          if (zoomSync.created) {
+            throw new Error("Event could not be saved after creating the Zoom meeting.");
+          }
+          return res.status(404).json({ error: "Event not found" });
+        }
         return res.json(event);
       } catch (error) {
         if (zoomSync.created && zoomSync.meeting) {
