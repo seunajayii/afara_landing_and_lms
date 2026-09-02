@@ -48,3 +48,4 @@ timeoutMs = 20000
 [userenv]
 
 [userenv.production]
+ZOOM_REDIRECT_URI = "https://afaraaccelerator.org/api/integrations/zoom/callback"
