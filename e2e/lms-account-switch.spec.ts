@@ -67,6 +67,7 @@ test.describe("LMS account switching", () => {
     );
 
     const evidence: Record<string, unknown> = {
+      direction: "participant-to-super-admin",
       participant: { email: credentials!.participant.email },
       superAdmin: { email: credentials!.superAdmin.email },
       participantCourseList: null,
@@ -146,7 +147,103 @@ test.describe("LMS account switching", () => {
         evidence.administratorDetailLoaded = true;
       });
     } finally {
-      await testInfo.attach("account-switch-evidence.json", {
+      await testInfo.attach("account-switch-evidence-participant-to-super-admin.json", {
+        body: JSON.stringify(evidence, null, 2),
+        contentType: "application/json",
+      });
+    }
+  });
+
+  test("refreshes course lists and details when switching super admin to participant in a fresh session", async ({
+    page,
+  }, testInfo) => {
+    const credentials = loadCredentials();
+    test.skip(
+      !credentials,
+      "Run npm run test:e2e for the seeded check, or provide the four E2E account variables.",
+    );
+
+    const evidence: Record<string, unknown> = {
+      direction: "super-admin-to-participant",
+      participant: { email: credentials!.participant.email },
+      superAdmin: { email: credentials!.superAdmin.email },
+      administratorCourseList: null,
+      participantCourseList: null,
+      administratorOnlyCourse: null,
+      participantDetailLoaded: false,
+    };
+
+    try {
+      await test.step("Load the administrator course list in a fresh session", async () => {
+        await signIn(page, credentials!.superAdmin.email, credentials!.superAdmin.password);
+        const administratorCourses = await getCourses(page);
+        const publishedAdministratorCourses = administratorCourses.filter(
+          (course) => course.status === "published",
+        );
+        evidence.administratorCourseList = publishedAdministratorCourses.map(
+          ({ id, title, status }) => ({ id, title, status }),
+        );
+
+        expect(publishedAdministratorCourses.length).toBeGreaterThan(1);
+        const administratorOnlyCourse = publishedAdministratorCourses.find(
+          (course) => course.title === "E2E Admin Course",
+        );
+        expect(administratorOnlyCourse).toBeDefined();
+        evidence.administratorOnlyCourse = {
+          id: administratorOnlyCourse!.id,
+          title: administratorOnlyCourse!.title,
+          status: administratorOnlyCourse!.status,
+        };
+        await expect(
+          page.getByText(administratorOnlyCourse!.title, { exact: true }),
+        ).toBeVisible();
+      });
+
+      await test.step("Switch accounts and verify the participant list is refreshed", async () => {
+        await page.getByTestId("button-logout").click();
+        await expect(page).toHaveURL(/\/login$/);
+
+        await signIn(page, credentials!.participant.email, credentials!.participant.password);
+        const participantCourses = await getCourses(page);
+        evidence.participantCourseList = participantCourses.map(({ id, title, status }) => ({
+          id,
+          title,
+          status,
+        }));
+
+        const administratorOnlyCourse = evidence.administratorOnlyCourse as {
+          id: string;
+          title: string;
+        };
+        expect(participantCourses.length).toBeGreaterThan(0);
+        expect(participantCourses.map((course) => course.id)).not.toContain(
+          administratorOnlyCourse.id,
+        );
+        await expect(
+          page.getByText(administratorOnlyCourse.title, { exact: true }),
+        ).not.toBeVisible();
+      });
+
+      await test.step("Load a participant course detail after the reverse switch", async () => {
+        const participantCourses = evidence.participantCourseList as Array<{
+          id: string;
+          title: string;
+          status: string;
+        }>;
+        const participantCourse = participantCourses.find(
+          (course) => course.status === "published",
+        );
+        expect(participantCourse).toBeDefined();
+
+        await page.goto(`/lms/courses/${participantCourse!.id}`);
+        await expect(
+          page.getByRole("heading", { name: participantCourse!.title, exact: true }),
+        ).toBeVisible();
+        await expect(page.getByText("Course content", { exact: true })).toBeVisible();
+        evidence.participantDetailLoaded = true;
+      });
+    } finally {
+      await testInfo.attach("account-switch-evidence-super-admin-to-participant.json", {
         body: JSON.stringify(evidence, null, 2),
         contentType: "application/json",
       });
