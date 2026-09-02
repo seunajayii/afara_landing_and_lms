@@ -54,6 +54,8 @@ import {
   isObjectStorageConfigured,
   isObjectStorageAvailable as checkObjectStorageAvailable,
   uploadPrivateVideo,
+  uploadPrivateObject,
+  downloadObjectStorageFileBytes,
   getObjectStorageFileStream,
   deleteObjectStorageFile,
   listObjectStoragePrivateVideoFiles,
@@ -4828,7 +4830,18 @@ export async function registerRoutes(
 
   const newsletterBlockSchema = z.discriminatedUnion("type", [
     z.object({ id: z.string().min(1), type: z.literal("text"), text: z.string().max(20000) }),
-    z.object({ id: z.string().min(1), type: z.literal("image"), url: z.string().trim().min(1).max(2000), alt: z.string().max(300) }),
+    z.object({
+      id: z.string().min(1),
+      type: z.literal("image"),
+      url: z.string().trim().min(1).max(2000),
+      alt: z.string().max(300),
+      asset: z.object({
+        key: z.string().regex(/^private\/newsletter-assets\/[a-f0-9-]+\.(jpg|jpeg|png|gif)$/i),
+        filename: z.string().trim().min(1).max(255),
+        contentType: z.enum(["image/jpeg", "image/png", "image/gif"]),
+        contentId: z.string().regex(/^newsletter-image-[a-f0-9-]+$/i),
+      }).optional(),
+    }),
     z.object({ id: z.string().min(1), type: z.literal("button"), label: z.string().trim().min(1).max(200), url: z.string().trim().min(1).max(2000) }),
     z.object({ id: z.string().min(1), type: z.literal("divider") }),
   ]);
@@ -4930,6 +4943,106 @@ export async function registerRoutes(
 
   const buildNewsletterHtml = (subject: string, content: string | undefined, blocks: NewsletterBlock[] | undefined) =>
     blocks?.length ? renderNewsletterHtml(subject, blocks) : content || "";
+
+  const prepareNewsletterEmail = async (
+    subject: string,
+    content: string | undefined,
+    blocks: NewsletterBlock[] | undefined,
+  ) => {
+    if (!blocks?.length) return { html: content || "", inlineImages: [] as Array<{ filename: string; content: Buffer; contentId: string; contentType: string }> };
+
+    const inlineImages: Array<{ filename: string; content: Buffer; contentId: string; contentType: string }> = [];
+    const emailBlocks = await Promise.all(blocks.map(async (block) => {
+      if (block.type !== "image" || !block.asset) return block;
+      const content = await downloadObjectStorageFileBytes(block.asset.key);
+      inlineImages.push({
+        filename: block.asset.filename,
+        content,
+        contentId: block.asset.contentId,
+        contentType: block.asset.contentType,
+      });
+      return { ...block, url: `cid:${block.asset.contentId}` };
+    }));
+
+    return { html: renderNewsletterHtml(subject, emailBlocks), inlineImages };
+  };
+
+  const newsletterImageUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 8 * 1024 * 1024 },
+    fileFilter: (_req, file, callback) => {
+      if (!["image/jpeg", "image/png", "image/gif"].includes(file.mimetype)) {
+        callback(new Error("Only JPEG, PNG, and GIF images are supported for email delivery."));
+        return;
+      }
+      callback(null, true);
+    },
+  });
+
+  app.post(
+    "/api/newsletter/assets/upload",
+    requireAuth,
+    requireAdminRole,
+    (req: Request, res: Response, next: NextFunction) => {
+      newsletterImageUpload.single("image")(req, res, (err) => {
+        if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({ error: "Image exceeds the 8 MB limit. Please upload a smaller image." });
+        }
+        if (err) return res.status(400).json({ error: err.message || "Image upload error" });
+        next();
+      });
+    },
+    async (req: Request, res: Response) => {
+      try {
+        if (!req.file) return res.status(400).json({ error: "No image provided" });
+        if (!isObjectStorageConfigured() || !(await checkObjectStorageAvailable())) {
+          return res.status(503).json({ error: "Image uploads are unavailable because private object storage is not provisioned." });
+        }
+        const extension = req.file.mimetype === "image/png" ? "png" : req.file.mimetype === "image/gif" ? "gif" : "jpg";
+        const assetId = randomUUID();
+        const contentId = `newsletter-image-${assetId}`;
+        const result = await uploadPrivateObject(`newsletter-assets/${assetId}.${extension}`, req.file.buffer);
+        const encodedKey = encodeURIComponent(result.key);
+        const encodedType = encodeURIComponent(req.file.mimetype);
+        res.status(201).json({
+          url: `/api/newsletter/assets?key=${encodedKey}&type=${encodedType}`,
+          asset: {
+            key: result.key,
+            filename: req.file.originalname || `newsletter-image.${extension}`,
+            contentType: req.file.mimetype,
+            contentId,
+          },
+        });
+      } catch (error) {
+        console.error("Newsletter image upload error:", error);
+        res.status(500).json({ error: "Failed to upload newsletter image" });
+      }
+    },
+  );
+
+  app.get("/api/newsletter/assets", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    const key = typeof req.query.key === "string" ? req.query.key : "";
+    const contentType = typeof req.query.type === "string" ? req.query.type : "";
+    const allowedTypes = new Set(["image/jpeg", "image/png", "image/gif"]);
+    if (!/^private\/newsletter-assets\/[a-f0-9-]+\.(jpg|jpeg|png|gif)$/i.test(key) || !allowedTypes.has(contentType)) {
+      return res.status(400).json({ error: "Invalid newsletter asset" });
+    }
+    try {
+      const file = await getObjectStorageFileStream(key);
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Content-Disposition", "inline");
+      res.setHeader("Cache-Control", "private, max-age=300");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      (file.body as any).pipe(res);
+    } catch (error: any) {
+      if (!res.headersSent && (error?.name === "NoSuchKey" || error?.$metadata?.httpStatusCode === 404)) {
+        return res.status(404).json({ error: "Newsletter image not found" });
+      }
+      console.error("Newsletter image preview failed:", error);
+      if (!res.headersSent) return res.status(502).json({ error: "Unable to load newsletter image" });
+      res.destroy(error);
+    }
+  });
 
   app.get("/api/newsletter/recipient-options", async (req: Request, res: Response) => {
     if (!req.session?.userId || !isAdmin(req)) return res.status(403).json({ error: "Admin access required" });
@@ -5138,9 +5251,9 @@ export async function registerRoutes(
         ...req.body,
         audience: req.body.audience || DEFAULT_NEWSLETTER_AUDIENCE,
       });
-      const html = buildNewsletterHtml(parsed.subject, parsed.content, parsed.blocks as NewsletterBlock[] | undefined);
+      const prepared = await prepareNewsletterEmail(parsed.subject, parsed.content, parsed.blocks as NewsletterBlock[] | undefined);
       const { sendNewsletter } = await import("./email");
-      const result = await sendNewsletter(parsed.subject, html, [recipientEmail]);
+      const result = await sendNewsletter(parsed.subject, prepared.html, [recipientEmail], prepared.inlineImages);
       if (!result.success) return res.status(502).json({ error: result.error || "Failed to send test email" });
       if (req.body.campaignId) {
         const campaign = await storage.getNewsletterCampaign(req.body.campaignId);
@@ -5170,9 +5283,9 @@ export async function registerRoutes(
       if (recipientEmails.length === 0) {
         return res.status(400).json({ error: "No recipients match the selected groups" });
       }
-      const html = buildNewsletterHtml(campaign.subject, campaign.content, campaign.contentJson as NewsletterBlock[] | undefined);
+      const prepared = await prepareNewsletterEmail(campaign.subject, campaign.content, campaign.contentJson as NewsletterBlock[] | undefined);
       const { sendNewsletter } = await import("./email");
-      const result = await sendNewsletter(campaign.subject, html, recipientEmails);
+      const result = await sendNewsletter(campaign.subject, prepared.html, recipientEmails, prepared.inlineImages);
       
       if (!result.success) {
         return res.status(500).json({ error: result.error || "Failed to send newsletter" });

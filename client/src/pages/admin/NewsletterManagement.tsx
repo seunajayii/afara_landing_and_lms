@@ -48,7 +48,29 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
-function BlockEditor({ block, onChange, onRemove }: { block: NewsletterBlock; onChange: (block: NewsletterBlock) => void; onRemove: () => void }) {
+type UploadedImageResponse = {
+  url: string;
+  asset: {
+    key: string;
+    filename: string;
+    contentType: "image/jpeg" | "image/png" | "image/gif";
+    contentId: string;
+  };
+};
+
+function BlockEditor({
+  block,
+  onChange,
+  onRemove,
+  onUpload,
+  uploading,
+}: {
+  block: NewsletterBlock;
+  onChange: (block: NewsletterBlock) => void;
+  onRemove: () => void;
+  onUpload: (file: File) => void;
+  uploading: boolean;
+}) {
   return (
     <div className="rounded-lg border bg-background p-4 space-y-3">
       <div className="flex items-center justify-between gap-3">
@@ -65,9 +87,35 @@ function BlockEditor({ block, onChange, onRemove }: { block: NewsletterBlock; on
         <Textarea value={block.text} onChange={(event) => onChange({ ...block, text: event.target.value })} placeholder="Write your English message here…" className="min-h-[130px]" />
       )}
       {block.type === "image" && (
-        <div className="grid sm:grid-cols-2 gap-3">
-          <div className="space-y-2"><Label>Image URL</Label><Input value={block.url} onChange={(event) => onChange({ ...block, url: event.target.value })} placeholder="https://…" /></div>
-          <div className="space-y-2"><Label>Alt text</Label><Input value={block.alt} onChange={(event) => onChange({ ...block, alt: event.target.value })} placeholder="Describe the image" /></div>
+        <div className="space-y-3">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Upload image</Label>
+              <Input
+                type="file"
+                accept="image/jpeg,image/png,image/gif"
+                disabled={uploading}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) onUpload(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                {uploading ? "Uploading…" : "JPEG, PNG, or GIF · max 8 MB. Uploaded images are embedded inline for better Gmail/Yahoo compatibility."}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Or use image URL</Label>
+              <Input
+                value={block.url.startsWith("/api/newsletter/assets") ? "" : block.url}
+                onChange={(event) => onChange({ ...block, url: event.target.value, asset: undefined })}
+                placeholder="https://…"
+              />
+            </div>
+          </div>
+          {block.url && <div className="rounded-md border bg-muted/20 p-2"><img src={block.url} alt={block.alt || "Newsletter image"} className="max-h-40 max-w-full object-contain" /></div>}
+          <div className="space-y-2"><Label>Alt text</Label><Input value={block.alt} onChange={(event) => onChange({ ...block, alt: event.target.value })} placeholder="Describe the image for accessibility" /></div>
         </div>
       )}
       {block.type === "button" && (
@@ -92,6 +140,7 @@ export default function NewsletterManagement() {
   const [applicantCohortId, setApplicantCohortId] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [testEmail, setTestEmail] = useState("");
+  const [uploadingImageBlockId, setUploadingImageBlockId] = useState<string | null>(null);
 
   const { data: subscribers = [], isLoading: loadingSubscribers } = useQuery<any[]>({ queryKey: ["/api/newsletter/subscribers"] });
   const { data: campaigns = [], isLoading: loadingCampaigns } = useQuery<NewsletterCampaign[]>({ queryKey: ["/api/newsletter/campaigns"] });
@@ -154,6 +203,30 @@ export default function NewsletterManagement() {
     onError: (error) => toast({ title: "Test email failed", description: getErrorMessage(error, "Please check the address and try again."), variant: "destructive" }),
   });
 
+  const uploadImageMutation = useMutation<UploadedImageResponse, Error, { blockId: string; file: File }>({
+    mutationFn: async ({ file }) => {
+      const formData = new FormData();
+      formData.append("image", file);
+      const response = await fetch("/api/newsletter/assets/upload", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "Failed to upload image");
+      return body as UploadedImageResponse;
+    },
+    onMutate: ({ blockId }) => setUploadingImageBlockId(blockId),
+    onSuccess: (uploaded, { blockId }) => {
+      setBlocks((current) => current.map((item) => item.id === blockId && item.type === "image"
+        ? { ...item, url: uploaded.url, asset: uploaded.asset }
+        : item));
+      toast({ title: "Image uploaded", description: "This image will be embedded inline in the email send." });
+    },
+    onError: (error) => toast({ title: "Image upload failed", description: error.message, variant: "destructive" }),
+    onSettled: () => setUploadingImageBlockId(null),
+  });
+
   const sendCampaignMutation = useMutation({
     mutationFn: async (campaignId: string) => {
       const response = await apiRequest("POST", `/api/newsletter/campaigns/${campaignId}/send`);
@@ -177,6 +250,11 @@ export default function NewsletterManagement() {
     if (type === "button") setBlocks((current) => [...current, { id: makeId(), type, label: "Learn more", url: "" }]);
     if (type === "divider") setBlocks((current) => [...current, { id: makeId(), type }]);
   };
+  const hasInvalidBlock = blocks.some((block) => (
+    (block.type === "text" && !block.text.trim())
+    || (block.type === "image" && !block.url.trim())
+    || (block.type === "button" && (!block.label.trim() || !block.url.trim()))
+  ));
 
   const handleSend = (campaign: NewsletterCampaign) => {
     if (!window.confirm(`Send “${campaign.subject}” to the selected recipient groups now? This cannot be undone.`)) return;
@@ -216,7 +294,14 @@ export default function NewsletterManagement() {
                   <div className="space-y-2"><Label htmlFor="campaign-subject">Subject line</Label><Input id="campaign-subject" value={campaignSubject} onChange={(event) => setCampaignSubject(event.target.value)} placeholder="Your next AFÁRÁ update" data-testid="input-campaign-subject" /></div>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between gap-3"><div><Label>Email content</Label><p className="text-xs text-muted-foreground mt-1">Add text, images, buttons, or dividers in the order they should appear.</p></div><Badge variant="outline">English</Badge></div>
-                    {blocks.map((block) => <BlockEditor key={block.id} block={block} onChange={(updated) => setBlocks((current) => current.map((item) => item.id === updated.id ? updated : item))} onRemove={() => setBlocks((current) => current.filter((item) => item.id !== block.id))} />)}
+                    {blocks.map((block) => <BlockEditor
+                      key={block.id}
+                      block={block}
+                      onChange={(updated) => setBlocks((current) => current.map((item) => item.id === updated.id ? updated : item))}
+                      onRemove={() => setBlocks((current) => current.filter((item) => item.id !== block.id))}
+                      onUpload={(file) => uploadImageMutation.mutate({ blockId: block.id, file })}
+                      uploading={uploadingImageBlockId === block.id}
+                    />)}
                     <div className="flex flex-wrap gap-2">
                       <Button type="button" variant="outline" size="sm" onClick={() => addBlock("text")}><Type className="h-4 w-4 mr-2" /> Add text</Button>
                       <Button type="button" variant="outline" size="sm" onClick={() => addBlock("image")}><ImageIcon className="h-4 w-4 mr-2" /> Add image</Button>
@@ -244,13 +329,13 @@ export default function NewsletterManagement() {
                   <div className="flex flex-col sm:flex-row gap-3">
                     <Button variant="outline" disabled={!campaignSubject.trim() || !testEmail.trim() || testMutation.isPending} onClick={() => testMutation.mutate()}><FlaskConical className="h-4 w-4 mr-2" />{testMutation.isPending ? "Sending test…" : "Send test email"}</Button>
                     <Input type="email" value={testEmail} onChange={(event) => setTestEmail(event.target.value)} placeholder="test recipient@example.com" className="sm:max-w-xs order-first sm:order-none" />
-                    <Button disabled={!campaignSubject.trim() || !blocks.length || !recipientPreview.data?.count || createCampaignMutation.isPending} onClick={() => createCampaignMutation.mutate()}>{createCampaignMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-2" />} Save draft</Button>
+                    <Button disabled={!campaignSubject.trim() || !blocks.length || hasInvalidBlock || !!uploadingImageBlockId || !recipientPreview.data?.count || createCampaignMutation.isPending} onClick={() => createCampaignMutation.mutate()}>{createCampaignMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-2" />} Save draft</Button>
                   </div>
                   {!testEmail && <p className="text-xs text-muted-foreground">Enter a test email address before using “Send test email”.</p>}
                 </div>
                 <div className="space-y-3 xl:sticky xl:top-4 self-start">
                   <div className="flex items-center justify-between gap-3"><div><h3 className="font-semibold">Live preview</h3><p className="text-xs text-muted-foreground">Email-style preview</p></div><Eye className="h-4 w-4 text-muted-foreground" /></div>
-                  <div className="rounded-lg border overflow-hidden bg-muted/30"><iframe title="Email preview" srcDoc={previewHtml} className="w-full h-[620px] bg-white" sandbox="" /></div>
+                  <div className="rounded-lg border overflow-hidden bg-muted/30"><iframe title="Email preview" srcDoc={previewHtml} className="w-full h-[620px] bg-white" sandbox="allow-same-origin" /></div>
                 </div>
               </CardContent>
             </Card>

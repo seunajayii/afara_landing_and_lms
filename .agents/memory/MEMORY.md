@@ -9,3 +9,4 @@
 - [Playwright E2E environment](playwright-e2e-environment.md) — Chromium needs explicit shared libraries here; Express 304 responses are not Playwright `response.ok()`
 - [Learning pod operating rules](learning-pods.md) — pod membership is cohort-scoped and server-authoritative; group work is shared and mentor-reviewed
 - [Email blast audiences](email-blast-audiences.md) — campaign audiences are dynamic database criteria resolved and deduplicated at send time; legacy HTML remains sendable
+- [Email image delivery](email-image-delivery.md) — uploaded newsletter images stay private and are sent as inline CID attachments for client compatibility

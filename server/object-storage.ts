@@ -49,10 +49,23 @@ export async function uploadPrivateVideo(
   body: Buffer,
   contentType: string,
 ): Promise<{ key: string }> {
+  return uploadPrivateObject(key, body);
+}
+
+export async function uploadPrivateObject(
+  key: string,
+  body: Buffer,
+): Promise<{ key: string }> {
   const objectName = toPrivateObjectName(key);
   const result = await getClient().uploadFromBytes(objectName, body, { compress: false });
   if (!result.ok) throw new Error(getErrorMessage(result.error));
   return { key: objectName };
+}
+
+export async function downloadObjectStorageFileBytes(key: string): Promise<Buffer> {
+  const result = await getClient().downloadAsBytes(key, { decompress: false });
+  if (!result.ok) throw new Error(getErrorMessage(result.error));
+  return result.value[0];
 }
 
 export async function getObjectStorageFileStream(

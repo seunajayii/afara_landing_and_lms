@@ -127,7 +127,13 @@ function getCohortBranding(cohort?: CohortEmailInfo | null) {
 export async function sendNewsletter(
   subject: string,
   htmlContent: string,
-  recipients: string[]
+  recipients: string[],
+  inlineImages: Array<{
+    filename: string;
+    content: Buffer;
+    contentId: string;
+    contentType: string;
+  }> = [],
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const { client, fromEmail } = await getResendClient();
@@ -136,7 +142,17 @@ export async function sendNewsletter(
       from: fromEmail,
       to: recipients,
       subject,
-      html: htmlContent
+      html: htmlContent,
+      ...(inlineImages.length > 0
+        ? {
+            attachments: inlineImages.map((image) => ({
+              filename: image.filename,
+              content: image.content,
+              content_id: image.contentId,
+              content_type: image.contentType,
+            })),
+          }
+        : {}),
     });
 
     if (error) {

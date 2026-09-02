@@ -1,6 +1,17 @@
 export type NewsletterBlock =
   | { id: string; type: "text"; text: string }
-  | { id: string; type: "image"; url: string; alt: string }
+  | {
+      id: string;
+      type: "image";
+      url: string;
+      alt: string;
+      asset?: {
+        key: string;
+        filename: string;
+        contentType: string;
+        contentId: string;
+      };
+    }
   | { id: string; type: "button"; label: string; url: string }
   | { id: string; type: "divider" };
 
@@ -37,7 +48,7 @@ function escapeHtml(value: string): string {
 
 function safeUrl(value: string): string {
   const url = value.trim();
-  if (/^(https?:\/\/|data:image\/)/i.test(url)) return escapeHtml(url);
+  if (/^(https?:\/\/|data:image\/|cid:|\/api\/newsletter\/assets\?key=)/i.test(url)) return escapeHtml(url);
   return "#";
 }
 
