@@ -1,4 +1,15 @@
+import { randomUUID } from "node:crypto";
 import { defineConfig, devices } from "@playwright/test";
+
+// The E2E command supplies this once per validation run so separately loaded
+// setup and teardown processes resolve the same credentials manifest.
+const configuredRunId = process.env.E2E_RUN_ID?.trim();
+if (process.env.E2E_SEED_DATABASE === "true" && !configuredRunId) {
+  throw new Error(
+    "E2E_RUN_ID must be set for seeded Playwright runs. Use npm run test:e2e.",
+  );
+}
+process.env.E2E_RUN_ID = configuredRunId || randomUUID();
 
 export default defineConfig({
   testDir: "./e2e",

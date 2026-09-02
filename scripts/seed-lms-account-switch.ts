@@ -8,31 +8,67 @@ import {
   cohorts,
   courseCohortAssignments,
   courses,
+  enrollments,
+  certificates,
   lessons,
+  lessonProgress,
   modules,
   users,
 } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray, or } from "drizzle-orm";
 
+const fixtureRunId =
+  process.env.E2E_RUN_ID?.trim().replace(/[^a-zA-Z0-9_-]/g, "-") ||
+  randomBytes(12).toString("hex");
+const fixtureNamespace = `e2e-account-switch-${fixtureRunId}`;
 export const ACCOUNT_SWITCH_CREDENTIALS_FILE =
   process.env.E2E_CREDENTIALS_FILE ||
-  resolve(process.cwd(), ".playwright/e2e-credentials.json");
+  resolve(process.cwd(), `.playwright/e2e-credentials-${fixtureRunId}.json`);
 
-const participantEmail = "e2e-lms-participant@afara.test";
-const superAdminEmail = "e2e-lms-superadmin@afara.test";
-const participantCohortId = "e2e-account-switch-participant-cohort";
-const adminOnlyCohortId = "e2e-account-switch-admin-only-cohort";
-const participantCourseId = "e2e-account-switch-participant-course";
-const adminCourseId = "e2e-account-switch-admin-course";
-const participantModuleId = "e2e-account-switch-participant-module";
-const adminModuleId = "e2e-account-switch-admin-module";
-const participantLessonId = "e2e-account-switch-participant-lesson";
-const adminLessonId = "e2e-account-switch-admin-lesson";
-const applicationId = "e2e-account-switch-participant-application";
+export interface AccountSwitchFixtureManifest {
+  namespace: string;
+  participantUserId: string;
+  superAdminUserId: string;
+  participantCohortId: string;
+  adminOnlyCohortId: string;
+  participantCourseId: string;
+  adminCourseId: string;
+  participantModuleId: string;
+  adminModuleId: string;
+  participantLessonId: string;
+  adminLessonId: string;
+  applicationId: string;
+  participantCourseTitle: string;
+  adminCourseTitle: string;
+}
 
 export interface AccountSwitchCredentials {
   participant: { email: string; password: string };
   superAdmin: { email: string; password: string };
+  fixture: AccountSwitchFixtureManifest;
+}
+
+function fixtureId(name: string) {
+  return `${fixtureNamespace}-${name}`;
+}
+
+function buildFixtureManifest(): AccountSwitchFixtureManifest {
+  return {
+    namespace: fixtureNamespace,
+    participantUserId: fixtureId("participant-user"),
+    superAdminUserId: fixtureId("super-admin-user"),
+    participantCohortId: fixtureId("participant-cohort"),
+    adminOnlyCohortId: fixtureId("admin-only-cohort"),
+    participantCourseId: fixtureId("participant-course"),
+    adminCourseId: fixtureId("admin-course"),
+    participantModuleId: fixtureId("participant-module"),
+    adminModuleId: fixtureId("admin-module"),
+    participantLessonId: fixtureId("participant-lesson"),
+    adminLessonId: fixtureId("admin-lesson"),
+    applicationId: fixtureId("participant-application"),
+    participantCourseTitle: `E2E Participant Course (${fixtureNamespace})`,
+    adminCourseTitle: `E2E Admin Course (${fixtureNamespace})`,
+  };
 }
 
 function assertSafeSeedEnvironment() {
@@ -46,16 +82,73 @@ function assertSafeSeedEnvironment() {
   }
 }
 
+function assertFixtureManifest(
+  manifest: AccountSwitchFixtureManifest,
+): void {
+  if (!manifest || typeof manifest.namespace !== "string") {
+    throw new Error("Refusing to clean up an invalid LMS fixture manifest.");
+  }
+  if (
+    !manifest.namespace.startsWith("e2e-account-switch-") ||
+    !/^[a-zA-Z0-9_-]+$/.test(manifest.namespace)
+  ) {
+    throw new Error("Refusing to clean up an untrusted LMS fixture namespace.");
+  }
+
+  const expectedIds: Record<string, string> = {
+    participantUserId: "participant-user",
+    superAdminUserId: "super-admin-user",
+    participantCohortId: "participant-cohort",
+    adminOnlyCohortId: "admin-only-cohort",
+    participantCourseId: "participant-course",
+    adminCourseId: "admin-course",
+    participantModuleId: "participant-module",
+    adminModuleId: "admin-module",
+    participantLessonId: "participant-lesson",
+    adminLessonId: "admin-lesson",
+    applicationId: "participant-application",
+  };
+  if (
+    Object.entries(expectedIds).some(
+      ([key, suffix]) => manifest[key as keyof AccountSwitchFixtureManifest] !== `${manifest.namespace}-${suffix}`,
+    )
+  ) {
+    throw new Error("Refusing to clean up LMS data outside the fixture namespace.");
+  }
+}
+
+function writeCredentials(credentials: AccountSwitchCredentials) {
+  mkdirSync(dirname(ACCOUNT_SWITCH_CREDENTIALS_FILE), { recursive: true });
+  writeFileSync(
+    ACCOUNT_SWITCH_CREDENTIALS_FILE,
+    `${JSON.stringify(credentials, null, 2)}\n`,
+    { mode: 0o600 },
+  );
+}
+
 export async function seedLmsAccountSwitchData(): Promise<AccountSwitchCredentials> {
   assertSafeSeedEnvironment();
 
   const now = new Date();
   const participantPassword = `e2e-${randomBytes(24).toString("hex")}`;
   const superAdminPassword = `e2e-${randomBytes(24).toString("hex")}`;
+  const fixture = buildFixtureManifest();
+  const participantEmail = `${fixture.namespace}-participant@afara.test`;
+  const superAdminEmail = `${fixture.namespace}-superadmin@afara.test`;
+  const credentials: AccountSwitchCredentials = {
+    participant: { email: participantEmail, password: participantPassword },
+    superAdmin: { email: superAdminEmail, password: superAdminPassword },
+    fixture,
+  };
+
+  // Write the manifest before changing the database so a failed setup can
+  // still be cleaned up by global teardown.
+  writeCredentials(credentials);
 
   const [participant] = await db
     .insert(users)
     .values({
+      id: fixture.participantUserId,
       email: participantEmail,
       passwordHash: await hashPassword(participantPassword),
       firstName: "E2E",
@@ -65,8 +158,9 @@ export async function seedLmsAccountSwitchData(): Promise<AccountSwitchCredentia
       mustChangePassword: false,
     })
     .onConflictDoUpdate({
-      target: users.email,
+      target: users.id,
       set: {
+        email: participantEmail,
         passwordHash: await hashPassword(participantPassword),
         firstName: "E2E",
         lastName: "Participant",
@@ -80,6 +174,7 @@ export async function seedLmsAccountSwitchData(): Promise<AccountSwitchCredentia
   const [superAdmin] = await db
     .insert(users)
     .values({
+      id: fixture.superAdminUserId,
       email: superAdminEmail,
       passwordHash: await hashPassword(superAdminPassword),
       firstName: "E2E",
@@ -89,8 +184,9 @@ export async function seedLmsAccountSwitchData(): Promise<AccountSwitchCredentia
       mustChangePassword: false,
     })
     .onConflictDoUpdate({
-      target: users.email,
+      target: users.id,
       set: {
+        email: superAdminEmail,
         passwordHash: await hashPassword(superAdminPassword),
         firstName: "E2E",
         lastName: "Super Admin",
@@ -105,10 +201,10 @@ export async function seedLmsAccountSwitchData(): Promise<AccountSwitchCredentia
     .insert(cohorts)
     .values([
       {
-        id: participantCohortId,
-        name: "E2E Participant Cohort",
-        slug: "e2e-account-switch-participant",
-        displayName: "E2E Participant Cohort",
+        id: fixture.participantCohortId,
+        name: `E2E Participant Cohort (${fixture.namespace})`,
+        slug: `${fixture.namespace}-participant`,
+        displayName: `E2E Participant Cohort (${fixture.namespace})`,
         cohortType: "core",
         status: "open",
         year: now.getFullYear(),
@@ -116,10 +212,10 @@ export async function seedLmsAccountSwitchData(): Promise<AccountSwitchCredentia
         isOpen: true,
       },
       {
-        id: adminOnlyCohortId,
-        name: "E2E Admin-only Cohort",
-        slug: "e2e-account-switch-admin-only",
-        displayName: "E2E Admin-only Cohort",
+        id: fixture.adminOnlyCohortId,
+        name: `E2E Admin-only Cohort (${fixture.namespace})`,
+        slug: `${fixture.namespace}-admin-only`,
+        displayName: `E2E Admin-only Cohort (${fixture.namespace})`,
         cohortType: "sponsored",
         status: "open",
         year: now.getFullYear(),
@@ -139,12 +235,12 @@ export async function seedLmsAccountSwitchData(): Promise<AccountSwitchCredentia
   await db
     .insert(applications)
     .values({
-      id: applicationId,
+      id: fixture.applicationId,
       email: participantEmail,
       firstName: "E2E",
       lastName: "Participant",
       status: "accepted",
-      cohortId: participantCohortId,
+      cohortId: fixture.participantCohortId,
       currentStep: 0,
       submittedAt: now,
       updatedAt: now,
@@ -154,7 +250,7 @@ export async function seedLmsAccountSwitchData(): Promise<AccountSwitchCredentia
       set: {
         email: participantEmail,
         status: "accepted",
-        cohortId: participantCohortId,
+        cohortId: fixture.participantCohortId,
         updatedAt: now,
       },
     });
@@ -163,10 +259,10 @@ export async function seedLmsAccountSwitchData(): Promise<AccountSwitchCredentia
     .insert(courses)
     .values([
       {
-        id: participantCourseId,
-        title: "E2E Participant Course",
-        description: "A published course visible to the seeded participant.",
-        shortDescription: "Participant-visible account-switch fixture.",
+        id: fixture.participantCourseId,
+        title: fixture.participantCourseTitle,
+        description: `A published course visible to the seeded participant (${fixture.namespace}).`,
+        shortDescription: `Participant-visible account-switch fixture (${fixture.namespace}).`,
         instructorId: superAdmin.id,
         durationMinutes: 60,
         status: "published",
@@ -178,10 +274,10 @@ export async function seedLmsAccountSwitchData(): Promise<AccountSwitchCredentia
         publishedAt: now,
       },
       {
-        id: adminCourseId,
-        title: "E2E Admin Course",
-        description: "A second published course visible to the seeded super admin.",
-        shortDescription: "Admin-visible account-switch fixture.",
+        id: fixture.adminCourseId,
+        title: fixture.adminCourseTitle,
+        description: `A second published course visible to the seeded super admin (${fixture.namespace}).`,
+        shortDescription: `Admin-visible account-switch fixture (${fixture.namespace}).`,
         instructorId: superAdmin.id,
         durationMinutes: 60,
         status: "published",
@@ -196,9 +292,9 @@ export async function seedLmsAccountSwitchData(): Promise<AccountSwitchCredentia
     .onConflictDoUpdate({
       target: courses.id,
       set: {
-        title: "E2E Participant Course",
-        description: "A published course visible to the seeded participant.",
-        shortDescription: "Participant-visible account-switch fixture.",
+        title: fixture.participantCourseTitle,
+        description: `A published course visible to the seeded participant (${fixture.namespace}).`,
+        shortDescription: `Participant-visible account-switch fixture (${fixture.namespace}).`,
         instructorId: superAdmin.id,
         durationMinutes: 60,
         status: "published",
@@ -212,11 +308,11 @@ export async function seedLmsAccountSwitchData(): Promise<AccountSwitchCredentia
     });
 
   await db
-    .update(courses)
+      .update(courses)
     .set({
-      title: "E2E Admin Course",
-      description: "A second published course visible to the seeded super admin.",
-      shortDescription: "Admin-visible account-switch fixture.",
+      title: fixture.adminCourseTitle,
+      description: `A second published course visible to the seeded super admin (${fixture.namespace}).`,
+      shortDescription: `Admin-visible account-switch fixture (${fixture.namespace}).`,
       instructorId: superAdmin.id,
       durationMinutes: 60,
       status: "published",
@@ -227,35 +323,35 @@ export async function seedLmsAccountSwitchData(): Promise<AccountSwitchCredentia
       learningOutcomes: ["Verify admin course visibility."],
       publishedAt: now,
     })
-    .where(eq(courses.id, adminCourseId));
+    .where(eq(courses.id, fixture.adminCourseId));
 
   await db
     .delete(courseCohortAssignments)
-    .where(eq(courseCohortAssignments.courseId, participantCourseId));
+    .where(eq(courseCohortAssignments.courseId, fixture.participantCourseId));
   await db
     .delete(courseCohortAssignments)
-    .where(eq(courseCohortAssignments.courseId, adminCourseId));
+    .where(eq(courseCohortAssignments.courseId, fixture.adminCourseId));
   await db.insert(courseCohortAssignments).values([
-    { courseId: participantCourseId, cohortId: participantCohortId },
-    { courseId: adminCourseId, cohortId: adminOnlyCohortId },
+    { courseId: fixture.participantCourseId, cohortId: fixture.participantCohortId },
+    { courseId: fixture.adminCourseId, cohortId: fixture.adminOnlyCohortId },
   ]);
 
   await db
     .insert(modules)
     .values([
       {
-        id: participantModuleId,
-        courseId: participantCourseId,
-        title: "Participant Module",
-        description: "Participant account-switch fixture module.",
+        id: fixture.participantModuleId,
+        courseId: fixture.participantCourseId,
+        title: `Participant Module (${fixture.namespace})`,
+        description: `Participant account-switch fixture module (${fixture.namespace}).`,
         orderIndex: 1,
         durationMinutes: 60,
       },
       {
-        id: adminModuleId,
-        courseId: adminCourseId,
-        title: "Admin Module",
-        description: "Admin account-switch fixture module.",
+        id: fixture.adminModuleId,
+        courseId: fixture.adminCourseId,
+        title: `Admin Module (${fixture.namespace})`,
+        description: `Admin account-switch fixture module (${fixture.namespace}).`,
         orderIndex: 1,
         durationMinutes: 60,
       },
@@ -263,8 +359,8 @@ export async function seedLmsAccountSwitchData(): Promise<AccountSwitchCredentia
     .onConflictDoUpdate({
       target: modules.id,
       set: {
-        title: "Participant Module",
-        description: "Participant account-switch fixture module.",
+        title: `Participant Module (${fixture.namespace})`,
+        description: `Participant account-switch fixture module (${fixture.namespace}).`,
         orderIndex: 1,
         durationMinutes: 60,
       },
@@ -273,21 +369,21 @@ export async function seedLmsAccountSwitchData(): Promise<AccountSwitchCredentia
   await db
     .update(modules)
     .set({
-      title: "Admin Module",
-      description: "Admin account-switch fixture module.",
+      title: `Admin Module (${fixture.namespace})`,
+      description: `Admin account-switch fixture module (${fixture.namespace}).`,
       orderIndex: 1,
       durationMinutes: 60,
     })
-    .where(eq(modules.id, adminModuleId));
+    .where(eq(modules.id, fixture.adminModuleId));
 
   await db
     .insert(lessons)
     .values([
       {
-        id: participantLessonId,
-        moduleId: participantModuleId,
-        title: "Participant Lesson",
-        description: "Participant account-switch fixture lesson.",
+        id: fixture.participantLessonId,
+        moduleId: fixture.participantModuleId,
+        title: `Participant Lesson (${fixture.namespace})`,
+        description: `Participant account-switch fixture lesson (${fixture.namespace}).`,
         orderIndex: 1,
         lessonType: "text",
         content: "Participant course detail loaded.",
@@ -295,10 +391,10 @@ export async function seedLmsAccountSwitchData(): Promise<AccountSwitchCredentia
         status: "published",
       },
       {
-        id: adminLessonId,
-        moduleId: adminModuleId,
-        title: "Admin Lesson",
-        description: "Admin account-switch fixture lesson.",
+        id: fixture.adminLessonId,
+        moduleId: fixture.adminModuleId,
+        title: `Admin Lesson (${fixture.namespace})`,
+        description: `Admin account-switch fixture lesson (${fixture.namespace}).`,
         orderIndex: 1,
         lessonType: "text",
         content: "Admin course detail loaded.",
@@ -309,8 +405,8 @@ export async function seedLmsAccountSwitchData(): Promise<AccountSwitchCredentia
     .onConflictDoUpdate({
       target: lessons.id,
       set: {
-        title: "Participant Lesson",
-        description: "Participant account-switch fixture lesson.",
+        title: `Participant Lesson (${fixture.namespace})`,
+        description: `Participant account-switch fixture lesson (${fixture.namespace}).`,
         orderIndex: 1,
         lessonType: "text",
         content: "Participant course detail loaded.",
@@ -322,28 +418,87 @@ export async function seedLmsAccountSwitchData(): Promise<AccountSwitchCredentia
   await db
     .update(lessons)
     .set({
-      title: "Admin Lesson",
-      description: "Admin account-switch fixture lesson.",
+      title: `Admin Lesson (${fixture.namespace})`,
+      description: `Admin account-switch fixture lesson (${fixture.namespace}).`,
       orderIndex: 1,
       lessonType: "text",
       content: "Admin course detail loaded.",
       durationMinutes: 60,
       status: "published",
     })
-    .where(eq(lessons.id, adminLessonId));
+    .where(eq(lessons.id, fixture.adminLessonId));
 
-  const credentials: AccountSwitchCredentials = {
-    participant: { email: participantEmail, password: participantPassword },
-    superAdmin: { email: superAdminEmail, password: superAdminPassword },
-  };
-  mkdirSync(dirname(ACCOUNT_SWITCH_CREDENTIALS_FILE), { recursive: true });
-  writeFileSync(
-    ACCOUNT_SWITCH_CREDENTIALS_FILE,
-    `${JSON.stringify(credentials, null, 2)}\n`,
-    { mode: 0o600 },
-  );
+  writeCredentials(credentials);
 
   return credentials;
+}
+
+export async function cleanupLmsAccountSwitchData(
+  credentials: AccountSwitchCredentials,
+): Promise<void> {
+  assertSafeSeedEnvironment();
+  assertFixtureManifest(credentials.fixture);
+
+  const { fixture } = credentials;
+  const userIds = [fixture.participantUserId, fixture.superAdminUserId];
+  const courseIds = [fixture.participantCourseId, fixture.adminCourseId];
+  const lessonIds = [fixture.participantLessonId, fixture.adminLessonId];
+
+  await db.transaction(async (tx) => {
+    // These are the only rows the account-switch check seeds. Delete child
+    // rows first so teardown remains safe if a check created progress.
+    await tx
+      .delete(lessonProgress)
+      .where(
+        or(
+          inArray(lessonProgress.userId, userIds),
+          inArray(lessonProgress.lessonId, lessonIds),
+        ),
+      );
+    await tx
+      .delete(enrollments)
+      .where(
+        or(
+          inArray(enrollments.userId, userIds),
+          inArray(enrollments.courseId, courseIds),
+        ),
+      );
+    await tx
+      .delete(certificates)
+      .where(
+        or(
+          inArray(certificates.userId, userIds),
+          inArray(certificates.courseId, courseIds),
+        ),
+      );
+    await tx
+      .delete(courseCohortAssignments)
+      .where(inArray(courseCohortAssignments.courseId, courseIds));
+    await tx
+      .delete(lessons)
+      .where(inArray(lessons.id, lessonIds));
+    await tx
+      .delete(modules)
+      .where(
+        inArray(modules.id, [
+          fixture.participantModuleId,
+          fixture.adminModuleId,
+        ]),
+      );
+    await tx.delete(courses).where(inArray(courses.id, courseIds));
+    await tx
+      .delete(applications)
+      .where(inArray(applications.id, [fixture.applicationId]));
+    await tx
+      .delete(cohorts)
+      .where(
+        inArray(cohorts.id, [
+          fixture.participantCohortId,
+          fixture.adminOnlyCohortId,
+        ]),
+      );
+    await tx.delete(users).where(inArray(users.id, userIds));
+  });
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

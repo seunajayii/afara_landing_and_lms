@@ -6,6 +6,9 @@ type Account = { email: string; password: string };
 type AccountSwitchCredentials = {
   participant: Account;
   superAdmin: Account;
+  fixture?: {
+    adminCourseTitle: string;
+  };
 };
 
 function loadCredentials(): AccountSwitchCredentials | null {
@@ -186,7 +189,9 @@ test.describe("LMS account switching", () => {
 
         expect(publishedAdministratorCourses.length).toBeGreaterThan(1);
         const administratorOnlyCourse = publishedAdministratorCourses.find(
-          (course) => course.title === "E2E Admin Course",
+          (course) =>
+            course.title ===
+            (credentials!.fixture?.adminCourseTitle ?? "E2E Admin Course"),
         );
         expect(administratorOnlyCourse).toBeDefined();
         evidence.administratorOnlyCourse = {
