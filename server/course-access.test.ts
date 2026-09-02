@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import express from "express";
 import test from "node:test";
 import type { Server } from "node:http";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { registerRoutes } from "./routes";
 import { storage } from "./storage";
+import { db } from "./db";
+import { applications, cohorts, learningPodMembers, learningPods, users as usersTable } from "@shared/schema";
 
 type StorageMethod = (...args: any[]) => any;
 
@@ -445,6 +449,37 @@ async function request(
   };
 }
 
+async function withDatabasePodRoutes<T>(
+  adminId: string,
+  callback: (baseUrl: string) => Promise<T>,
+): Promise<T> {
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => {
+    (req as any).session = {
+      userId: req.header("x-test-user") || adminId,
+      userRole: "admin",
+      mustChangePassword: false,
+    };
+    next();
+  });
+
+  const server = await registerRoutes(app);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", () => resolve());
+    });
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    return await callback(`http://127.0.0.1:${address.port}`);
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close(error => error ? reject(error) : resolve());
+    });
+  }
+}
+
 test("course and lesson routes keep selected cohorts isolated while sharing all-participant courses", async () => {
   await withCourseRoutes(async baseUrl => {
     const cases = [
@@ -542,6 +577,7 @@ test("course and lesson routes keep selected cohorts isolated while sharing all-
     }
   });
 });
+
 
 
 test("progress writes and protected playback reject a course outside the learner's cohort", async () => {
@@ -799,4 +835,126 @@ test("a participant cannot be active in two pods in the same cohort", async () =
       error: "A participant can only belong to one active pod in a cohort",
     });
   });
+});
+
+test("simultaneous pod creation leaves one active assignment and no empty rejected pod", async () => {
+  const participantId = randomUUID();
+  const mentorOneId = randomUUID();
+  const mentorTwoId = randomUUID();
+  const adminId = randomUUID();
+  const cohortId = randomUUID();
+  const applicationId = randomUUID();
+  const participantEmail = `${participantId}@example.com`;
+
+  await db.insert(usersTable).values([
+    {
+      id: participantId,
+      email: participantEmail,
+      firstName: "Concurrent",
+      lastName: "Participant",
+      role: "participant",
+      isActive: true,
+      mustChangePassword: false,
+    },
+    {
+      id: mentorOneId,
+      email: `${mentorOneId}@example.com`,
+      firstName: "Mentor",
+      lastName: "One",
+      role: "mentor",
+      isActive: true,
+      mustChangePassword: false,
+    },
+    {
+      id: mentorTwoId,
+      email: `${mentorTwoId}@example.com`,
+      firstName: "Mentor",
+      lastName: "Two",
+      role: "mentor",
+      isActive: true,
+      mustChangePassword: false,
+    },
+    {
+      id: adminId,
+      email: `${adminId}@example.com`,
+      firstName: "Pod",
+      lastName: "Administrator",
+      role: "admin",
+      isActive: true,
+      mustChangePassword: false,
+    },
+  ]);
+  await db.insert(cohorts).values({
+    id: cohortId,
+    name: "Concurrent assignment cohort",
+    slug: `concurrent-assignment-${cohortId}`,
+  });
+  await db.insert(applications).values({
+    id: applicationId,
+    email: participantEmail,
+    firstName: "Concurrent",
+    lastName: "Participant",
+    status: "accepted",
+    cohortId,
+  });
+
+  try {
+    await withDatabasePodRoutes(adminId, async baseUrl => {
+      const payload = (name: string, mentorId: string) => ({
+        cohortId,
+        name,
+        description: null,
+        mentorId,
+        status: "active",
+        userIds: [participantId],
+      });
+
+      const responses = await Promise.all([
+        request(baseUrl, adminId, "/api/admin/learning-pods", {
+          method: "POST",
+          body: JSON.stringify(payload("Concurrent pod one", mentorOneId)),
+        }),
+        request(baseUrl, adminId, "/api/admin/learning-pods", {
+          method: "POST",
+          body: JSON.stringify(payload("Concurrent pod two", mentorTwoId)),
+        }),
+      ]);
+
+      const successful = responses.filter(response => response.status === 201);
+      const rejected = responses.filter(response => response.status === 400);
+      assert.equal(successful.length, 1);
+      assert.equal(rejected.length, 1);
+      assert.deepEqual(rejected[0].body, {
+        error: "A participant can only belong to one active pod in a cohort",
+      });
+
+      const activeMemberships = await db.select({
+        podId: learningPodMembers.podId,
+        userId: learningPodMembers.userId,
+      })
+        .from(learningPodMembers)
+        .innerJoin(learningPods, eq(learningPodMembers.podId, learningPods.id))
+        .where(and(
+          eq(learningPods.cohortId, cohortId),
+          eq(learningPods.status, "active"),
+          eq(learningPodMembers.userId, participantId),
+          isNull(learningPodMembers.removedAt),
+        ));
+      assert.equal(activeMemberships.length, 1);
+
+      const cohortPods = await db.select({ id: learningPods.id })
+        .from(learningPods)
+        .where(eq(learningPods.cohortId, cohortId));
+      assert.equal(cohortPods.length, 1);
+      assert.equal(cohortPods[0].id, activeMemberships[0].podId);
+    });
+  } finally {
+    await db.delete(applications).where(eq(applications.id, applicationId));
+    await db.delete(learningPods).where(eq(learningPods.cohortId, cohortId));
+    await db.delete(cohorts).where(eq(cohorts.id, cohortId));
+    await db.delete(usersTable).where(eq(usersTable.id, participantId));
+    await db.delete(usersTable).where(eq(usersTable.id, mentorOneId));
+    await db.delete(usersTable).where(eq(usersTable.id, mentorTwoId));
+    await db.delete(usersTable).where(eq(usersTable.id, adminId));
+  }
 });
