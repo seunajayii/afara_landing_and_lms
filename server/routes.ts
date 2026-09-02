@@ -510,6 +510,11 @@ export async function processZoomRecordingWebhook(
   }
 }
 
+function safeZoomErrorSummary(error: string | null): string | null {
+  if (!error) return null;
+  return error.replace(/\s+/g, " ").trim().slice(0, 240) || null;
+}
+
 const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
@@ -575,7 +580,13 @@ export async function registerRoutes(
         void processZoomRecordingWebhook(eventId, dependencies);
       }
 
-      return res.status(200).json({ received: true });
+      return res.status(200).json({
+        received: true,
+        duplicate: !inserted,
+        message: inserted
+          ? "Zoom notification received."
+          : "Zoom notification already received; the existing import was kept.",
+      });
     } catch (error) {
       console.error("Zoom webhook handling failed:", error);
       return res.status(503).json({ error: "Zoom webhook is not configured" });
@@ -800,6 +811,66 @@ export async function registerRoutes(
     return role === "admin" || role === "superadmin";
   };
 
+  const getZoomAdminStatus = async () => {
+    const [webhooks, allEvents] = await Promise.all([
+      storage.getRecentZoomWebhookEvents(50),
+      storage.getAllEvents(),
+    ]);
+
+    const events = webhooks.map((webhook) => {
+      const payload = asRecord(webhook.payload);
+      const zoomPayload = asRecord(payload?.payload);
+      const zoomObject = asRecord(zoomPayload?.object);
+      const identifiers = new Set<string>();
+      for (const candidate of [zoomObject?.id, zoomObject?.uuid]) {
+        getZoomMeetingIdentifiers(candidate).forEach((identifier) => identifiers.add(identifier));
+      }
+      const recordingFiles = Array.isArray(zoomObject?.recording_files)
+        ? zoomObject.recording_files as ZoomRecordingFilePayload[]
+        : [];
+      recordingFiles.forEach((file) => {
+        getZoomMeetingIdentifiers(file.meeting_id).forEach((identifier) => identifiers.add(identifier));
+      });
+      const matchedEvent = allEvents.find((event) => {
+        const eventIdentifiers = new Set<string>();
+        for (const source of [event.zoomMeetingId, event.meetingLink]) {
+          getZoomMeetingIdentifiers(source).forEach((identifier) => eventIdentifiers.add(identifier));
+        }
+        return Array.from(identifiers).some((identifier) => eventIdentifiers.has(identifier));
+      });
+
+      return {
+        id: webhook.id,
+        eventId: webhook.eventId,
+        eventType: webhook.eventType,
+        status: webhook.status,
+        receivedAt: webhook.receivedAt,
+        processingStartedAt: webhook.processingStartedAt,
+        processedAt: webhook.processedAt,
+        error: safeZoomErrorSummary(webhook.error),
+        eventTitle: matchedEvent?.title || null,
+      };
+    });
+
+    return {
+      events,
+      counts: {
+        waiting: events.filter((event) =>
+          event.eventType === "recording.completed" && event.status === "received"
+        ).length,
+        importing: events.filter((event) =>
+          event.eventType === "recording.completed" && event.status === "processing"
+        ).length,
+        complete: events.filter((event) =>
+          event.eventType === "recording.completed" && event.status === "completed"
+        ).length,
+        failed: events.filter((event) =>
+          event.eventType === "recording.completed" && event.status === "failed"
+        ).length,
+      },
+    };
+  };
+
   app.get(
     "/api/admin/integrations/zoom/connect",
     requireAuth,
@@ -876,16 +947,49 @@ export async function registerRoutes(
     requireAdminRole,
     async (_req: Request, res: Response) => {
       try {
-        const connection = await storage.getZoomOAuthConnection();
+        const [connection, recordingSync] = await Promise.all([
+          storage.getZoomOAuthConnection(),
+          getZoomAdminStatus(),
+        ]);
         res.json({
           connected: Boolean(connection),
           accountEmail: connection?.zoomUserEmail ?? null,
           connectedAt: connection?.createdAt ?? null,
           tokenExpiresAt: connection?.accessTokenExpiresAt ?? null,
+          ...recordingSync,
         });
       } catch (error) {
         console.error("Failed to read Zoom connection status:", error);
-        res.status(500).json({ error: "Failed to read Zoom connection status." });
+        res.status(500).json({ error: "Failed to read Zoom and recording sync status." });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/integrations/zoom/webhooks/:eventId/retry",
+    requireAuth,
+    requireAdminRole,
+    async (req: Request, res: Response) => {
+      try {
+        const webhook = await storage.getZoomWebhookEvent(req.params.eventId);
+        if (!webhook) {
+          return res.status(404).json({ error: "Zoom notification not found." });
+        }
+        if (webhook.status !== "failed") {
+          return res.status(409).json({ error: "Only failed imports can be retried." });
+        }
+        void processZoomRecordingWebhook(webhook.eventId, dependencies);
+        return res.status(202).json({
+          accepted: true,
+          eventId: webhook.eventId,
+          message: "Zoom recording import retry started.",
+        });
+      } catch (error) {
+        console.error(
+          "Failed to retry Zoom recording import:",
+          error instanceof Error ? error.message : "unknown error",
+        );
+        return res.status(500).json({ error: "Zoom recording import could not be retried." });
       }
     },
   );

@@ -56,6 +56,12 @@ import {
   Users,
   Clock,
   ExternalLink,
+  RefreshCw,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  Clock3,
+  RotateCcw,
 } from "lucide-react";
 import type { Course, Event } from "@shared/schema";
 
@@ -104,6 +110,17 @@ type AdminCourse = Course & {
   }>;
 };
 
+type ZoomSyncEvent = {
+  id: string;
+  eventId: string;
+  eventType: string;
+  status: string;
+  receivedAt: string;
+  processingStartedAt: string | null;
+  processedAt: string | null;
+  error: string | null;
+  eventTitle: string | null;
+};
 const eventTypes = [
   { value: "webinar", label: "Webinar" },
   { value: "workshop", label: "Workshop" },
@@ -138,6 +155,15 @@ function getStatusBadgeVariant(status: string): "default" | "secondary" | "outli
   }
 }
 
+function getZoomStatusLabel(status: string, eventType: string): string {
+  switch (status) {
+    case "received": return eventType === "recording.completed" ? "Waiting" : "Received";
+    case "processing": return "Importing";
+    case "completed": return "Complete";
+    case "failed": return "Failed";
+    default: return "Received";
+  }
+}
 function formatDateTime(dateString: string | Date): string {
   const date = new Date(dateString);
   return date.toLocaleDateString("en-US", {
@@ -211,6 +237,38 @@ export default function EventManagement() {
   });
   const { data: courses } = useQuery<AdminCourse[]>({
     queryKey: ["/api/courses"],
+  });
+  const {
+    data: zoomSync,
+    isLoading: isZoomSyncLoading,
+    isFetching: isZoomSyncFetching,
+  } = useQuery<ZoomSyncStatusResponse>({
+    queryKey: ["/api/admin/integrations/zoom/status"],
+    refetchInterval: 10000,
+    staleTime: 5000,
+  });
+  const retryZoomImportMutation = useMutation({
+    mutationFn: async (eventId: string) => {
+      const response = await apiRequest(
+        "POST",
+        `/api/admin/integrations/zoom/webhooks/${encodeURIComponent(eventId)}/retry`,
+      );
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/integrations/zoom/status"] });
+      toast({
+        title: "Retry started",
+        description: "The Zoom recording import is being attempted again.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Retry failed",
+        description: parseApiError(error),
+        variant: "destructive",
+      });
+    },
   });
   const lessonOptions = (courses || []).flatMap((course) =>
     (course.modules || []).flatMap((module) =>
@@ -415,6 +473,133 @@ export default function EventManagement() {
               />
             </div>
           </div>
+
+          <Card className="mb-8" data-testid="card-zoom-sync-status">
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Video className="h-5 w-5 text-primary" />
+                    Zoom recording sync
+                  </CardTitle>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Recent webhook receipts and protected recording imports
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/admin/integrations/zoom/status"] })}
+                  disabled={isZoomSyncFetching}
+                  data-testid="button-refresh-zoom-sync"
+                >
+                  <RefreshCw className={`mr-2 h-4 w-4 ${isZoomSyncFetching ? "animate-spin" : ""}`} />
+                  Refresh
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isZoomSyncLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-16 w-full" />
+                </div>
+              ) : (
+                <>
+                  <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <div className="rounded-md border bg-muted/20 p-3">
+                      <p className="text-xs text-muted-foreground">Waiting</p>
+                      <p className="mt-1 text-xl font-semibold">{zoomSync?.counts.waiting ?? 0}</p>
+                    </div>
+                    <div className="rounded-md border bg-muted/20 p-3">
+                      <p className="text-xs text-muted-foreground">Importing</p>
+                      <p className="mt-1 text-xl font-semibold">{zoomSync?.counts.importing ?? 0}</p>
+                    </div>
+                    <div className="rounded-md border bg-muted/20 p-3">
+                      <p className="text-xs text-muted-foreground">Complete</p>
+                      <p className="mt-1 text-xl font-semibold">{zoomSync?.counts.complete ?? 0}</p>
+                    </div>
+                    <div className="rounded-md border bg-muted/20 p-3">
+                      <p className="text-xs text-muted-foreground">Failed</p>
+                      <p className="mt-1 text-xl font-semibold">{zoomSync?.counts.failed ?? 0}</p>
+                    </div>
+                  </div>
+                  {zoomSync?.events.length ? (
+                    <div className="space-y-3">
+                      {zoomSync.events.map((webhook) => {
+                        const StatusIcon = getZoomStatusIcon(webhook.status);
+                        const isRecordingWebhook = webhook.eventType === "recording.completed";
+                        return (
+                          <div
+                            key={webhook.id}
+                            className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-start sm:justify-between"
+                            data-testid={`zoom-sync-event-${webhook.eventId}`}
+                          >
+                            <div className="flex min-w-0 items-start gap-3">
+                              <StatusIcon className={`mt-0.5 h-4 w-4 shrink-0 ${
+                                webhook.status === "failed"
+                                  ? "text-destructive"
+                                  : webhook.status === "completed"
+                                    ? "text-green-600"
+                                    : webhook.status === "processing"
+                                      ? "animate-spin text-primary"
+                                      : "text-muted-foreground"
+                              }`} />
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="font-medium">
+                                    {webhook.eventTitle || "Zoom recording notification"}
+                                  </p>
+                                  <Badge variant={getZoomStatusVariant(webhook.status)}>
+                                    {getZoomStatusLabel(webhook.status, webhook.eventType)}
+                                  </Badge>
+                                </div>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {webhook.eventType} · received {formatDateTime(webhook.receivedAt)}
+                                </p>
+                                {webhook.error && (
+                                  <p className="mt-2 text-sm text-destructive">
+                                    {webhook.error}
+                                  </p>
+                                )}
+                                {webhook.status === "received" && (
+                                  <p className="mt-2 text-sm text-muted-foreground">
+                                    {isRecordingWebhook
+                                      ? "Notification already received and is waiting for import."
+                                      : "Notification already received; no recording import is required."}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            {webhook.status === "failed" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => retryZoomImportMutation.mutate(webhook.eventId)}
+                                disabled={retryZoomImportMutation.isPending}
+                                data-testid={`button-retry-zoom-${webhook.eventId}`}
+                              >
+                                {retryZoomImportMutation.isPending ? (
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                  <RotateCcw className="mr-2 h-4 w-4" />
+                                )}
+                                Retry import
+                              </Button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                      No Zoom recording notifications have been received yet.
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
 
           {isLoading ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -1085,4 +1270,32 @@ export default function EventManagement() {
       </main>
     </div>
   );
+}
+
+function getZoomStatusVariant(status: string): "default" | "secondary" | "outline" | "destructive" {
+  switch (status) {
+    case "completed": return "default";
+    case "failed": return "destructive";
+    case "processing": return "outline";
+    default: return "secondary";
+  }
+}
+
+type ZoomSyncStatusResponse = {
+  events: ZoomSyncEvent[];
+  counts: {
+    waiting: number;
+    importing: number;
+    complete: number;
+    failed: number;
+  };
+};
+
+function getZoomStatusIcon(status: string) {
+  switch (status) {
+    case "completed": return CheckCircle2;
+    case "failed": return AlertCircle;
+    case "processing": return Loader2;
+    default: return Clock3;
+  }
 }

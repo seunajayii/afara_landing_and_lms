@@ -143,6 +143,7 @@ export interface IStorage {
     eventType: string;
     payload: unknown;
   }): Promise<boolean>;
+  getRecentZoomWebhookEvents(limit?: number): Promise<ZoomWebhookEvent[]>;
   getZoomWebhookEvent(eventId: string): Promise<ZoomWebhookEvent | undefined>;
   claimZoomWebhookEvent(eventId: string): Promise<ZoomWebhookEvent | undefined>;
   markZoomWebhookEventCompleted(eventId: string): Promise<void>;
@@ -797,6 +798,13 @@ export class DatabaseStorage implements IStorage {
       .onConflictDoNothing({ target: zoomWebhookEvents.eventId })
       .returning({ id: zoomWebhookEvents.id });
     return inserted.length > 0;
+  }
+
+  async getRecentZoomWebhookEvents(limit = 50): Promise<ZoomWebhookEvent[]> {
+    const safeLimit = Math.max(1, Math.min(Math.floor(limit), 100));
+    return db.select().from(zoomWebhookEvents)
+      .orderBy(desc(zoomWebhookEvents.receivedAt))
+      .limit(safeLimit);
   }
 
   async getZoomWebhookEvent(eventId: string): Promise<ZoomWebhookEvent | undefined> {
