@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   BarChart2,
   Brain,
@@ -471,7 +472,7 @@ export default function CohortAnalytics() {
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <FolderOpen className="h-4 w-4 text-primary" />
-                Cohorts
+                Analyze cohort
               </CardTitle>
               <a href="/admin/cohorts">
                 <Button size="sm" variant="outline" className="gap-1.5" data-testid="link-manage-cohorts">
@@ -481,53 +482,53 @@ export default function CohortAnalytics() {
               </a>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  size="sm"
-                  variant={selectedCohortId === null ? "default" : "outline"}
-                  onClick={() => { setSelectedCohortId(null); setNarrative(null); }}
-                  data-testid="button-cohort-all"
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <Select
+                  value={selectedCohortId ?? "all"}
+                  onValueChange={(value) => {
+                    setSelectedCohortId(value === "all" ? null : value);
+                    setNarrative(null);
+                  }}
                 >
-                  All Applications
-                </Button>
+                  <SelectTrigger className="w-full sm:max-w-md" data-testid="select-cohort-analytics">
+                    <SelectValue placeholder="Choose a cohort to analyze" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All applications</SelectItem>
+                    {cohorts.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.displayName || c.name}{c.year ? ` · ${c.year}` : ""}{c.isOpen ? " · Open" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-                {cohorts.map((c) => (
-                  <div key={c.id} className="flex items-center gap-0.5">
-                    <Button
-                      size="sm"
-                      variant={selectedCohortId === c.id ? "default" : "outline"}
-                      onClick={() => { setSelectedCohortId(c.id); setNarrative(null); }}
-                      data-testid={`button-cohort-${c.id}`}
-                      className="gap-1.5"
-                    >
-                      {c.isOpen
-                        ? <LockOpen className="h-3 w-3 text-green-600" />
-                        : <LockKeyhole className="h-3 w-3 opacity-40" />
-                      }
-                      {c.displayName || c.name}
-                      {c.year && <span className="opacity-60 text-xs">{c.year}</span>}
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7"
-                      title={c.isOpen ? "Close applications" : "Open applications"}
-                      onClick={() => toggleOpenMutation.mutate({ id: c.id, open: !c.isOpen })}
-                      disabled={toggleOpenMutation.isPending}
-                      data-testid={`button-toggle-open-${c.id}`}
-                    >
-                      {c.isOpen
-                        ? <LockKeyhole className="h-3 w-3 text-amber-600" />
-                        : <LockOpen className="h-3 w-3 text-green-600" />
-                      }
-                    </Button>
-                  </div>
-                ))}
+                {selectedCohort && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 self-start sm:self-auto"
+                    title={selectedCohort.isOpen ? "Close applications" : "Open applications"}
+                    onClick={() => toggleOpenMutation.mutate({ id: selectedCohort.id, open: !selectedCohort.isOpen })}
+                    disabled={toggleOpenMutation.isPending}
+                    data-testid="button-toggle-selected-cohort-open"
+                  >
+                    {selectedCohort.isOpen
+                      ? <><LockKeyhole className="h-3.5 w-3.5 text-amber-600" /> Close applications</>
+                      : <><LockOpen className="h-3.5 w-3.5 text-green-600" /> Open applications</>
+                    }
+                  </Button>
+                )}
               </div>
 
               {cohorts.length === 0 && (
                 <p className="text-xs text-muted-foreground mt-3">
                   No cohorts yet. Use "Manage Cohorts" to create AFARA's recurring cohorts (e.g. AFARA CORE, DOREWA).
+                </p>
+              )}
+              {cohorts.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-3">
+                  Choose a cohort to scope applications, evaluation scores, recommendation breakdowns, sector/country summaries, candidate lists, and exports.
                 </p>
               )}
             </CardContent>
