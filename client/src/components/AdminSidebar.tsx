@@ -18,6 +18,7 @@ import {
   Menu,
   BarChart2,
   Network,
+  TrendingUp,
 } from "lucide-react";
 import afaraLogo from "@assets/AFARA Image 1_1759521116826.png";
 
@@ -27,6 +28,7 @@ const adminNavItems = [
   { path: "/admin/cohorts", label: "Cohorts", icon: FolderOpen },
   { path: "/admin/cohort-analytics", label: "Cohort Analytics", icon: BarChart2 },
   { path: "/admin/learning-pods", label: "Learning Pods", icon: Network },
+  { path: "/admin/progress-reporting", label: "Progress Reporting", icon: TrendingUp },
   { path: "/admin/courses", label: "Course Management", icon: BookOpen },
   { path: "/admin/users", label: "User Management", icon: Users },
   { path: "/admin/resources", label: "Resource Management", icon: FolderOpen },

@@ -19,6 +19,7 @@ import {
   Menu,
   X,
   Info,
+  TrendingUp,
 } from "lucide-react";
 import afaraLogo from "@assets/AFARA Image 1_1759521116826.png";
 
@@ -98,6 +99,7 @@ const navItems = [
   { path: "/lms/resources", label: "Resources", icon: FolderOpen },
   { path: "/lms/community", label: "Community", icon: MessageSquare },
   { path: "/lms/certificates", label: "Certificates", icon: Award },
+  { path: "/lms/progress", label: "My Progress", icon: TrendingUp },
   { path: "/lms/profile", label: "Profile", icon: UserCircle },
 ];
 

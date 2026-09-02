@@ -133,6 +133,37 @@ const learningPodReviewSchema = z.object({
   feedback: z.string().trim().min(1).max(10000),
 });
 
+const progressAreaUpdateSchema = z.object({
+  status: z.enum(["not_started", "emerging", "progressing", "strong_progress", "achieved", "not_applicable"]),
+  evidence: z.string().trim().max(5000).optional(),
+});
+
+const progressReviewPayloadSchema = z.object({
+  reviewType: z.enum(["baseline", "midpoint", "final"]),
+  status: z.enum(["draft", "published"]).default("draft"),
+  participantReflection: z.string().trim().max(10000).nullable().optional(),
+  summary: z.string().trim().max(10000).nullable().optional(),
+  achievements: z.string().trim().max(10000).nullable().optional(),
+  challenges: z.string().trim().max(10000).nullable().optional(),
+  nextSteps: z.string().trim().max(10000).nullable().optional(),
+  areaUpdates: z.record(progressAreaUpdateSchema).optional(),
+});
+
+const progressMilestonePayloadSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(5000).nullable().optional(),
+  targetAt: z.string().datetime().nullable().optional(),
+  status: z.enum(["planned", "in_progress", "completed", "blocked"]).default("planned"),
+  evidence: z.string().trim().max(5000).nullable().optional(),
+});
+
+const progressFeedbackPayloadSchema = z.object({
+  content: z.string().trim().min(1).max(10000),
+  visibility: z.enum(["participant", "internal"]).default("participant"),
+  contextType: z.string().trim().max(80).nullable().optional(),
+  contextId: z.string().trim().max(120).nullable().optional(),
+});
+
 const activeLearningPodDistributions = new Set<string>();
 
 const youtubeVideoResourceSchema = insertResourceSchema.superRefine((resource, ctx) => {
@@ -1858,6 +1889,185 @@ export async function registerRoutes(
     return participants;
   };
 
+  const progressAreas = [
+    { key: "learning_application", label: "Learning & application" },
+    { key: "project_business_development", label: "Project & business development" },
+    { key: "leadership_execution", label: "Leadership & execution" },
+    { key: "financial_operational_readiness", label: "Financial & operational readiness" },
+    { key: "collaboration_network_engagement", label: "Collaboration & network engagement" },
+  ];
+
+  const canAccessParticipantProgress = async (req: Request, participant: any) => {
+    if (isAdminSession(req) || participant.userId === req.session.userId) return true;
+    if (req.session.userRole === "facilitator") return true;
+    if (req.session.userRole === "mentor") {
+      const pods = await storage.getLearningPodsByUser(participant.userId);
+      return pods.some((pod) => pod.cohortId === participant.cohortId && pod.mentorId === req.session.userId);
+    }
+    return false;
+  };
+
+  const getProgressReport = async (participant: any, includeInternal = false) => {
+    const [user, cohort, application, evaluation, milestones, reviews, feedback, allCourses, enrollments, lessonProgress, sessions] = await Promise.all([
+      storage.getUser(participant.userId),
+      storage.getCohort(participant.cohortId),
+      participant.applicationId ? storage.getApplication(participant.applicationId) : Promise.resolve(undefined),
+      participant.applicationId ? storage.getApplicationEvaluation(participant.applicationId) : Promise.resolve(undefined),
+      storage.getProgressMilestones(participant.id),
+      storage.getProgressReviews(participant.id),
+      storage.getProgressFeedback(participant.id, includeInternal),
+      storage.getAllCourses(),
+      storage.getEnrollmentsByUser(participant.userId),
+      storage.getLessonProgressByUser(participant.userId),
+      storage.getMentorshipSessionsByMentee(participant.userId),
+    ]);
+    if (!user || !cohort) return undefined;
+
+    const assignedCourses = [];
+    for (const course of allCourses) {
+      if (course.status !== "published") continue;
+      if (course.audience === "selected" && !(await storage.isCourseAssignedToCohort(course.id, participant.cohortId))) continue;
+      const modules = await storage.getModulesByCourse(course.id);
+      const lessons = (await Promise.all(modules.map((module) => storage.getLessonsByModule(module.id))))
+        .flat()
+        .filter((lesson) => lesson.status === "published");
+      const completedLessons = lessons.filter((lesson) =>
+        lessonProgress.some((progress) => progress.lessonId === lesson.id && progress.status === "completed"),
+      ).length;
+      const enrollment = enrollments.find((entry) => entry.courseId === course.id);
+      assignedCourses.push({
+        id: course.id,
+        title: course.title,
+        totalLessons: lessons.length,
+        completedLessons,
+        progressPercent: lessons.length ? Math.round((completedLessons / lessons.length) * 100) : (enrollment?.progressPercent ?? 0),
+        completed: lessons.length > 0 && completedLessons === lessons.length,
+        enrolled: Boolean(enrollment),
+      });
+    }
+
+    const pods = (await storage.getLearningPodsByUser(participant.userId))
+      .filter((pod) => pod.cohortId === participant.cohortId);
+    const podReports = await Promise.all(pods.map(async (pod) => {
+      const [mentor, members, assignments] = await Promise.all([
+        storage.getUser(pod.mentorId),
+        storage.getLearningPodMembers(pod.id),
+        storage.getLearningPodAssignments(pod.id),
+      ]);
+      let submitted = 0;
+      let reviewed = 0;
+      const feedbackEvidence: Array<{ id: string; content: string; sourceType: string; visibility: string; contextType: string; contextId: string; createdAt: Date }> = [];
+      for (const assignment of assignments.filter((entry) => entry.status === "published")) {
+        const submissions = await storage.getLearningPodSubmissions(assignment.id, pod.id);
+        const relevant = assignment.workType === "group"
+          ? submissions
+          : submissions.filter((submission) => submission.submitterId === participant.userId);
+        if (relevant.length > 0) submitted += 1;
+        if (relevant.some((submission) => submission.score !== null)) reviewed += 1;
+        relevant.filter((submission) => submission.feedback).forEach((submission) => {
+          feedbackEvidence.push({
+            id: `submission-${submission.id}`,
+            content: submission.feedback!,
+            sourceType: "mentor",
+            visibility: "participant",
+            contextType: "pod_submission",
+            contextId: submission.id,
+            createdAt: submission.evaluatedAt || submission.updatedAt,
+          });
+        });
+      }
+      return {
+        id: pod.id,
+        name: pod.name,
+        mentor: mentor ? { id: mentor.id, name: `${mentor.firstName} ${mentor.lastName}` } : null,
+        memberCount: members.filter((member) => !member.removedAt).length,
+        assignmentCount: assignments.filter((entry) => entry.status === "published").length,
+        submittedAssignments: submitted,
+        reviewedAssignments: reviewed,
+        feedback: feedbackEvidence,
+      };
+    }));
+
+    const completedSessions = sessions.filter((session) => session.status === "completed");
+    const submissionFeedback = podReports.flatMap((pod: any) => pod.feedback || []);
+    const sessionFeedback = completedSessions
+      .filter((session) => Boolean(session.feedback || session.notes))
+      .map((session) => ({
+        id: `session-${session.id}`,
+        content: session.feedback || session.notes,
+        sourceType: "mentor",
+        visibility: "participant",
+        contextType: "mentorship_session",
+        contextId: session.id,
+        createdAt: session.scheduledAt,
+      }));
+    const completedCourses = assignedCourses.filter((course) => course.completed).length;
+    const courseCompletionPercent = assignedCourses.length ? Math.round((completedCourses / assignedCourses.length) * 100) : 0;
+    const assignmentCount = podReports.reduce((total, pod) => total + pod.assignmentCount, 0);
+    const submittedAssignments = podReports.reduce((total, pod) => total + pod.submittedAssignments, 0);
+    const reviewedAssignments = podReports.reduce((total, pod) => total + pod.reviewedAssignments, 0);
+
+    return {
+      participant: {
+        ...participant,
+        user: sanitizeUser(user),
+      },
+      cohort: { id: cohort.id, name: cohort.name, displayName: cohort.displayName, year: cohort.year, programStartAt: cohort.programStartAt, programEndAt: cohort.programEndAt },
+      project: {
+        name: participant.projectName,
+        description: participant.projectDescription,
+        stage: participant.projectStage,
+      },
+      application: application ? {
+        id: application.id,
+        companyName: application.companyName,
+        projectStage: application.projectStage,
+        projectCurrentStatus: application.projectCurrentStatus,
+        primarySector: application.primarySector,
+        projectedImpact: application.projectedImpact,
+        businessImpact: application.businessImpact,
+        keyActivitiesForNextStage: application.keyActivitiesForNextStage,
+      } : null,
+      admissionEvaluation: evaluation ? {
+        overallScore: evaluation.overallScore,
+        recommendation: evaluation.recommendation,
+        summary: evaluation.summary,
+        strengths: evaluation.strengths,
+        concerns: evaluation.concerns,
+        evaluatedAt: evaluation.evaluatedAt,
+      } : null,
+      progressAreas,
+      milestones,
+      reviews,
+      feedback: [...feedback, ...submissionFeedback, ...sessionFeedback].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      ),
+      courses: assignedCourses,
+      pods: podReports,
+      activity: {
+        assignedCourses: assignedCourses.length,
+        completedCourses,
+        courseCompletionPercent,
+        assignments: assignmentCount,
+        submittedAssignments,
+        reviewedAssignments,
+        completedMentorshipSessions: completedSessions.length,
+      },
+    };
+  };
+
+  const ensureCohortProgressRecords = async (cohortId: string) => {
+    const accepted = await getAcceptedCohortParticipants(cohortId);
+    const records = [];
+    for (const applicant of accepted) {
+      const application = await storage.getApplication(applicant.applicationId);
+      if (!application) continue;
+      const record = await storage.ensureCohortParticipantFromApplication(application, applicant.id);
+      if (record) records.push(record);
+    }
+    return records;
+  };
+
   const getLearningPodResponse = async (pod: any, req: Request, includeAllSubmissions = false) => {
     const cohort = await storage.getCohort(pod.cohortId);
     const mentor = await storage.getUser(pod.mentorId);
@@ -1912,6 +2122,204 @@ export async function registerRoutes(
     }
     return assigned;
   };
+
+  app.get("/api/progress-reporting/me", requireAuth, async (req: Request, res: Response) => {
+    try {
+      let records = await storage.getCohortParticipantsByUser(req.session.userId!);
+      if (records.length === 0) {
+        const user = await storage.getUser(req.session.userId!);
+        if (user) {
+          const acceptedApplications = (await storage.getApplicationsByStatus("accepted"))
+            .filter((application) => application.email.toLowerCase() === user.email.toLowerCase());
+          for (const application of acceptedApplications) {
+            await storage.ensureCohortParticipantFromApplication(application, user.id);
+          }
+          records = await storage.getCohortParticipantsByUser(user.id);
+        }
+      }
+      const cohortId = typeof req.query.cohortId === "string" ? req.query.cohortId : undefined;
+      const participant = records.find((record) => !cohortId || record.cohortId === cohortId);
+      if (!participant) return res.json({ report: null, reports: [] });
+      res.json({ report: await getProgressReport(participant, false), reports: records });
+    } catch (error) {
+      console.error("Failed to fetch participant progress report:", error);
+      res.status(500).json({ error: "Failed to fetch participant progress" });
+    }
+  });
+
+  app.get("/api/progress-reporting/participants/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const participant = await storage.getCohortParticipant(req.params.id);
+      if (!participant) return res.status(404).json({ error: "Participant progress record not found" });
+      if (!await canAccessParticipantProgress(req, participant)) return res.status(403).json({ error: "Access denied" });
+      const includeInternal = isAdminSession(req) || req.session.userRole === "facilitator" || req.session.userRole === "mentor";
+      const report = await getProgressReport(participant, includeInternal);
+      if (!report) return res.status(404).json({ error: "Participant progress report unavailable" });
+      res.json(report);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch participant progress" });
+    }
+  });
+
+  app.get("/api/admin/progress/cohorts/:cohortId", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const cohort = await storage.getCohort(req.params.cohortId);
+      if (!cohort) return res.status(404).json({ error: "Cohort not found" });
+      const records = await ensureCohortProgressRecords(cohort.id);
+      const reports = (await Promise.all(records.map((record) => getProgressReport(record, true)))).filter(Boolean);
+      const reportRows = reports.map((report: any) => ({
+        participant: report.participant,
+        project: report.project,
+        activity: report.activity,
+        milestones: report.milestones,
+        reviews: report.reviews,
+        pods: report.pods,
+      }));
+      const active = records.filter((record) => record.status === "active").length;
+      const completed = records.filter((record) => record.status === "completed").length;
+      const courseCompletionPercent = reportRows.length
+        ? Math.round(reportRows.reduce((sum, row) => sum + row.activity.courseCompletionPercent, 0) / reportRows.length)
+        : 0;
+      res.json({
+        cohort: { id: cohort.id, name: cohort.name, displayName: cohort.displayName, year: cohort.year, programStartAt: cohort.programStartAt, programEndAt: cohort.programEndAt },
+        participants: reportRows,
+        summary: {
+          totalParticipants: reportRows.length,
+          activeParticipants: active,
+          completedParticipants: completed,
+          courseCompletionPercent,
+          milestonesCompleted: reportRows.reduce((sum, row) => sum + row.milestones.filter((milestone: any) => milestone.status === "completed").length, 0),
+          assignmentsSubmitted: reportRows.reduce((sum, row) => sum + row.activity.submittedAssignments, 0),
+        },
+      });
+    } catch (error) {
+      console.error("Failed to fetch cohort progress report:", error);
+      res.status(500).json({ error: "Failed to fetch cohort progress" });
+    }
+  });
+
+  app.get("/api/admin/progress/pods/:podId", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const pod = await storage.getLearningPod(req.params.podId);
+      if (!pod) return res.status(404).json({ error: "Learning pod not found" });
+      await ensureCohortProgressRecords(pod.cohortId);
+      const members = await storage.getLearningPodMembers(pod.id);
+      const reports = [];
+      for (const member of members.filter((entry) => !entry.removedAt)) {
+        const participant = await storage.getCohortParticipantByUserAndCohort(member.userId, pod.cohortId);
+        if (!participant) continue;
+        const report = await getProgressReport(participant, true);
+        if (report) reports.push(report);
+      }
+      res.json({
+        pod: { ...pod, mentor: await storage.getUser(pod.mentorId) },
+        participants: reports,
+        summary: {
+          totalParticipants: reports.length,
+          courseCompletionPercent: reports.length ? Math.round(reports.reduce((sum, report: any) => sum + report.activity.courseCompletionPercent, 0) / reports.length) : 0,
+          assignmentsSubmitted: reports.reduce((sum, report: any) => sum + report.activity.submittedAssignments, 0),
+          assignmentsReviewed: reports.reduce((sum, report: any) => sum + report.activity.reviewedAssignments, 0),
+          milestonesCompleted: reports.reduce((sum, report: any) => sum + report.milestones.filter((milestone: any) => milestone.status === "completed").length, 0),
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch pod progress" });
+    }
+  });
+
+  app.post("/api/progress-reporting/participants/:id/milestones", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const participant = await storage.getCohortParticipant(req.params.id);
+      if (!participant) return res.status(404).json({ error: "Participant progress record not found" });
+      if (!await canAccessParticipantProgress(req, participant)) return res.status(403).json({ error: "Access denied" });
+      const data = progressMilestonePayloadSchema.parse(req.body);
+      const milestone = await storage.createProgressMilestone({
+        participantId: participant.id,
+        title: data.title,
+        description: data.description ?? null,
+        targetAt: data.targetAt ? new Date(data.targetAt) : null,
+        status: data.status,
+        evidence: data.evidence ?? null,
+        createdById: req.session.userId!,
+      });
+      res.status(201).json(milestone);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      res.status(500).json({ error: "Failed to create milestone" });
+    }
+  });
+
+  app.patch("/api/progress-reporting/milestones/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const existing = await storage.getProgressMilestone(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Milestone not found" });
+      const participant = await storage.getCohortParticipant(existing.participantId);
+      if (!participant || !await canAccessParticipantProgress(req, participant)) return res.status(403).json({ error: "Access denied" });
+      const data = progressMilestonePayloadSchema.partial().parse(req.body);
+      const milestone = await storage.updateProgressMilestone(existing.id, {
+        ...(data.title !== undefined ? { title: data.title } : {}),
+        ...(data.description !== undefined ? { description: data.description } : {}),
+        ...(data.targetAt !== undefined ? { targetAt: data.targetAt ? new Date(data.targetAt) : null } : {}),
+        ...(data.status !== undefined ? { status: data.status } : {}),
+        ...(data.evidence !== undefined ? { evidence: data.evidence } : {}),
+      });
+      res.json(milestone);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      res.status(500).json({ error: "Failed to update milestone" });
+    }
+  });
+
+  app.patch("/api/progress-reporting/participants/:id/reviews/:reviewType", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const participant = await storage.getCohortParticipant(req.params.id);
+      if (!participant) return res.status(404).json({ error: "Participant progress record not found" });
+      if (!await canAccessParticipantProgress(req, participant)) return res.status(403).json({ error: "Access denied" });
+      const data = progressReviewPayloadSchema.parse({ ...req.body, reviewType: req.params.reviewType });
+      const isStaff = isAdminSession(req) || req.session.userRole === "facilitator" || req.session.userRole === "mentor";
+      const existingReview = await storage.getProgressReview(participant.id, data.reviewType);
+      const review = await storage.upsertProgressReview({
+        participantId: participant.id,
+        reviewType: data.reviewType,
+        status: isStaff ? data.status : (existingReview?.status ?? "draft"),
+        reviewerId: isStaff ? req.session.userId! : (existingReview?.reviewerId ?? null),
+        participantReflection: data.participantReflection ?? existingReview?.participantReflection ?? null,
+        summary: isStaff ? (data.summary ?? null) : (existingReview?.summary ?? null),
+        achievements: isStaff ? (data.achievements ?? null) : (existingReview?.achievements ?? null),
+        challenges: isStaff ? (data.challenges ?? null) : (existingReview?.challenges ?? null),
+        nextSteps: isStaff ? (data.nextSteps ?? null) : (existingReview?.nextSteps ?? null),
+        areaUpdates: isStaff ? (data.areaUpdates ?? {}) : (existingReview?.areaUpdates ?? {}),
+        completedAt: isStaff && data.status === "published" ? new Date() : (existingReview?.completedAt ?? null),
+      });
+      res.json(review);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      res.status(500).json({ error: "Failed to save progress review" });
+    }
+  });
+
+  app.post("/api/progress-reporting/participants/:id/feedback", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const participant = await storage.getCohortParticipant(req.params.id);
+      if (!participant) return res.status(404).json({ error: "Participant progress record not found" });
+      if (!await canAccessParticipantProgress(req, participant)) return res.status(403).json({ error: "Access denied" });
+      const data = progressFeedbackPayloadSchema.parse(req.body);
+      const isStaff = isAdminSession(req) || req.session.userRole === "facilitator" || req.session.userRole === "mentor";
+      const feedback = await storage.createProgressFeedback({
+        participantId: participant.id,
+        sourceType: isStaff ? (isAdminSession(req) ? "admin" : req.session.userRole === "mentor" ? "mentor" : "facilitator") : "participant",
+        authorId: req.session.userId!,
+        contextType: data.contextType ?? null,
+        contextId: data.contextId ?? null,
+        content: data.content,
+        visibility: isStaff ? data.visibility : "participant",
+      });
+      res.status(201).json(feedback);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      res.status(500).json({ error: "Failed to save progress feedback" });
+    }
+  });
 
   const validateCourseCohorts = async (cohortIds: string[]): Promise<string | null> => {
     const uniqueCohortIds = Array.from(new Set(cohortIds));
@@ -4530,15 +4938,16 @@ export async function registerRoutes(
       : undefined;
     if (newStatus === "accepted") {
       try {
-        const user = await storage.getUserByEmail(application.email);
+        let user = await storage.getUserByEmail(application.email);
         if (user) {
           await storage.updateUser(user.id, { role: "participant" });
         } else {
           // Account provisioning deferred from submission to here so only
           // admin-verified applicants receive accounts.
           const tempPassword = randomUUID() + randomUUID();
-          await createUserWithPassword(application.email, tempPassword, application.firstName, application.lastName, "participant", true);
+          user = await createUserWithPassword(application.email, tempPassword, application.firstName, application.lastName, "participant", true);
         }
+        await storage.ensureCohortParticipantFromApplication(application, user.id);
         await sendAcceptanceEmail(application.email, application.firstName, reviewNotes, cohortEmailInfo);
       } catch (err) {
         console.error("Failed to provision account or send acceptance email:", err);

@@ -47,6 +47,12 @@ export const cohortStatusEnum = pgEnum("cohort_status", ["draft", "open", "close
 export const courseAudienceEnum = pgEnum("course_audience", ["all", "selected"]);
 export const learningPodStatusEnum = pgEnum("learning_pod_status", ["active", "archived"]);
 export const podWorkTypeEnum = pgEnum("pod_work_type", ["individual", "group"]);
+export const participantProgressStatusEnum = pgEnum("participant_progress_status", ["active", "completed", "withdrawn"]);
+export const progressReviewTypeEnum = pgEnum("progress_review_type", ["baseline", "midpoint", "final"]);
+export const progressReviewStatusEnum = pgEnum("progress_review_status", ["draft", "published"]);
+export const progressMilestoneStatusEnum = pgEnum("progress_milestone_status", ["planned", "in_progress", "completed", "blocked"]);
+export const progressFeedbackSourceEnum = pgEnum("progress_feedback_source", ["mentor", "facilitator", "participant", "admin"]);
+export const progressFeedbackVisibilityEnum = pgEnum("progress_feedback_visibility", ["participant", "internal"]);
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -512,6 +518,75 @@ export const learningPodSubmissions = pgTable("learning_pod_submissions", {
   evaluatedAt: timestamp("evaluated_at"),
 });
 
+// A durable, cohort-scoped journey record. Applications remain the historical
+// admissions baseline; this record stores the participant's programme baseline
+// and later progress without overwriting the application.
+export const cohortParticipants = pgTable("cohort_participants", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  cohortId: varchar("cohort_id").notNull().references(() => cohorts.id, { onDelete: "cascade" }),
+  applicationId: varchar("application_id").references(() => applications.id, { onDelete: "set null" }),
+  projectName: text("project_name"),
+  projectDescription: text("project_description"),
+  projectStage: text("project_stage"),
+  status: participantProgressStatusEnum("status").notNull().default("active"),
+  acceptedAt: timestamp("accepted_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  userCohortUnique: uniqueIndex("cohort_participants_user_cohort_idx").on(table.userId, table.cohortId),
+}));
+
+export const progressMilestones = pgTable("progress_milestones", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  participantId: varchar("participant_id").notNull().references(() => cohortParticipants.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  targetAt: timestamp("target_at"),
+  status: progressMilestoneStatusEnum("status").notNull().default("planned"),
+  evidence: text("evidence"),
+  completedAt: timestamp("completed_at"),
+  createdById: varchar("created_by_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type ProgressAreaUpdate = {
+  status: "not_started" | "emerging" | "progressing" | "strong_progress" | "achieved" | "not_applicable";
+  evidence?: string;
+};
+
+export const progressReviews = pgTable("progress_reviews", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  participantId: varchar("participant_id").notNull().references(() => cohortParticipants.id, { onDelete: "cascade" }),
+  reviewType: progressReviewTypeEnum("review_type").notNull(),
+  status: progressReviewStatusEnum("status").notNull().default("draft"),
+  reviewerId: varchar("reviewer_id").references(() => users.id, { onDelete: "set null" }),
+  participantReflection: text("participant_reflection"),
+  summary: text("summary"),
+  achievements: text("achievements"),
+  challenges: text("challenges"),
+  nextSteps: text("next_steps"),
+  areaUpdates: jsonb("area_updates").$type<Record<string, ProgressAreaUpdate>>().notNull().default({}),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  completedAt: timestamp("completed_at"),
+}, (table) => ({
+  participantReviewUnique: uniqueIndex("progress_reviews_participant_type_idx").on(table.participantId, table.reviewType),
+}));
+
+export const progressFeedback = pgTable("progress_feedback", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  participantId: varchar("participant_id").notNull().references(() => cohortParticipants.id, { onDelete: "cascade" }),
+  sourceType: progressFeedbackSourceEnum("source_type").notNull(),
+  authorId: varchar("author_id").notNull().references(() => users.id),
+  contextType: text("context_type"),
+  contextId: varchar("context_id"),
+  content: text("content").notNull(),
+  visibility: progressFeedbackVisibilityEnum("visibility").notNull().default("participant"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const applications = pgTable("applications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   
@@ -756,6 +831,10 @@ export const insertLearningPodSchema = createInsertSchema(learningPods).omit({ i
 export const insertLearningPodMemberSchema = createInsertSchema(learningPodMembers).omit({ id: true, joinedAt: true, removedAt: true });
 export const insertLearningPodAssignmentSchema = createInsertSchema(learningPodAssignments).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertLearningPodSubmissionSchema = createInsertSchema(learningPodSubmissions).omit({ id: true, submittedAt: true, updatedAt: true, score: true, feedback: true, evaluatedById: true, evaluatedAt: true });
+export const insertCohortParticipantSchema = createInsertSchema(cohortParticipants).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertProgressMilestoneSchema = createInsertSchema(progressMilestones).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertProgressReviewSchema = createInsertSchema(progressReviews).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertProgressFeedbackSchema = createInsertSchema(progressFeedback).omit({ id: true, createdAt: true });
 export type LearningPod = typeof learningPods.$inferSelect;
 export type InsertLearningPod = z.infer<typeof insertLearningPodSchema>;
 export type LearningPodMember = typeof learningPodMembers.$inferSelect;
@@ -764,3 +843,11 @@ export type LearningPodAssignment = typeof learningPodAssignments.$inferSelect;
 export type InsertLearningPodAssignment = z.infer<typeof insertLearningPodAssignmentSchema>;
 export type LearningPodSubmission = typeof learningPodSubmissions.$inferSelect;
 export type InsertLearningPodSubmission = z.infer<typeof insertLearningPodSubmissionSchema>;
+export type CohortParticipant = typeof cohortParticipants.$inferSelect;
+export type InsertCohortParticipant = z.infer<typeof insertCohortParticipantSchema>;
+export type ProgressMilestone = typeof progressMilestones.$inferSelect;
+export type InsertProgressMilestone = z.infer<typeof insertProgressMilestoneSchema>;
+export type ProgressReview = typeof progressReviews.$inferSelect;
+export type InsertProgressReview = z.infer<typeof insertProgressReviewSchema>;
+export type ProgressFeedback = typeof progressFeedback.$inferSelect;
+export type InsertProgressFeedback = z.infer<typeof insertProgressFeedbackSchema>;

@@ -324,6 +324,101 @@ export async function runSchemaMigrations() {
       CREATE INDEX IF NOT EXISTS learning_pod_submissions_assignment_idx ON learning_pod_submissions (assignment_id);
       CREATE INDEX IF NOT EXISTS learning_pod_submissions_pod_idx ON learning_pod_submissions (pod_id);
     `);
+    // Cohort-scoped participant progress records keep the admissions
+    // application as an immutable starting point while collecting project
+    // milestones, qualitative reviews, and feedback throughout the programme.
+    await db.execute(sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'participant_progress_status') THEN
+          CREATE TYPE participant_progress_status AS ENUM ('active', 'completed', 'withdrawn');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'progress_review_type') THEN
+          CREATE TYPE progress_review_type AS ENUM ('baseline', 'midpoint', 'final');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'progress_review_status') THEN
+          CREATE TYPE progress_review_status AS ENUM ('draft', 'published');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'progress_milestone_status') THEN
+          CREATE TYPE progress_milestone_status AS ENUM ('planned', 'in_progress', 'completed', 'blocked');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'progress_feedback_source') THEN
+          CREATE TYPE progress_feedback_source AS ENUM ('mentor', 'facilitator', 'participant', 'admin');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'progress_feedback_visibility') THEN
+          CREATE TYPE progress_feedback_visibility AS ENUM ('participant', 'internal');
+        END IF;
+      END
+      $$;
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS cohort_participants (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        cohort_id VARCHAR NOT NULL REFERENCES cohorts(id) ON DELETE CASCADE,
+        application_id VARCHAR REFERENCES applications(id) ON DELETE SET NULL,
+        project_name TEXT,
+        project_description TEXT,
+        project_stage TEXT,
+        status participant_progress_status NOT NULL DEFAULT 'active',
+        accepted_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE (user_id, cohort_id)
+      );
+      CREATE INDEX IF NOT EXISTS cohort_participants_cohort_idx ON cohort_participants (cohort_id);
+      CREATE INDEX IF NOT EXISTS cohort_participants_user_idx ON cohort_participants (user_id);
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS progress_milestones (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        participant_id VARCHAR NOT NULL REFERENCES cohort_participants(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        description TEXT,
+        target_at TIMESTAMP,
+        status progress_milestone_status NOT NULL DEFAULT 'planned',
+        evidence TEXT,
+        completed_at TIMESTAMP,
+        created_by_id VARCHAR NOT NULL REFERENCES users(id),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS progress_milestones_participant_idx ON progress_milestones (participant_id);
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS progress_reviews (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        participant_id VARCHAR NOT NULL REFERENCES cohort_participants(id) ON DELETE CASCADE,
+        review_type progress_review_type NOT NULL,
+        status progress_review_status NOT NULL DEFAULT 'draft',
+        reviewer_id VARCHAR REFERENCES users(id) ON DELETE SET NULL,
+        participant_reflection TEXT,
+        summary TEXT,
+        achievements TEXT,
+        challenges TEXT,
+        next_steps TEXT,
+        area_updates JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        completed_at TIMESTAMP,
+        UNIQUE (participant_id, review_type)
+      );
+      CREATE INDEX IF NOT EXISTS progress_reviews_participant_idx ON progress_reviews (participant_id);
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS progress_feedback (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        participant_id VARCHAR NOT NULL REFERENCES cohort_participants(id) ON DELETE CASCADE,
+        source_type progress_feedback_source NOT NULL,
+        author_id VARCHAR NOT NULL REFERENCES users(id),
+        context_type TEXT,
+        context_id VARCHAR,
+        content TEXT NOT NULL,
+        visibility progress_feedback_visibility NOT NULL DEFAULT 'participant',
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS progress_feedback_participant_idx ON progress_feedback (participant_id);
+    `);
     log("Schema migrations applied successfully");
 
     // Data migration: backfill slugs/status for pre-existing cohorts, seed the two

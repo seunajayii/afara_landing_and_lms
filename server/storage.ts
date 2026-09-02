@@ -27,6 +27,10 @@ import {
   type LearningPodMember, type InsertLearningPodMember,
   type LearningPodAssignment, type InsertLearningPodAssignment,
   type LearningPodSubmission, type InsertLearningPodSubmission,
+  type CohortParticipant, type InsertCohortParticipant,
+  type ProgressMilestone, type InsertProgressMilestone,
+  type ProgressReview, type InsertProgressReview,
+  type ProgressFeedback, type InsertProgressFeedback,
   users, profiles, mentorProfiles, facilitatorProfiles,
   courses, modules, lessons, enrollments, lessonProgress,
   mentorshipRequests, mentorshipSessions,
@@ -36,6 +40,7 @@ import {
   newsletterSubscribers, newsletterCampaigns,
   applications, applicationEvaluations, cohorts, courseCohortAssignments,
   learningPods, learningPodMembers, learningPodAssignments, learningPodSubmissions
+  , cohortParticipants, progressMilestones, progressReviews, progressFeedback
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, ne, desc, asc, sql, or, inArray, isNull, lt } from "drizzle-orm";
@@ -230,6 +235,23 @@ export interface IStorage {
   getApplicationEvaluation(applicationId: string): Promise<ApplicationEvaluation | undefined>;
   upsertApplicationEvaluation(data: InsertApplicationEvaluation): Promise<ApplicationEvaluation>;
   getAllApplicationEvaluations(): Promise<ApplicationEvaluation[]>;
+
+  getCohortParticipant(id: string): Promise<CohortParticipant | undefined>;
+  getCohortParticipantByUserAndCohort(userId: string, cohortId: string): Promise<CohortParticipant | undefined>;
+  getCohortParticipantsByCohort(cohortId: string): Promise<CohortParticipant[]>;
+  getCohortParticipantsByUser(userId: string): Promise<CohortParticipant[]>;
+  createCohortParticipant(data: InsertCohortParticipant): Promise<CohortParticipant>;
+  updateCohortParticipant(id: string, data: Partial<InsertCohortParticipant>): Promise<CohortParticipant | undefined>;
+  ensureCohortParticipantFromApplication(application: Application, userId: string): Promise<CohortParticipant | undefined>;
+  getProgressMilestones(participantId: string): Promise<ProgressMilestone[]>;
+  getProgressMilestone(id: string): Promise<ProgressMilestone | undefined>;
+  createProgressMilestone(data: InsertProgressMilestone): Promise<ProgressMilestone>;
+  updateProgressMilestone(id: string, data: Partial<InsertProgressMilestone>): Promise<ProgressMilestone | undefined>;
+  getProgressReviews(participantId: string): Promise<ProgressReview[]>;
+  getProgressReview(participantId: string, reviewType: string): Promise<ProgressReview | undefined>;
+  upsertProgressReview(data: InsertProgressReview): Promise<ProgressReview>;
+  getProgressFeedback(participantId: string, includeInternal?: boolean): Promise<ProgressFeedback[]>;
+  createProgressFeedback(data: InsertProgressFeedback): Promise<ProgressFeedback>;
 
   getCohort(id: string): Promise<Cohort | undefined>;
   getCohortBySlug(slug: string): Promise<Cohort | undefined>;
@@ -1179,6 +1201,133 @@ export class DatabaseStorage implements IStorage {
 
   async getAllApplicationEvaluations(): Promise<ApplicationEvaluation[]> {
     return db.select().from(applicationEvaluations);
+  }
+
+  async getCohortParticipant(id: string): Promise<CohortParticipant | undefined> {
+    const [participant] = await db.select().from(cohortParticipants).where(eq(cohortParticipants.id, id));
+    return participant;
+  }
+
+  async getCohortParticipantByUserAndCohort(userId: string, cohortId: string): Promise<CohortParticipant | undefined> {
+    const [participant] = await db.select().from(cohortParticipants).where(and(
+      eq(cohortParticipants.userId, userId),
+      eq(cohortParticipants.cohortId, cohortId),
+    ));
+    return participant;
+  }
+
+  async getCohortParticipantsByCohort(cohortId: string): Promise<CohortParticipant[]> {
+    return db.select().from(cohortParticipants)
+      .where(eq(cohortParticipants.cohortId, cohortId))
+      .orderBy(asc(cohortParticipants.acceptedAt));
+  }
+
+  async getCohortParticipantsByUser(userId: string): Promise<CohortParticipant[]> {
+    return db.select().from(cohortParticipants)
+      .where(eq(cohortParticipants.userId, userId))
+      .orderBy(desc(cohortParticipants.acceptedAt));
+  }
+
+  async createCohortParticipant(data: InsertCohortParticipant): Promise<CohortParticipant> {
+    const [participant] = await db.insert(cohortParticipants).values(data).returning();
+    return participant;
+  }
+
+  async updateCohortParticipant(id: string, data: Partial<InsertCohortParticipant>): Promise<CohortParticipant | undefined> {
+    const [participant] = await db.update(cohortParticipants)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(cohortParticipants.id, id))
+      .returning();
+    return participant;
+  }
+
+  async ensureCohortParticipantFromApplication(application: Application, userId: string): Promise<CohortParticipant | undefined> {
+    if (!application.cohortId) return undefined;
+    const existing = await this.getCohortParticipantByUserAndCohort(userId, application.cohortId);
+    if (existing) {
+      return (await this.updateCohortParticipant(existing.id, {
+        applicationId: application.id,
+        status: "active",
+      })) ?? existing;
+    }
+    return this.createCohortParticipant({
+      userId,
+      cohortId: application.cohortId,
+      applicationId: application.id,
+      projectName: application.companyName || application.companyLegalName || null,
+      projectDescription: application.projectDescription || application.businessDescription || null,
+      projectStage: application.projectStage || application.projectCurrentStatus || null,
+      status: "active",
+      acceptedAt: new Date(),
+    });
+  }
+
+  async getProgressMilestones(participantId: string): Promise<ProgressMilestone[]> {
+    return db.select().from(progressMilestones)
+      .where(eq(progressMilestones.participantId, participantId))
+      .orderBy(asc(progressMilestones.targetAt), desc(progressMilestones.createdAt));
+  }
+
+  async getProgressMilestone(id: string): Promise<ProgressMilestone | undefined> {
+    const [milestone] = await db.select().from(progressMilestones).where(eq(progressMilestones.id, id));
+    return milestone;
+  }
+
+  async createProgressMilestone(data: InsertProgressMilestone): Promise<ProgressMilestone> {
+    const [milestone] = await db.insert(progressMilestones).values(data).returning();
+    return milestone;
+  }
+
+  async updateProgressMilestone(id: string, data: Partial<InsertProgressMilestone>): Promise<ProgressMilestone | undefined> {
+    const [milestone] = await db.update(progressMilestones)
+      .set({
+        ...data,
+        updatedAt: new Date(),
+        completedAt: data.status === "completed" ? (data.completedAt ?? new Date()) : data.completedAt,
+      })
+      .where(eq(progressMilestones.id, id))
+      .returning();
+    return milestone;
+  }
+
+  async getProgressReviews(participantId: string): Promise<ProgressReview[]> {
+    return db.select().from(progressReviews)
+      .where(eq(progressReviews.participantId, participantId))
+      .orderBy(asc(progressReviews.createdAt));
+  }
+
+  async getProgressReview(participantId: string, reviewType: string): Promise<ProgressReview | undefined> {
+    const [review] = await db.select().from(progressReviews).where(and(
+      eq(progressReviews.participantId, participantId),
+      eq(progressReviews.reviewType, reviewType as "baseline" | "midpoint" | "final"),
+    ));
+    return review;
+  }
+
+  async upsertProgressReview(data: InsertProgressReview): Promise<ProgressReview> {
+    const existing = await this.getProgressReview(data.participantId, data.reviewType);
+    if (existing) {
+      const [review] = await db.update(progressReviews)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(progressReviews.id, existing.id))
+        .returning();
+      return review;
+    }
+    const [review] = await db.insert(progressReviews).values(data).returning();
+    return review;
+  }
+
+  async getProgressFeedback(participantId: string, includeInternal = false): Promise<ProgressFeedback[]> {
+    const conditions = [eq(progressFeedback.participantId, participantId)];
+    if (!includeInternal) conditions.push(eq(progressFeedback.visibility, "participant"));
+    return db.select().from(progressFeedback)
+      .where(and(...conditions))
+      .orderBy(desc(progressFeedback.createdAt));
+  }
+
+  async createProgressFeedback(data: InsertProgressFeedback): Promise<ProgressFeedback> {
+    const [feedback] = await db.insert(progressFeedback).values(data).returning();
+    return feedback;
   }
 
   async getCohort(id: string): Promise<Cohort | undefined> {

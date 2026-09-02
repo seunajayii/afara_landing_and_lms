@@ -29,6 +29,8 @@ import CourseManagement from "@/pages/admin/CourseManagement";
 import UserManagement from "@/pages/admin/UserManagement";
 import ResourceManagement from "@/pages/admin/ResourceManagement";
 import CertificateManagement from "@/pages/admin/CertificateManagement";
+import Progress from "@/pages/lms/Progress";
+import ProgressReporting from "@/pages/admin/ProgressReporting";
 import ApplicationManagement from "@/pages/admin/ApplicationManagement";
 import EventManagement from "@/pages/admin/EventManagement";
 import NewsletterManagement from "@/pages/admin/NewsletterManagement";
@@ -135,6 +137,7 @@ function Router() {
       <Route path="/lms/community">{() => <ProtectedRoute component={Community} />}</Route>
       <Route path="/lms/community/:threadId">{() => <ProtectedRoute component={ThreadDetail} />}</Route>
       <Route path="/lms/certificates">{() => <ProtectedRoute component={Certificates} />}</Route>
+      <Route path="/lms/progress">{() => <ProtectedRoute component={Progress} />}</Route>
       <Route path="/lms/profile">{() => <ProtectedRoute component={Profile} />}</Route>
       
       {/* Admin Routes */}
@@ -150,6 +153,7 @@ function Router() {
       <Route path="/admin/cohorts">{() => <AdminProtectedRoute component={CohortManagement} />}</Route>
       <Route path="/admin/cohort-report">{() => <AdminProtectedRoute component={CohortReport} />}</Route>
       <Route path="/admin/learning-pods">{() => <AdminProtectedRoute component={LearningPodManagement} />}</Route>
+      <Route path="/admin/progress-reporting">{() => <AdminProtectedRoute component={ProgressReporting} />}</Route>
       
       <Route component={NotFound} />
     </Switch>
