@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth";
 import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Circle, Download, FileText, Lock, PlayCircle, ShieldCheck, Video } from "lucide-react";
 import type { Course, Lesson, LessonProgress, Module, Resource } from "@shared/schema";
 
@@ -38,9 +39,11 @@ function PrivateLessonVideo({ resource }: { resource: Resource }) {
 export default function CourseDetail() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
   const courseQuery = useQuery<CourseCurriculum>({
-    queryKey: ["/api/courses", id],
+    queryKey: ["/api/courses", id, user?.id, user?.role],
+    enabled: Boolean(user?.id && id),
     queryFn: async () => {
       const response = await fetch(`/api/courses/${id}`, { credentials: "include" });
       if (!response.ok) throw new Error(response.status === 404 ? "This course is not available." : "Unable to load this course.");

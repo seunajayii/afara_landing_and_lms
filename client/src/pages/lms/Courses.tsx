@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Course } from "@shared/schema";
+import { useAuth } from "@/lib/auth";
 
 interface CourseWithModules extends Course {
   modules?: { id: string }[];
@@ -34,9 +35,11 @@ function CourseCardSkeleton() {
 
 export default function Courses() {
   const [filter, setFilter] = useState("all");
+  const { user } = useAuth();
 
   const { data: courses, isLoading } = useQuery<CourseWithModules[]>({
-    queryKey: ["/api/courses"],
+    queryKey: ["/api/courses", user?.id, user?.role],
+    enabled: Boolean(user?.id),
   });
 
   const categories = useMemo(() => {

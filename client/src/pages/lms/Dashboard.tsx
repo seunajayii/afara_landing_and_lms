@@ -66,7 +66,8 @@ export default function Dashboard() {
   const { user, isAdmin } = useAuth();
   
   const { data: courses, isLoading: coursesLoading } = useQuery<Course[]>({
-    queryKey: ["/api/courses"],
+    queryKey: ["/api/courses", user?.id, user?.role],
+    enabled: Boolean(user?.id),
   });
 
   const { data: events, isLoading: eventsLoading } = useQuery<Event[]>({
