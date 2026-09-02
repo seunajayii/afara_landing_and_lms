@@ -22,9 +22,9 @@ function formatDuration(minutes: number | null | undefined) {
   return `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}`;
 }
 
-function PrivateLessonVideo({ resource }: { resource: Resource }) {
+function PrivateLessonVideo({ resource, user }: { resource: Resource; user: { id: string; role: string } }) {
   const playback = useQuery<{ playbackUrl: string }>({
-    queryKey: ["/api/resources", resource.id, "playback"],
+    queryKey: ["/api/resources", resource.id, "playback", user.id, user.role],
     queryFn: async () => {
       const response = await fetch(`/api/resources/${resource.id}/playback`, { credentials: "include" });
       if (!response.ok) throw new Error("Unable to authorize playback");
@@ -50,7 +50,15 @@ export default function CourseDetail() {
       return response.json();
     },
   });
-  const progressQuery = useQuery<LessonProgress[]>({ queryKey: ["/api/progress/me"] });
+  const progressQuery = useQuery<LessonProgress[]>({
+    queryKey: ["/api/progress/me", user?.id],
+    enabled: Boolean(user?.id),
+    queryFn: async () => {
+      const response = await fetch("/api/progress/me", { credentials: "include" });
+      if (!response.ok) throw new Error("Unable to load course progress.");
+      return response.json();
+    },
+  });
   const allLessons = useMemo(() => courseQuery.data?.modules.flatMap((module) => module.lessons) || [], [courseQuery.data]);
   const activeLesson = allLessons.find((lesson) => lesson.id === activeLessonId) || allLessons[0];
   const completedIds = new Set((progressQuery.data || []).filter((entry) => entry.status === "completed").map((entry) => entry.lessonId));
@@ -91,7 +99,7 @@ export default function CourseDetail() {
                   <aside className="rounded-lg border bg-card lg:sticky lg:top-4 lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto"><div className="border-b p-4"><h2 className="font-semibold">Course content</h2><p className="mt-1 text-xs text-muted-foreground">Pick up where you left off at any time.</p></div>{courseQuery.data.modules.map((module, index) => <div key={module.id} className="border-b last:border-b-0"><p className="px-4 pt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Module {index + 1}: {module.title}</p><div className="p-2">{module.lessons.map((lesson) => <button key={lesson.id} type="button" onClick={() => selectLesson(lesson)} className={`flex w-full items-center gap-2 rounded-md p-2.5 text-left text-sm transition-colors ${activeLesson?.id === lesson.id ? "bg-primary/10 text-primary" : "hover:bg-muted"}`} data-testid={`lesson-nav-${lesson.id}`}>{completedIds.has(lesson.id) ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" /> : activeLesson?.id === lesson.id ? <PlayCircle className="h-4 w-4 shrink-0" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />}<span className="min-w-0 flex-1 truncate">{lesson.title}</span></button>)}</div></div>)}</aside>
                   {activeLesson && <section className="min-w-0"><Card><CardContent className="p-5 md:p-7"><div className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><div className="mb-2 flex gap-2"><Badge variant="outline">{activeLesson.lessonType === "downloadable" ? "Download" : activeLesson.lessonType}</Badge>{completedIds.has(activeLesson.id) && <Badge className="bg-emerald-500/10 text-emerald-700">Completed</Badge>}</div><h2 className="text-2xl font-bold">{activeLesson.title}</h2>{activeLesson.description && <p className="mt-2 text-muted-foreground">{activeLesson.description}</p>}</div><span className="text-sm text-muted-foreground">{formatDuration(activeLesson.durationMinutes)}</span></div>
                     {!activeLesson.contentAvailable ? <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-5 text-sm">This lesson’s resource is not available for your account. Contact the programme team if you think this is incorrect.</div> :
-                      activeLesson.lessonType === "video" && activeLesson.resource?.videoSource === "upload" ? <div className="space-y-3"><PrivateLessonVideo resource={activeLesson.resource} /><p className="flex items-center gap-2 text-sm text-muted-foreground"><ShieldCheck className="h-4 w-4 text-primary" />Protected video · signed playback</p></div> :
+                       activeLesson.lessonType === "video" && activeLesson.resource?.videoSource === "upload" && user ? <div className="space-y-3"><PrivateLessonVideo resource={activeLesson.resource} user={user} /><p className="flex items-center gap-2 text-sm text-muted-foreground"><ShieldCheck className="h-4 w-4 text-primary" />Protected video · signed playback</p></div> :
                       activeLesson.lessonType === "video" && (activeLesson.resource?.youtubeVideoId || activeLesson.videoId) ? <div className="aspect-video overflow-hidden rounded-lg bg-black"><iframe className="h-full w-full" src={`https://www.youtube-nocookie.com/embed/${activeLesson.resource?.youtubeVideoId || activeLesson.videoId}`} title={activeLesson.title} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen data-testid="youtube-lesson-player" /></div> :
                       activeLesson.lessonType === "downloadable" && activeLesson.resource ? <div className="rounded-lg border bg-muted/30 p-6"><FileText className="mb-3 h-8 w-8 text-primary" /><h3 className="font-semibold">{activeLesson.resource.title}</h3><p className="mt-1 text-sm text-muted-foreground">{activeLesson.resource.description || "Open or download this material when you are ready."}</p><div className="mt-4 flex flex-wrap gap-2"><Button onClick={() => { completeCurrent(); setLocation(`/lms/resources/${activeLesson.resource!.id}`); }}><FileText className="mr-2 h-4 w-4" />Open resource</Button>{activeLesson.resource.fileUrl && <Button asChild variant="outline" onClick={completeCurrent}><a href={activeLesson.resource.fileUrl} target="_blank" rel="noreferrer"><Download className="mr-2 h-4 w-4" />Download</a></Button>}</div></div> :
                       activeLesson.lessonType === "text" ? <div className="whitespace-pre-wrap rounded-lg bg-muted/40 p-5 leading-7">{activeLesson.content}</div> :

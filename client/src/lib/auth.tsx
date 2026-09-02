@@ -44,6 +44,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return res.json();
     },
     onSuccess: () => {
+      queryClient.removeQueries({
+        predicate: (query) => query.queryKey[0] !== "/api/auth/me",
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
     }
   });
@@ -64,8 +67,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return res.json();
     },
     onSuccess: () => {
+      queryClient.removeQueries({
+        predicate: (query) => query.queryKey[0] !== "/api/auth/me",
+      });
       queryClient.setQueryData(["/api/auth/me"], null);
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
     }
   });
 
