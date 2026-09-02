@@ -36,12 +36,48 @@ const users = {
     isActive: true,
     mustChangePassword: false,
   },
+  secondAssignedToA: {
+    id: "learner-a-2",
+    email: "learner-a-2@example.com",
+    firstName: "Learner",
+    lastName: "A2",
+    role: "participant",
+    isActive: true,
+    mustChangePassword: false,
+  },
   withoutCohort: {
     id: "learner-no-cohort",
     email: "learner-no-cohort@example.com",
     firstName: "Learner",
     lastName: "No Cohort",
     role: "participant",
+    isActive: true,
+    mustChangePassword: false,
+  },
+  mentorA: {
+    id: "mentor-a",
+    email: "mentor-a@example.com",
+    firstName: "Mentor",
+    lastName: "A",
+    role: "mentor",
+    isActive: true,
+    mustChangePassword: false,
+  },
+  mentorB: {
+    id: "mentor-b",
+    email: "mentor-b@example.com",
+    firstName: "Mentor",
+    lastName: "B",
+    role: "mentor",
+    isActive: true,
+    mustChangePassword: false,
+  },
+  admin: {
+    id: "admin",
+    email: "admin@example.com",
+    firstName: "Admin",
+    lastName: "User",
+    role: "admin",
     isActive: true,
     mustChangePassword: false,
   },
@@ -156,7 +192,7 @@ function userForId(userId: string) {
 }
 
 function cohortForUser(userId: string) {
-  if (userId === users.assignedToA.id) return cohortA;
+  if (userId === users.assignedToA.id || userId === users.secondAssignedToA.id) return cohortA;
   if (userId === users.assignedToB.id) return cohortB;
   return undefined;
 }
@@ -172,6 +208,18 @@ async function withCourseRoutes<T>(
   };
 
   replace("getUser", async (userId: string) => userForId(userId));
+  replace("getUserByEmail", async (email: string) => (
+    Object.values(users).find(user => user.email.toLowerCase() === email.toLowerCase())
+  ));
+  replace("getCohort", async (cohortId: string) => [cohortA, cohortB].find(cohort => cohort.id === cohortId));
+  const acceptedApplications = [
+    { id: "application-a", email: users.assignedToA.email, cohortId: cohortA.id, status: "accepted" },
+    { id: "application-a-2", email: users.secondAssignedToA.email, cohortId: cohortA.id, status: "accepted" },
+    { id: "application-b", email: users.assignedToB.email, cohortId: cohortB.id, status: "accepted" },
+  ];
+  replace("getApplicationsByStatus", async (status: string) => (
+    acceptedApplications.filter(application => application.status === status)
+  ));
   replace("getExpiredPrivateVideoUploads", async () => []);
   replace("getAllCourses", async () => courses);
   replace("getPublishedCourses", async () => courses);
@@ -212,13 +260,142 @@ async function withCourseRoutes<T>(
     Array.from(enrollmentByKey.values()).filter(enrollment => enrollment.userId === userId)
   ));
 
+  const podA = {
+    id: "pod-a",
+    cohortId: cohortA.id,
+    name: "Pod A",
+    description: "Cohort A pod",
+    mentorId: users.mentorA.id,
+    status: "active",
+  };
+  const podB = {
+    id: "pod-b",
+    cohortId: cohortB.id,
+    name: "Pod B",
+    description: "Cohort B pod",
+    mentorId: users.mentorB.id,
+    status: "active",
+  };
+  const archivedPod = {
+    id: "pod-archived",
+    cohortId: cohortA.id,
+    name: "Archived pod",
+    description: null,
+    mentorId: users.mentorA.id,
+    status: "archived",
+  };
+  const pods = new Map<string, Record<string, any>>([
+    [podA.id, podA],
+    [podB.id, podB],
+    [archivedPod.id, archivedPod],
+  ]);
+  const podMembers = new Map<string, Set<string>>([
+    [podA.id, new Set([users.assignedToA.id, users.secondAssignedToA.id])],
+    [podB.id, new Set([users.assignedToB.id])],
+    [archivedPod.id, new Set([users.assignedToA.id])],
+  ]);
+  const assignments = new Map<string, Record<string, any>>([
+    ["individual-a", {
+      id: "individual-a",
+      podId: podA.id,
+      title: "Individual work",
+      instructions: "Submit your own work",
+      workType: "individual",
+      status: "published",
+      dueAt: null,
+      maxScore: 100,
+      createdById: users.admin.id,
+    }],
+    ["group-a", {
+      id: "group-a",
+      podId: podA.id,
+      title: "Group project",
+      instructions: "Submit one project per pod",
+      workType: "group",
+      status: "published",
+      dueAt: null,
+      maxScore: 100,
+      createdById: users.admin.id,
+    }],
+  ]);
+  const submissions = new Map<string, Record<string, any>>();
+  let nextPodId = 1;
+  let nextSubmissionId = 1;
+  replace("getAllLearningPods", async () => Array.from(pods.values()));
+  replace("getLearningPodsByCohort", async (cohortId: string) => (
+    Array.from(pods.values()).filter(pod => pod.cohortId === cohortId && pod.status === "active")
+  ));
+  replace("getLearningPodsByUser", async (userId: string) => (
+    Array.from(pods.values()).filter(pod => pod.status === "active" && (
+      pod.mentorId === userId || podMembers.get(pod.id)?.has(userId)
+    ))
+  ));
+  replace("getLearningPod", async (podId: string) => pods.get(podId));
+  replace("createLearningPod", async (data: Record<string, any>) => {
+    const pod = { ...data, id: `created-pod-${nextPodId++}` };
+    pods.set(pod.id, pod);
+    podMembers.set(pod.id, new Set());
+    return pod;
+  });
+  replace("updateLearningPod", async (podId: string, data: Record<string, any>) => {
+    const pod = pods.get(podId);
+    if (!pod) return undefined;
+    Object.assign(pod, data);
+    return pod;
+  });
+  replace("deleteLearningPod", async (podId: string) => {
+    pods.delete(podId);
+    podMembers.delete(podId);
+  });
+  replace("getLearningPodMembers", async (podId: string) => (
+    Array.from(podMembers.get(podId) || [], userId => ({ id: `${podId}-${userId}`, podId, userId }))
+  ));
+  replace("setLearningPodMembers", async (podId: string, userIds: string[]) => {
+    podMembers.set(podId, new Set(userIds));
+  });
+  replace("getLearningPodAssignments", async (podId: string) => (
+    Array.from(assignments.values()).filter(assignment => assignment.podId === podId)
+  ));
+  replace("getLearningPodAssignment", async (assignmentId: string) => assignments.get(assignmentId));
+  replace("getLearningPodSubmissions", async (assignmentId: string, podId: string) => (
+    Array.from(submissions.values()).filter(submission => (
+      submission.assignmentId === assignmentId && submission.podId === podId
+    ))
+  ));
+  replace("getLearningPodSubmissionById", async (submissionId: string) => submissions.get(submissionId));
+  replace("getLearningPodSubmission", async (assignmentId: string, podId: string, submitterId?: string) => (
+    Array.from(submissions.values()).find(submission => (
+      submission.assignmentId === assignmentId &&
+      submission.podId === podId &&
+      (!submitterId || submission.submitterId === submitterId)
+    ))
+  ));
+  replace("createLearningPodSubmission", async (data: Record<string, any>) => {
+    const submission = {
+      ...data,
+      id: `submission-${nextSubmissionId++}`,
+      score: null,
+      feedback: null,
+      evaluatedById: null,
+      evaluatedAt: null,
+    };
+    submissions.set(submission.id, submission);
+    return submission;
+  });
+  replace("updateLearningPodSubmission", async (submissionId: string, data: Record<string, any>) => {
+    const submission = submissions.get(submissionId);
+    if (!submission) return undefined;
+    Object.assign(submission, data);
+    return submission;
+  });
+
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
     const userId = req.header("x-test-user") || users.assignedToA.id;
     (req as any).session = {
       userId,
-      userRole: "participant",
+      userRole: userForId(userId)?.role || "participant",
       mustChangePassword: false,
     };
     next();
@@ -441,5 +618,185 @@ test("enrollment creation follows the learner's course access and hides restrict
     const crossUserEnrollments = await request(baseUrl, users.assignedToB.id, `/api/enrollments/user/${users.assignedToA.id}`);
     assert.equal(crossUserEnrollments.status, 403);
     assert.deepEqual(crossUserEnrollments.body, { error: "Access denied" });
+  });
+});
+
+test("learners can only access their own active assigned pod", async () => {
+  await withCourseRoutes(async baseUrl => {
+    const learnerPods = await request(baseUrl, users.assignedToA.id, "/api/learning-pods");
+    assert.equal(learnerPods.status, 200);
+    assert.deepEqual(learnerPods.body.map((pod: { id: string }) => pod.id), ["pod-a"]);
+
+    const otherCohortPods = await request(baseUrl, users.assignedToB.id, "/api/learning-pods");
+    assert.equal(otherCohortPods.status, 200);
+    assert.deepEqual(otherCohortPods.body.map((pod: { id: string }) => pod.id), ["pod-b"]);
+
+    const noPod = await request(baseUrl, users.withoutCohort.id, "/api/learning-pods");
+    assert.equal(noPod.status, 200);
+    assert.deepEqual(noPod.body, []);
+
+    const crossPod = await request(baseUrl, users.assignedToB.id, "/api/learning-pods/pod-a");
+    assert.equal(crossPod.status, 404);
+    assert.deepEqual(crossPod.body, { error: "Learning pod not found" });
+
+    const archivedPod = await request(baseUrl, users.assignedToA.id, "/api/learning-pods/pod-archived");
+    assert.equal(archivedPod.status, 404);
+    assert.deepEqual(archivedPod.body, { error: "Learning pod not found" });
+  });
+});
+
+test("non-members cannot read pod details or submit work", async () => {
+  await withCourseRoutes(async baseUrl => {
+    const pod = await request(baseUrl, users.assignedToB.id, "/api/learning-pods/pod-a");
+    assert.equal(pod.status, 404);
+
+    const submission = await request(
+      baseUrl,
+      users.assignedToB.id,
+      "/api/learning-pods/pod-a/assignments/individual-a/submissions",
+      {
+        method: "POST",
+        body: JSON.stringify({ submissionText: "Cross-pod submission" }),
+      },
+    );
+    assert.equal(submission.status, 404);
+    assert.deepEqual(submission.body, { error: "Assignment not found" });
+  });
+});
+
+test("individual work stays separate while group work is shared by the pod", async () => {
+  await withCourseRoutes(async baseUrl => {
+    const individualA = await request(
+      baseUrl,
+      users.assignedToA.id,
+      "/api/learning-pods/pod-a/assignments/individual-a/submissions",
+      {
+        method: "POST",
+        body: JSON.stringify({ submissionText: "Learner A's work" }),
+      },
+    );
+    assert.equal(individualA.status, 201);
+
+    const individualA2 = await request(
+      baseUrl,
+      users.secondAssignedToA.id,
+      "/api/learning-pods/pod-a/assignments/individual-a/submissions",
+      {
+        method: "POST",
+        body: JSON.stringify({ submissionText: "Learner A2's work" }),
+      },
+    );
+    assert.equal(individualA2.status, 201);
+    assert.notEqual(individualA.body.id, individualA2.body.id);
+
+    const groupA = await request(
+      baseUrl,
+      users.assignedToA.id,
+      "/api/learning-pods/pod-a/assignments/group-a/submissions",
+      {
+        method: "POST",
+        body: JSON.stringify({ submissionUrl: "https://example.com/group-project" }),
+      },
+    );
+    assert.equal(groupA.status, 201);
+
+    const groupA2 = await request(
+      baseUrl,
+      users.secondAssignedToA.id,
+      "/api/learning-pods/pod-a/assignments/group-a/submissions",
+      {
+        method: "POST",
+        body: JSON.stringify({ submissionUrl: "https://example.com/updated-group-project" }),
+      },
+    );
+    assert.equal(groupA2.status, 200);
+    assert.equal(groupA2.body.id, groupA.body.id);
+    assert.equal(groupA2.body.submitterId, users.secondAssignedToA.id);
+    assert.equal(groupA2.body.submissionUrl, "https://example.com/updated-group-project");
+
+    const pod = await request(baseUrl, users.assignedToA.id, "/api/learning-pods/pod-a");
+    assert.equal(pod.status, 200);
+    const podA2 = await request(baseUrl, users.secondAssignedToA.id, "/api/learning-pods/pod-a");
+    assert.equal(podA2.status, 200);
+    const individualSubmissions = pod.body.assignments
+      .find((assignment: { id: string }) => assignment.id === "individual-a").submissions;
+    const individualSubmissionsA2 = podA2.body.assignments
+      .find((assignment: { id: string }) => assignment.id === "individual-a").submissions;
+    const groupSubmissions = pod.body.assignments
+      .find((assignment: { id: string }) => assignment.id === "group-a").submissions;
+    assert.deepEqual(individualSubmissions.map((submission: { submitterId: string }) => submission.submitterId), [users.assignedToA.id]);
+    assert.deepEqual(individualSubmissionsA2.map((submission: { submitterId: string }) => submission.submitterId), [users.secondAssignedToA.id]);
+    assert.equal(groupSubmissions.length, 1);
+  });
+});
+
+test("only the assigned mentor or an administrator can review pod work", async () => {
+  await withCourseRoutes(async baseUrl => {
+    const submitted = await request(
+      baseUrl,
+      users.assignedToA.id,
+      "/api/learning-pods/pod-a/assignments/individual-a/submissions",
+      {
+        method: "POST",
+        body: JSON.stringify({ submissionText: "Work to review" }),
+      },
+    );
+    assert.equal(submitted.status, 201);
+
+    const reviewPath = `/api/learning-pods/pod-a/assignments/individual-a/submissions/${submitted.body.id}/review`;
+    for (const reviewerId of [users.assignedToA.id, users.mentorB.id]) {
+      const rejected = await request(baseUrl, reviewerId, reviewPath, {
+        method: "PATCH",
+        body: JSON.stringify({ score: 80, feedback: "Looks good" }),
+      });
+      assert.equal(rejected.status, 403);
+    }
+
+    const mentorReview = await request(baseUrl, users.mentorA.id, reviewPath, {
+      method: "PATCH",
+      body: JSON.stringify({ score: 85, feedback: "Strong analysis" }),
+    });
+    assert.equal(mentorReview.status, 200);
+    assert.equal(mentorReview.body.score, 85);
+    assert.equal(mentorReview.body.feedback, "Strong analysis");
+    assert.equal(mentorReview.body.evaluatedById, users.mentorA.id);
+
+    const adminReview = await request(baseUrl, users.admin.id, reviewPath, {
+      method: "PATCH",
+      body: JSON.stringify({ score: 90, feedback: "Approved by admin" }),
+    });
+    assert.equal(adminReview.status, 200);
+    assert.equal(adminReview.body.score, 90);
+    assert.equal(adminReview.body.feedback, "Approved by admin");
+    assert.equal(adminReview.body.evaluatedById, users.admin.id);
+  });
+});
+
+test("a participant cannot be active in two pods in the same cohort", async () => {
+  await withCourseRoutes(async baseUrl => {
+    const duplicateOnCreate = await request(baseUrl, users.admin.id, "/api/admin/learning-pods", {
+      method: "POST",
+      body: JSON.stringify({
+        cohortId: cohortA.id,
+        name: "Duplicate pod",
+        description: null,
+        mentorId: users.mentorA.id,
+        status: "active",
+        userIds: [users.assignedToA.id],
+      }),
+    });
+    assert.equal(duplicateOnCreate.status, 400);
+    assert.deepEqual(duplicateOnCreate.body, {
+      error: "A participant can only belong to one active pod in a cohort",
+    });
+
+    const duplicateOnReactivation = await request(baseUrl, users.admin.id, "/api/admin/learning-pods/pod-archived", {
+      method: "PATCH",
+      body: JSON.stringify({ status: "active" }),
+    });
+    assert.equal(duplicateOnReactivation.status, 400);
+    assert.deepEqual(duplicateOnReactivation.body, {
+      error: "A participant can only belong to one active pod in a cohort",
+    });
   });
 });

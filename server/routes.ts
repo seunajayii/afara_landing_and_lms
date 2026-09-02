@@ -111,7 +111,11 @@ const learningPodAssignmentPayloadSchema = insertLearningPodAssignmentSchema.ext
   maxScore: z.number().int().min(1).max(10000).default(100),
 });
 
-const learningPodSubmissionPayloadSchema = insertLearningPodSubmissionSchema.extend({
+const learningPodSubmissionPayloadSchema = insertLearningPodSubmissionSchema.omit({
+  assignmentId: true,
+  podId: true,
+  submitterId: true,
+}).extend({
   submissionText: z.string().trim().max(20000).nullable().optional(),
   submissionUrl: z.string().trim().url().max(2000).nullable().optional(),
 }).refine((value) => Boolean(value.submissionText || value.submissionUrl), {
@@ -1786,7 +1790,13 @@ export async function registerRoutes(
   };
 
   const canAccessLearningPod = async (req: Request, pod: any) => {
-    if (isAdminSession(req) || pod.mentorId === req.session.userId) return true;
+    if (isAdminSession(req)) return true;
+    if (pod.status !== "active") return false;
+    if (pod.mentorId === req.session.userId) return true;
+    const activeCohort = req.session.userId
+      ? await storage.getActiveCohortForUser(req.session.userId)
+      : undefined;
+    if (!activeCohort || activeCohort.id !== pod.cohortId) return false;
     const members = await storage.getLearningPodMembers(pod.id);
     return members.some((member) => member.userId === req.session.userId);
   };
@@ -2270,6 +2280,19 @@ export async function registerRoutes(
       if (data.mentorId && !await validateLearningPodMentor(data.mentorId)) {
         return res.status(400).json({ error: "The selected mentor is not available" });
       }
+      const nextCohortId = data.cohortId ?? existing.cohortId;
+      const nextStatus = data.status ?? existing.status;
+      if (nextStatus === "active") {
+        const members = await storage.getLearningPodMembers(existing.id);
+        const eligibleIds = new Set((await getAcceptedCohortParticipants(nextCohortId)).map((participant) => participant.id));
+        if (members.some((member) => !eligibleIds.has(member.userId))) {
+          return res.status(400).json({ error: "Every active pod member must be an accepted participant in the pod cohort" });
+        }
+        const alreadyAssigned = await getActivePodMemberIdsForCohort(nextCohortId, existing.id);
+        if (members.some((member) => alreadyAssigned.has(member.userId))) {
+          return res.status(400).json({ error: "A participant can only belong to one active pod in a cohort" });
+        }
+      }
       const pod = await storage.updateLearningPod(existing.id, data);
       res.json(await getLearningPodResponse(pod!, req, true));
     } catch (error) {
@@ -2364,7 +2387,11 @@ export async function registerRoutes(
       const pods = isAdminSession(req)
         ? await storage.getAllLearningPods()
         : await storage.getLearningPodsByUser(req.session.userId!);
-      res.json(await Promise.all(pods.map((pod) => getLearningPodResponse(pod, req))));
+      const visiblePods = isAdminSession(req)
+        ? pods
+        : (await Promise.all(pods.map(async (pod) => await canAccessLearningPod(req, pod) ? pod : null)))
+          .filter((pod): pod is typeof pods[number] => Boolean(pod));
+      res.json(await Promise.all(visiblePods.map((pod) => getLearningPodResponse(pod, req))));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch your learning pods" });
     }
