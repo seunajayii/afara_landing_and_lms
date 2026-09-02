@@ -1,6 +1,6 @@
 import { LMSSidebar } from "@/components/LMSSidebar";
 import { CourseCard } from "@/components/CourseCard";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -39,7 +39,12 @@ export default function Courses() {
     queryKey: ["/api/courses"],
   });
 
-  const categories = ["all", "Finance", "Technical", "Regulation", "Soft Skills"];
+  const categories = useMemo(() => {
+    const availableCategories = (courses || [])
+      .map((course) => course.category?.trim())
+      .filter((category): category is string => Boolean(category));
+    return ["all", ...Array.from(new Set(availableCategories)).sort()];
+  }, [courses]);
   
   const filteredCourses = courses?.filter(course => {
     if (filter === "all") return course.status === "published";
