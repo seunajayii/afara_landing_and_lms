@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import express from "express";
 import test from "node:test";
 import type { Server } from "node:http";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { registerRoutes } from "./routes";
 import { storage } from "./storage";
@@ -956,5 +956,128 @@ test("simultaneous pod creation leaves one active assignment and no empty reject
     await db.delete(usersTable).where(eq(usersTable.id, mentorOneId));
     await db.delete(usersTable).where(eq(usersTable.id, mentorTwoId));
     await db.delete(usersTable).where(eq(usersTable.id, adminId));
+  }
+});
+
+test("simultaneous auto-distribution creates one complete assignment and reports the losing run", async () => {
+  const participantIds = Array.from({ length: 6 }, () => randomUUID());
+  const mentorOneId = randomUUID();
+  const mentorTwoId = randomUUID();
+  const adminId = randomUUID();
+  const cohortId = randomUUID();
+
+  await db.insert(usersTable).values([
+    ...participantIds.map((id, index) => ({
+      id,
+      email: `${id}@example.com`,
+      firstName: "Auto",
+      lastName: `Participant ${index + 1}`,
+      role: "participant",
+      isActive: true,
+      mustChangePassword: false,
+    })),
+    {
+      id: mentorOneId,
+      email: `${mentorOneId}@example.com`,
+      firstName: "Mentor",
+      lastName: "One",
+      role: "mentor",
+      isActive: true,
+      mustChangePassword: false,
+    },
+    {
+      id: mentorTwoId,
+      email: `${mentorTwoId}@example.com`,
+      firstName: "Mentor",
+      lastName: "Two",
+      role: "mentor",
+      isActive: true,
+      mustChangePassword: false,
+    },
+    {
+      id: adminId,
+      email: `${adminId}@example.com`,
+      firstName: "Pod",
+      lastName: "Administrator",
+      role: "admin",
+      isActive: true,
+      mustChangePassword: false,
+    },
+  ]);
+  await db.insert(cohorts).values({
+    id: cohortId,
+    name: "Concurrent auto-distribution cohort",
+    slug: `concurrent-auto-distribution-${cohortId}`,
+  });
+  await db.insert(applications).values(participantIds.map((id, index) => ({
+    id: randomUUID(),
+    email: `${id}@example.com`,
+    firstName: "Auto",
+    lastName: `Participant ${index + 1}`,
+    status: "accepted",
+    cohortId,
+  })));
+
+  try {
+    await withDatabasePodRoutes(adminId, async baseUrl => {
+      const payload = {
+        cohortId,
+        podSize: 3,
+        mentorIds: [mentorOneId, mentorTwoId],
+        namePrefix: "Concurrent auto pod",
+      };
+      const responses = await Promise.all([
+        request(baseUrl, adminId, "/api/admin/learning-pods/auto-distribute", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        }),
+        request(baseUrl, adminId, "/api/admin/learning-pods/auto-distribute", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        }),
+      ]);
+
+      assert.equal(responses.filter(response => response.status === 201).length, 1);
+      const rejected = responses.filter(response => response.status === 409);
+      assert.equal(rejected.length, 1);
+      assert.deepEqual(rejected[0].body, {
+        error: "This cohort is already being distributed. Please wait for the current distribution to finish.",
+      });
+
+      const activeMemberships = await db.select({
+        podId: learningPodMembers.podId,
+        userId: learningPodMembers.userId,
+      })
+        .from(learningPodMembers)
+        .innerJoin(learningPods, eq(learningPodMembers.podId, learningPods.id))
+        .where(and(
+          eq(learningPods.cohortId, cohortId),
+          eq(learningPods.status, "active"),
+          isNull(learningPodMembers.removedAt),
+        ));
+      assert.equal(activeMemberships.length, participantIds.length);
+      assert.deepEqual(
+        new Set(activeMemberships.map(membership => membership.userId)),
+        new Set(participantIds),
+      );
+      assert.equal(new Set(activeMemberships.map(membership => membership.podId)).size, 2);
+
+      const cohortPods = await db.select({
+        id: learningPods.id,
+      })
+        .from(learningPods)
+        .where(eq(learningPods.cohortId, cohortId));
+      assert.equal(cohortPods.length, 2);
+    });
+  } finally {
+    await db.delete(learningPods).where(eq(learningPods.cohortId, cohortId));
+    await db.delete(applications).where(eq(applications.cohortId, cohortId));
+    await db.delete(cohorts).where(eq(cohorts.id, cohortId));
+    await db.delete(usersTable).where(inArray(usersTable.id, [
+      ...participantIds,
+      mentorOneId,
+      mentorTwoId,
+      adminId,
+    ]));
   }
 });

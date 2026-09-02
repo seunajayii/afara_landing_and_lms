@@ -1,7 +1,11 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
-import { storage, LearningPodMembershipConflictError } from "./storage";
+import {
+  storage,
+  LearningPodDistributionInProgressError,
+  LearningPodMembershipConflictError,
+} from "./storage";
 import { authenticateUser, createUserWithPassword } from "./auth";
 import { 
   insertUserSchema, insertProfileSchema, insertMentorProfileSchema, insertFacilitatorProfileSchema,
@@ -128,6 +132,8 @@ const learningPodReviewSchema = z.object({
   score: z.number().int().min(0).max(10000),
   feedback: z.string().trim().min(1).max(10000),
 });
+
+const activeLearningPodDistributions = new Set<string>();
 
 const youtubeVideoResourceSchema = insertResourceSchema.superRefine((resource, ctx) => {
   if (resource.resourceType === "video") {
@@ -2319,8 +2325,19 @@ export async function registerRoutes(
   });
 
   app.post("/api/admin/learning-pods/auto-distribute", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    let distributionCohortId: string | undefined;
+    let distributionLockAcquired = false;
     try {
       const data = learningPodAutoDistributeSchema.parse(req.body);
+      distributionCohortId = data.cohortId;
+      if (activeLearningPodDistributions.has(data.cohortId)) {
+        return res.status(409).json({
+          error: "This cohort is already being distributed. Please wait for the current distribution to finish.",
+        });
+      }
+      activeLearningPodDistributions.add(data.cohortId);
+      distributionLockAcquired = true;
+
       const cohort = await storage.getCohort(data.cohortId);
       if (!cohort) return res.status(404).json({ error: "Cohort not found" });
       for (const mentorId of data.mentorIds) {
@@ -2335,7 +2352,7 @@ export async function registerRoutes(
       const existingPods = await storage.getAllLearningPods();
       const existingNames = new Set(existingPods.filter((pod) => pod.cohortId === data.cohortId).map((pod) => pod.name));
       let nextPodNumber = 1;
-      const created = [];
+      const podInputs = [];
       for (let offset = 0; offset < participants.length; offset += data.podSize) {
         let name = `${data.namePrefix} ${nextPodNumber}`;
         while (existingNames.has(name)) {
@@ -2347,22 +2364,30 @@ export async function registerRoutes(
           cohortId: data.cohortId,
           name,
           description: `Automatically distributed pod for ${cohort.displayName || cohort.name}.`,
-          mentorId: data.mentorIds[created.length % data.mentorIds.length],
+          mentorId: data.mentorIds[Math.floor(offset / data.podSize) % data.mentorIds.length],
           status: "active",
         } as const;
         nextPodNumber += 1;
-        const pod = await storage.createLearningPodWithMembers(
-          podData,
-          participants.slice(offset, offset + data.podSize).map((participant) => participant.id),
-        );
-        created.push(await getLearningPodResponse(pod, req, true));
+        podInputs.push({
+          data: podData,
+          userIds: participants.slice(offset, offset + data.podSize).map((participant) => participant.id),
+        });
       }
+      const pods = await storage.createLearningPodsWithMembers(podInputs);
+      const created = await Promise.all(pods.map((pod) => getLearningPodResponse(pod, req, true)));
       res.status(201).json({ pods: created });
     } catch (error) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      if (error instanceof LearningPodDistributionInProgressError) {
+        return res.status(409).json({ error: error.message });
+      }
       if (error instanceof LearningPodMembershipConflictError) return res.status(400).json({ error: error.message });
       console.error("Failed to auto-distribute learning pods:", error);
       res.status(500).json({ error: "Failed to auto-distribute learning pods" });
+    } finally {
+      if (distributionLockAcquired && distributionCohortId) {
+        activeLearningPodDistributions.delete(distributionCohortId);
+      }
     }
   });
 

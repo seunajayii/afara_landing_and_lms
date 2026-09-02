@@ -48,6 +48,24 @@ export class LearningPodMembershipConflictError extends Error {
   }
 }
 
+export class LearningPodDistributionInProgressError extends Error {
+  constructor() {
+    super("This cohort is already being distributed. Please wait for the current distribution to finish.");
+    this.name = "LearningPodDistributionInProgressError";
+  }
+}
+
+function hasPostgresErrorCode(error: unknown, code: string): boolean {
+  const seen = new Set<unknown>();
+  let current = error;
+  while (typeof current === "object" && current !== null && !seen.has(current)) {
+    seen.add(current);
+    if ("code" in current && current.code === code) return true;
+    current = "cause" in current ? current.cause : undefined;
+  }
+  return false;
+}
+
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
@@ -233,6 +251,9 @@ export interface IStorage {
   getLearningPod(id: string): Promise<LearningPod | undefined>;
   createLearningPod(data: InsertLearningPod): Promise<LearningPod>;
   createLearningPodWithMembers(data: InsertLearningPod, userIds: string[]): Promise<LearningPod>;
+  createLearningPodsWithMembers(
+    pods: Array<{ data: InsertLearningPod; userIds: string[] }>,
+  ): Promise<LearningPod[]>;
   updateLearningPod(id: string, data: Partial<InsertLearningPod>): Promise<LearningPod | undefined>;
   deleteLearningPod(id: string): Promise<void>;
   getLearningPodMembers(podId: string): Promise<LearningPodMember[]>;
@@ -1324,6 +1345,65 @@ export class DatabaseStorage implements IStorage {
         );
       }
       return pod;
+    });
+  }
+
+  async createLearningPodsWithMembers(
+    podInputs: Array<{ data: InsertLearningPod; userIds: string[] }>,
+  ): Promise<LearningPod[]> {
+    if (podInputs.length === 0) return [];
+
+    const cohortId = podInputs[0].data.cohortId;
+    if (podInputs.some(({ data }) => data.cohortId !== cohortId)) {
+      throw new Error("All learning pods in a distribution must belong to the same cohort");
+    }
+
+    return db.transaction(async (tx) => {
+      let cohortRows;
+      try {
+        cohortRows = await tx.select({ id: cohorts.id })
+          .from(cohorts)
+          .where(eq(cohorts.id, cohortId))
+          .for("update", { noWait: true });
+      } catch (error) {
+        if (hasPostgresErrorCode(error, "55P03")) {
+          throw new LearningPodDistributionInProgressError();
+        }
+        throw error;
+      }
+      if (cohortRows.length === 0) throw new Error("Cohort not found");
+
+      const activeUserIds = Array.from(new Set(
+        podInputs
+          .filter(({ data }) => (data.status ?? "active") === "active")
+          .flatMap(({ userIds }) => userIds),
+      ));
+      if (activeUserIds.length > 0) {
+        const [conflict] = await tx.select({ userId: learningPodMembers.userId })
+          .from(learningPodMembers)
+          .innerJoin(learningPods, eq(learningPodMembers.podId, learningPods.id))
+          .where(and(
+            eq(learningPods.cohortId, cohortId),
+            eq(learningPods.status, "active"),
+            isNull(learningPodMembers.removedAt),
+            inArray(learningPodMembers.userId, activeUserIds),
+          ))
+          .limit(1);
+        if (conflict) throw new LearningPodMembershipConflictError();
+      }
+
+      const created: LearningPod[] = [];
+      for (const { data, userIds } of podInputs) {
+        const [pod] = await tx.insert(learningPods).values(data).returning();
+        const uniqueUserIds = Array.from(new Set(userIds));
+        if (uniqueUserIds.length > 0) {
+          await tx.insert(learningPodMembers).values(
+            uniqueUserIds.map((userId) => ({ podId: pod.id, userId })),
+          );
+        }
+        created.push(pod);
+      }
+      return created;
     });
   }
 
