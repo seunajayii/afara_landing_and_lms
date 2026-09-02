@@ -227,6 +227,12 @@ export async function runSchemaMigrations() {
         UNIQUE (course_id, cohort_id)
       )
     `);
+    await db.execute(sql`
+      ALTER TABLE newsletter_campaigns
+        ADD COLUMN IF NOT EXISTS content_json JSONB,
+        ADD COLUMN IF NOT EXISTS audience_json JSONB,
+        ADD COLUMN IF NOT EXISTS last_test_sent_at TIMESTAMP
+    `);
     // Learning pods group accepted cohort participants around one assigned
     // mentor. Work and submissions are kept separate from one-to-one
     // mentorship sessions so both experiences can coexist.

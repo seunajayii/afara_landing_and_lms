@@ -58,6 +58,12 @@ import {
   deleteObjectStorageFile,
   listObjectStoragePrivateVideoFiles,
 } from "./object-storage";
+import {
+  DEFAULT_NEWSLETTER_AUDIENCE,
+  renderNewsletterHtml,
+  type NewsletterAudience,
+  type NewsletterBlock,
+} from "@shared/newsletter";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -4786,15 +4792,144 @@ export async function registerRoutes(
     email: z.string().email()
   });
 
+  const newsletterBlockSchema = z.discriminatedUnion("type", [
+    z.object({ id: z.string().min(1), type: z.literal("text"), text: z.string().max(20000) }),
+    z.object({ id: z.string().min(1), type: z.literal("image"), url: z.string().trim().min(1).max(2000), alt: z.string().max(300) }),
+    z.object({ id: z.string().min(1), type: z.literal("button"), label: z.string().trim().min(1).max(200), url: z.string().trim().min(1).max(2000) }),
+    z.object({ id: z.string().min(1), type: z.literal("divider") }),
+  ]);
+  const newsletterAudienceSchema = z.object({
+    segments: z.array(z.discriminatedUnion("type", [
+      z.object({ type: z.literal("newsletter_subscribers") }),
+      z.object({ type: z.literal("community_members") }),
+      z.object({ type: z.literal("team_members") }),
+      z.object({ type: z.literal("all_users") }),
+      z.object({ type: z.literal("cohort_members"), cohortId: z.string().min(1) }),
+      z.object({ type: z.literal("applicants"), status: z.enum(["submitted", "under_review", "accepted", "rejected", "waitlisted", "disqualified"]), cohortId: z.string().min(1).optional() }),
+    ])).default([]),
+    selectedUserIds: z.array(z.string().min(1)).default([]),
+  });
   const campaignSchema = z.object({
     subject: z.string().min(1, "Subject is required"),
-    content: z.string().min(1, "Content is required")
+    content: z.string().optional(),
+    blocks: z.array(newsletterBlockSchema).min(1).optional(),
+    audience: newsletterAudienceSchema.default({ segments: [], selectedUserIds: [] }),
+  }).superRefine((campaign, ctx) => {
+    if (!campaign.content && !campaign.blocks?.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["content"], message: "Content is required" });
+    }
+    if (!campaign.audience.segments.length && !campaign.audience.selectedUserIds.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["audience"], message: "Choose at least one recipient group" });
+    }
   });
 
   const isAdmin = (req: Request): boolean => {
     const role = req.session?.userRole;
     return role === "admin" || role === "superadmin";
   };
+
+  const resolveNewsletterRecipients = async (audience: NewsletterAudience) => {
+    const allUsers = await storage.getAllUsers();
+    const usersById = new Map(allUsers.map((user) => [user.id, user]));
+    const usersByEmail = new Map(allUsers.map((user) => [user.email.toLowerCase(), user]));
+    const recipients = new Map<string, {
+      id?: string;
+      email: string;
+      firstName?: string;
+      lastName?: string;
+      sources: string[];
+    }>();
+    const addRecipient = (email: string, firstName: string | null | undefined, lastName: string | null | undefined, source: string, userId?: string) => {
+      const normalizedEmail = email.trim().toLowerCase();
+      if (!normalizedEmail || !normalizedEmail.includes("@")) return;
+      const existing = recipients.get(normalizedEmail);
+      if (existing) {
+        if (!existing.sources.includes(source)) existing.sources.push(source);
+        return;
+      }
+      recipients.set(normalizedEmail, {
+        id: userId,
+        email: normalizedEmail,
+        firstName: firstName || undefined,
+        lastName: lastName || undefined,
+        sources: [source],
+      });
+    };
+
+    for (const segment of audience.segments) {
+      if (segment.type === "newsletter_subscribers") {
+        const subscribers = await storage.getActiveNewsletterSubscribers();
+        subscribers.forEach((subscriber) => addRecipient(subscriber.email, subscriber.firstName, subscriber.lastName, "Newsletter subscribers", usersByEmail.get(subscriber.email.toLowerCase())?.id));
+      } else if (segment.type === "community_members") {
+        allUsers.filter((user) => user.isActive && user.role === "community_member")
+          .forEach((user) => addRecipient(user.email, user.firstName, user.lastName, "Community members", user.id));
+      } else if (segment.type === "team_members") {
+        const teamRoles = new Set(["mentor", "facilitator", "admin", "superadmin"]);
+        allUsers.filter((user) => user.isActive && teamRoles.has(user.role))
+          .forEach((user) => addRecipient(user.email, user.firstName, user.lastName, "Team members", user.id));
+      } else if (segment.type === "all_users") {
+        allUsers.filter((user) => user.isActive)
+          .forEach((user) => addRecipient(user.email, user.firstName, user.lastName, "All active users", user.id));
+      } else if (segment.type === "cohort_members") {
+        const applications = (await storage.getApplicationsByStatus("accepted"))
+          .filter((application) => application.cohortId === segment.cohortId);
+        applications.forEach((application) => {
+          const user = usersByEmail.get(application.email.toLowerCase());
+          addRecipient(application.email, application.firstName, application.lastName, "Cohort members", user?.id);
+        });
+      } else if (segment.type === "applicants") {
+        const applications = (await storage.getApplicationsByStatus(segment.status))
+          .filter((application) => !segment.cohortId || application.cohortId === segment.cohortId);
+        applications.forEach((application) => {
+          const user = usersByEmail.get(application.email.toLowerCase());
+          addRecipient(application.email, application.firstName, application.lastName, `Applicants · ${segment.status}`, user?.id);
+        });
+      }
+    }
+
+    audience.selectedUserIds.forEach((userId) => {
+      const user = usersById.get(userId);
+      if (user?.isActive) addRecipient(user.email, user.firstName, user.lastName, "Selected people", user.id);
+    });
+    return Array.from(recipients.values()).sort((a, b) => a.email.localeCompare(b.email));
+  };
+
+  const buildNewsletterHtml = (subject: string, content: string | undefined, blocks: NewsletterBlock[] | undefined) =>
+    blocks?.length ? renderNewsletterHtml(subject, blocks) : content || "";
+
+  app.get("/api/newsletter/recipient-options", async (req: Request, res: Response) => {
+    if (!req.session?.userId || !isAdmin(req)) return res.status(403).json({ error: "Admin access required" });
+    try {
+      const cohorts = await storage.getAllCohorts();
+      const users = (await storage.getAllUsers())
+        .filter((user) => user.isActive)
+        .map((user) => ({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role }));
+      const statuses = ["submitted", "under_review", "accepted", "rejected", "waitlisted", "disqualified"];
+      const groupDefinitions: Array<{ key: NewsletterAudience["segments"][number]["type"]; label: string; description: string; audience: NewsletterAudience }> = [
+        { key: "newsletter_subscribers", label: "Newsletter subscribers", description: "People who opted into the public newsletter.", audience: { segments: [{ type: "newsletter_subscribers" }], selectedUserIds: [] } },
+        { key: "community_members", label: "Community members", description: "Active users with the community member role.", audience: { segments: [{ type: "community_members" }], selectedUserIds: [] } },
+        { key: "team_members", label: "Team members", description: "Mentors, facilitators, admins, and super admins.", audience: { segments: [{ type: "team_members" }], selectedUserIds: [] } },
+        { key: "all_users", label: "All active users", description: "Every active platform account.", audience: { segments: [{ type: "all_users" }], selectedUserIds: [] } },
+      ];
+      const groups = await Promise.all(groupDefinitions.map(async (group) => ({ key: group.key, label: group.label, description: group.description, count: (await resolveNewsletterRecipients(group.audience)).length })));
+      res.json({ groups, cohorts: await Promise.all(cohorts.map(async (cohort) => ({ id: cohort.id, name: cohort.displayName || cohort.name, count: (await resolveNewsletterRecipients({ segments: [{ type: "cohort_members", cohortId: cohort.id }], selectedUserIds: [] })).length }))), applicantStatuses: statuses, users });
+    } catch (error) {
+      console.error("Recipient options error:", error);
+      res.status(500).json({ error: "Failed to load recipient options" });
+    }
+  });
+
+  app.post("/api/newsletter/recipient-preview", async (req: Request, res: Response) => {
+    if (!req.session?.userId || !isAdmin(req)) return res.status(403).json({ error: "Admin access required" });
+    try {
+      const audience = newsletterAudienceSchema.parse(req.body.audience || DEFAULT_NEWSLETTER_AUDIENCE) as NewsletterAudience;
+      const recipients = await resolveNewsletterRecipients(audience);
+      res.json({ count: recipients.length, recipients: recipients.slice(0, 500) });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      res.status(500).json({ error: "Failed to preview recipients" });
+    }
+  });
 
   app.post("/api/contact", async (req: Request, res: Response) => {
     const { name, email, organization, interest, message } = req.body;
@@ -4900,11 +5035,14 @@ export async function registerRoutes(
       return res.status(403).json({ error: "Admin access required" });
     }
     try {
-      const { subject, content } = campaignSchema.parse(req.body);
+      const parsed = campaignSchema.parse(req.body);
+      const content = buildNewsletterHtml(parsed.subject, parsed.content, parsed.blocks as NewsletterBlock[] | undefined);
       
       const campaign = await storage.createNewsletterCampaign({
-        subject,
+        subject: parsed.subject,
         content,
+        contentJson: parsed.blocks as NewsletterBlock[] | undefined,
+        audienceJson: parsed.audience as NewsletterAudience,
         sentById: req.session.userId,
         status: "draft"
       });
@@ -4918,6 +5056,70 @@ export async function registerRoutes(
     }
   });
 
+  app.patch("/api/newsletter/campaigns/:id", async (req: Request, res: Response) => {
+    if (!req.session?.userId || !isAdmin(req)) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    try {
+      const campaign = await storage.getNewsletterCampaign(req.params.id);
+      if (!campaign) return res.status(404).json({ error: "Campaign not found" });
+      if (campaign.status !== "draft") return res.status(400).json({ error: "Sent campaigns cannot be edited" });
+      const parsed = campaignSchema.parse(req.body);
+      const updated = await storage.updateNewsletterCampaign(campaign.id, {
+        subject: parsed.subject,
+        content: buildNewsletterHtml(parsed.subject, parsed.content, parsed.blocks as NewsletterBlock[] | undefined),
+        contentJson: parsed.blocks as NewsletterBlock[] | undefined,
+        audienceJson: parsed.audience as NewsletterAudience,
+      });
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      res.status(500).json({ error: "Failed to update campaign" });
+    }
+  });
+
+  app.post("/api/newsletter/preview", async (req: Request, res: Response) => {
+    if (!req.session?.userId || !isAdmin(req)) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    try {
+      const parsed = campaignSchema.parse({
+        ...req.body,
+        audience: req.body.audience || DEFAULT_NEWSLETTER_AUDIENCE,
+      });
+      res.json({ subject: parsed.subject, html: buildNewsletterHtml(parsed.subject, parsed.content, parsed.blocks as NewsletterBlock[] | undefined) });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      res.status(500).json({ error: "Failed to build preview" });
+    }
+  });
+
+  app.post("/api/newsletter/test", async (req: Request, res: Response) => {
+    if (!req.session?.userId || !isAdmin(req)) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    try {
+      const recipientEmail = z.string().email().parse(req.body.recipientEmail);
+      const parsed = campaignSchema.parse({
+        ...req.body,
+        audience: req.body.audience || DEFAULT_NEWSLETTER_AUDIENCE,
+      });
+      const html = buildNewsletterHtml(parsed.subject, parsed.content, parsed.blocks as NewsletterBlock[] | undefined);
+      const { sendNewsletter } = await import("./email");
+      const result = await sendNewsletter(parsed.subject, html, [recipientEmail]);
+      if (!result.success) return res.status(502).json({ error: result.error || "Failed to send test email" });
+      if (req.body.campaignId) {
+        const campaign = await storage.getNewsletterCampaign(req.body.campaignId);
+        if (campaign?.status === "draft") await storage.updateNewsletterCampaign(campaign.id, { lastTestSentAt: new Date() });
+      }
+      res.json({ message: "Test email sent", recipientEmail });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      console.error("Test newsletter error:", error);
+      res.status(500).json({ error: "Failed to send test email" });
+    }
+  });
+
   app.post("/api/newsletter/campaigns/:id/send", async (req: Request, res: Response) => {
     if (!req.session?.userId || !isAdmin(req)) {
       return res.status(403).json({ error: "Admin access required" });
@@ -4927,16 +5129,16 @@ export async function registerRoutes(
       if (!campaign) {
         return res.status(404).json({ error: "Campaign not found" });
       }
-      
-      const activeSubscribers = await storage.getActiveNewsletterSubscribers();
-      const recipientEmails = activeSubscribers.map(s => s.email);
-      
+      if (campaign.status !== "draft") return res.status(400).json({ error: "This campaign has already been sent or is not ready to send" });
+      const audience = (campaign.audienceJson || DEFAULT_NEWSLETTER_AUDIENCE) as NewsletterAudience;
+      const recipients = await resolveNewsletterRecipients(audience);
+      const recipientEmails = recipients.map((recipient) => recipient.email);
       if (recipientEmails.length === 0) {
-        return res.status(400).json({ error: "No active subscribers" });
+        return res.status(400).json({ error: "No recipients match the selected groups" });
       }
-      
+      const html = buildNewsletterHtml(campaign.subject, campaign.content, campaign.contentJson as NewsletterBlock[] | undefined);
       const { sendNewsletter } = await import("./email");
-      const result = await sendNewsletter(campaign.subject, campaign.content, recipientEmails);
+      const result = await sendNewsletter(campaign.subject, html, recipientEmails);
       
       if (!result.success) {
         return res.status(500).json({ error: result.error || "Failed to send newsletter" });
@@ -4944,7 +5146,8 @@ export async function registerRoutes(
       
       await storage.updateNewsletterCampaign(campaign.id, {
         status: "sent",
-        recipientCount: recipientEmails.length
+        recipientCount: recipientEmails.length,
+        sentAt: new Date(),
       });
       
       res.json({ message: "Newsletter sent successfully", recipientCount: recipientEmails.length });

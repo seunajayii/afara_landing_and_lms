@@ -8,3 +8,4 @@
 - [Zoom OAuth connection](zoom-oauth.md) — meeting-management authorization must not depend on optional Zoom profile-read scopes
 - [Playwright E2E environment](playwright-e2e-environment.md) — Chromium needs explicit shared libraries here; Express 304 responses are not Playwright `response.ok()`
 - [Learning pod operating rules](learning-pods.md) — pod membership is cohort-scoped and server-authoritative; group work is shared and mentor-reviewed
+- [Email blast audiences](email-blast-audiences.md) — campaign audiences are dynamic database criteria resolved and deduplicated at send time; legacy HTML remains sendable

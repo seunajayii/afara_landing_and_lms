@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, integer, boolean, timestamp, pgEnum, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import type { NewsletterAudience, NewsletterBlock } from "./newsletter";
 
 // Cohort-specific extra application questions (e.g. DOREWA-only questions),
 // configured by admins per cohort and rendered as an extra step at the end
@@ -398,8 +399,11 @@ export const newsletterCampaigns = pgTable("newsletter_campaigns", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   subject: text("subject").notNull(),
   content: text("content").notNull(),
+  contentJson: jsonb("content_json").$type<NewsletterBlock[]>(),
+  audienceJson: jsonb("audience_json").$type<NewsletterAudience>(),
   sentById: varchar("sent_by_id").references(() => users.id),
   sentAt: timestamp("sent_at"),
+  lastTestSentAt: timestamp("last_test_sent_at"),
   recipientCount: integer("recipient_count").default(0),
   status: text("status").notNull().default("draft"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -669,7 +673,7 @@ export const insertCertificateSchema = createInsertSchema(certificates).omit({ i
 export const insertAchievementSchema = createInsertSchema(achievements).omit({ id: true });
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
 export const insertNewsletterSubscriberSchema = createInsertSchema(newsletterSubscribers).omit({ id: true, subscribedAt: true });
-export const insertNewsletterCampaignSchema = createInsertSchema(newsletterCampaigns).omit({ id: true, createdAt: true, sentAt: true });
+export const insertNewsletterCampaignSchema = createInsertSchema(newsletterCampaigns).omit({ id: true, createdAt: true });
 export const insertApplicationSchema = createInsertSchema(applications).omit({ 
   id: true, 
   reviewedAt: true, 
