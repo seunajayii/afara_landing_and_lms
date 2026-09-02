@@ -148,6 +148,21 @@ export async function runSchemaMigrations() {
       ALTER TABLE zoom_webhook_events
         ADD COLUMN IF NOT EXISTS processing_started_at TIMESTAMP
     `);
+    // Store one encrypted Zoom OAuth connection for meeting management. The
+    // application encrypts the token values before they reach this table.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS zoom_oauth_connections (
+        id VARCHAR PRIMARY KEY,
+        access_token TEXT NOT NULL,
+        refresh_token TEXT NOT NULL,
+        access_token_expires_at TIMESTAMP NOT NULL,
+        scope TEXT,
+        zoom_user_id TEXT,
+        zoom_user_email TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
     // Zoom recording delivery is configured per event. Keep the provider
     // meeting ID and the optional curriculum lesson mapping separate from the
     // existing manual recording URL for backwards compatibility.

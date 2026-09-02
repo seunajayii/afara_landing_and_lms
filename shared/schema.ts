@@ -293,6 +293,18 @@ export const zoomWebhookEvents = pgTable("zoom_webhook_events", {
   error: text("error"),
 });
 
+export const zoomOAuthConnections = pgTable("zoom_oauth_connections", {
+  id: varchar("id").primaryKey(),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  accessTokenExpiresAt: timestamp("access_token_expires_at").notNull(),
+  scope: text("scope"),
+  zoomUserId: text("zoom_user_id"),
+  zoomUserEmail: text("zoom_user_email"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const discussionThreads = pgTable("discussion_threads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),
@@ -647,6 +659,7 @@ export type Resource = typeof resources.$inferSelect;
 export type PrivateVideoUpload = typeof privateVideoUploads.$inferSelect;
 export type InsertPrivateVideoUpload = typeof privateVideoUploads.$inferInsert;
 export type ZoomWebhookEvent = typeof zoomWebhookEvents.$inferSelect;
+export type ZoomOAuthConnection = typeof zoomOAuthConnections.$inferSelect;
 export type InsertDiscussionThread = z.infer<typeof insertDiscussionThreadSchema>;
 export type DiscussionThread = typeof discussionThreads.$inferSelect;
 export type InsertDiscussionPost = z.infer<typeof insertDiscussionPostSchema>;

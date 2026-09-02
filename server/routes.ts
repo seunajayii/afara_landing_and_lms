@@ -11,12 +11,23 @@ import {
   insertDiscussionThreadSchema, insertDiscussionPostSchema, insertCertificateSchema,
   insertNotificationSchema, insertApplicationSchema, insertCohortSchema,
   extraAnswersSchema,
-  type Cohort
+  type Cohort, type Event
 } from "@shared/schema";
 import { z } from "zod";
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
 import {
   downloadZoomRecording as downloadZoomRecordingFile,
+  createZoomMeeting,
+  deleteZoomMeeting,
+  decryptZoomToken,
+  encryptZoomToken,
+  exchangeZoomAuthorizationCode,
+  getZoomAuthorizationUrl,
+  getZoomUser,
+  refreshZoomAccessToken,
+  updateZoomMeeting,
+  type ZoomMeeting,
+  type ZoomMeetingInput,
   type ZoomRecordingDownloadInput,
   type ZoomRecordingDownload,
 } from "./zoom";
@@ -172,6 +183,101 @@ function getZoomWebhookSecret(): string {
     throw new Error("ZOOM_WEBHOOK_SECRET_TOKEN is not configured");
   }
   return secret;
+}
+
+function getZoomRedirectUri(): string {
+  const configured = process.env.ZOOM_REDIRECT_URI;
+  if (configured) return configured.replace(/\/+$/, "");
+
+  const appBaseUrl = process.env.APP_BASE_URL;
+  if (appBaseUrl) return `${appBaseUrl.replace(/\/+$/, "")}/api/integrations/zoom/callback`;
+
+  if (process.env.NODE_ENV !== "production" && process.env.REPLIT_DEV_DOMAIN) {
+    return `https://${process.env.REPLIT_DEV_DOMAIN}/api/integrations/zoom/callback`;
+  }
+
+  throw new Error(
+    "ZOOM_REDIRECT_URI or APP_BASE_URL must be configured before connecting Zoom.",
+  );
+}
+
+function isZoomMeetingPlatform(platform: string | null | undefined): boolean {
+  return typeof platform === "string" && platform.trim().toLowerCase() === "zoom";
+}
+
+async function getConnectedZoomAccessToken(): Promise<string> {
+  const connection = await storage.getZoomOAuthConnection();
+  if (!connection) {
+    throw new Error("Zoom is not connected. Connect the AFÁRÁ Zoom account first.");
+  }
+
+  let accessToken = decryptZoomToken(connection.accessToken);
+  if (connection.accessTokenExpiresAt.getTime() <= Date.now() + 60_000) {
+    const refreshToken = decryptZoomToken(connection.refreshToken);
+    const refreshed = await refreshZoomAccessToken(refreshToken);
+    await storage.saveZoomOAuthConnection({
+      accessToken: encryptZoomToken(refreshed.accessToken),
+      refreshToken: encryptZoomToken(refreshed.refreshToken),
+      accessTokenExpiresAt: new Date(Date.now() + refreshed.expiresInSeconds * 1000),
+      scope: refreshed.scope ?? connection.scope,
+      zoomUserId: connection.zoomUserId,
+      zoomUserEmail: connection.zoomUserEmail,
+    });
+    accessToken = refreshed.accessToken;
+  }
+  return accessToken;
+}
+
+type ZoomEventFields = {
+  title: string;
+  description?: string | null;
+  startTime: Date;
+  endTime?: Date | null;
+  durationMinutes?: number | null;
+  meetingPlatform?: string | null;
+  meetingLink?: string | null;
+  zoomMeetingId?: string | null;
+};
+
+function getZoomMeetingInput(event: ZoomEventFields): ZoomMeetingInput {
+  return {
+    topic: event.title,
+    agenda: event.description,
+    startTime: event.startTime,
+    endTime: event.endTime,
+    durationMinutes: event.durationMinutes,
+  };
+}
+
+async function provisionZoomMeeting(
+  event: ZoomEventFields,
+): Promise<{ meeting?: ZoomMeeting; created: boolean }> {
+  if (!isZoomMeetingPlatform(event.meetingPlatform)) {
+    return { created: false };
+  }
+
+  // A supplied link without an existing Zoom ID is intentionally treated as a
+  // manually managed meeting. Leaving it blank opts into automatic creation.
+  if (event.meetingLink && !event.zoomMeetingId) {
+    return { created: false };
+  }
+
+  const accessToken = await getConnectedZoomAccessToken();
+  const input = getZoomMeetingInput(event);
+  if (event.zoomMeetingId) {
+    return {
+      meeting: await updateZoomMeeting(accessToken, event.zoomMeetingId, input),
+      created: false,
+    };
+  }
+  return {
+    meeting: await createZoomMeeting(accessToken, input),
+    created: true,
+  };
+}
+
+function getZoomFailureMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Zoom meeting synchronization failed.";
 }
 
 function hasValidZoomWebhookSignature(req: Request, rawBody: Buffer, secret: string): boolean {
@@ -693,6 +799,96 @@ export async function registerRoutes(
     const role = req.session?.userRole as string | undefined;
     return role === "admin" || role === "superadmin";
   };
+
+  app.get(
+    "/api/admin/integrations/zoom/connect",
+    requireAuth,
+    requireAdminRole,
+    (req: Request, res: Response) => {
+      try {
+        const state = randomUUID();
+        req.session.zoomOAuthState = state;
+        const authorizationUrl = getZoomAuthorizationUrl(getZoomRedirectUri(), state);
+        req.session.save((error) => {
+          if (error) {
+            console.error("Failed to save Zoom OAuth session state:", error);
+            return res.status(500).json({ error: "Could not start Zoom connection." });
+          }
+          res.redirect(authorizationUrl);
+        });
+      } catch (error) {
+        console.error("Failed to start Zoom OAuth:", error);
+        res.status(503).json({ error: getZoomFailureMessage(error) });
+      }
+    },
+  );
+
+  app.get("/api/integrations/zoom/callback", async (req: Request, res: Response) => {
+    const redirectToEvents = (status: "connected" | "error", message?: string) => {
+      const query = new URLSearchParams({ zoom: status });
+      if (message) query.set("message", message);
+      return res.redirect(`/admin/events?${query.toString()}`);
+    };
+
+    const receivedState = typeof req.query.state === "string" ? req.query.state : "";
+    const expectedState = req.session.zoomOAuthState;
+    delete req.session.zoomOAuthState;
+    if (!expectedState || !receivedState || expectedState !== receivedState) {
+      return redirectToEvents("error", "The Zoom connection session expired. Please try again.");
+    }
+
+    if (typeof req.query.error === "string") {
+      return redirectToEvents("error", "Zoom authorization was cancelled.");
+    }
+
+    const code = typeof req.query.code === "string" ? req.query.code : "";
+    if (!code) return redirectToEvents("error", "Zoom did not return an authorization code.");
+
+    try {
+      const redirectUri = getZoomRedirectUri();
+      const tokens = await exchangeZoomAuthorizationCode(code, redirectUri);
+      let zoomUser: { id?: string; email?: string } = {};
+      try {
+        zoomUser = await getZoomUser(tokens.accessToken);
+      } catch (error) {
+        // Meeting scopes are sufficient for this integration. User profile
+        // metadata is helpful in the admin UI but should not block connection.
+        console.warn("Zoom profile lookup skipped after OAuth:", getZoomFailureMessage(error));
+      }
+      await storage.saveZoomOAuthConnection({
+        accessToken: encryptZoomToken(tokens.accessToken),
+        refreshToken: encryptZoomToken(tokens.refreshToken),
+        accessTokenExpiresAt: new Date(Date.now() + tokens.expiresInSeconds * 1000),
+        scope: tokens.scope,
+        zoomUserId: zoomUser.id,
+        zoomUserEmail: zoomUser.email,
+      });
+      return redirectToEvents("connected");
+    } catch (error) {
+      console.error("Zoom OAuth callback failed:", error);
+      return redirectToEvents("error", "AFÁRÁ could not complete the Zoom connection.");
+    }
+  });
+
+  app.get(
+    "/api/admin/integrations/zoom/status",
+    requireAuth,
+    requireAdminRole,
+    async (_req: Request, res: Response) => {
+      try {
+        const connection = await storage.getZoomOAuthConnection();
+        res.json({
+          connected: Boolean(connection),
+          accountEmail: connection?.zoomUserEmail ?? null,
+          connectedAt: connection?.createdAt ?? null,
+          tokenExpiresAt: connection?.accessTokenExpiresAt ?? null,
+        });
+      } catch (error) {
+        console.error("Failed to read Zoom connection status:", error);
+        res.status(500).json({ error: "Failed to read Zoom connection status." });
+      }
+    },
+  );
 
   // Never return provider IDs or storage keys for a restricted video. A
   // learner can still receive the resource metadata, but playback must go
@@ -1891,18 +2087,43 @@ export async function registerRoutes(
       }
       
       const data = insertEventSchema.parse(body);
-      const event = await storage.createEvent(data);
-      res.status(201).json(event);
+      const zoomSync = await provisionZoomMeeting(data);
+      const eventData = zoomSync.meeting
+        ? {
+            ...data,
+            zoomMeetingId: zoomSync.meeting.id,
+            meetingLink: zoomSync.meeting.joinUrl,
+          }
+        : data;
+
+      try {
+        const event = await storage.createEvent(eventData);
+        return res.status(201).json(event);
+      } catch (error) {
+        if (zoomSync.created && zoomSync.meeting) {
+          try {
+            const accessToken = await getConnectedZoomAccessToken();
+            await deleteZoomMeeting(accessToken, zoomSync.meeting.id);
+          } catch (cleanupError) {
+            console.error("Failed to clean up orphaned Zoom meeting:", cleanupError);
+          }
+        }
+        throw error;
+      }
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: error.errors });
       }
-      res.status(500).json({ error: "Failed to create event" });
+      console.error("Failed to create event:", error);
+      res.status(502).json({ error: getZoomFailureMessage(error) });
     }
   });
 
   app.patch("/api/events/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
+      const existing = await storage.getEvent(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Event not found" });
+
       // Convert datetime-local strings to Date objects
       const body = { ...req.body };
       if (body.startTime && typeof body.startTime === 'string') {
@@ -1911,12 +2132,39 @@ export async function registerRoutes(
       if (body.endTime && typeof body.endTime === 'string') {
         body.endTime = new Date(body.endTime);
       }
-      
-      const event = await storage.updateEvent(req.params.id, body);
-      if (!event) return res.status(404).json({ error: "Event not found" });
-      res.json(event);
+
+      const data = insertEventSchema.partial().parse(body);
+      const candidate = { ...existing, ...data };
+      const zoomSync = await provisionZoomMeeting(candidate);
+      const updateData = zoomSync.meeting
+        ? {
+            ...data,
+            zoomMeetingId: zoomSync.meeting.id,
+            meetingLink: zoomSync.meeting.joinUrl,
+          }
+        : data;
+
+      try {
+        const event = await storage.updateEvent(req.params.id, updateData);
+        if (!event) return res.status(404).json({ error: "Event not found" });
+        return res.json(event);
+      } catch (error) {
+        if (zoomSync.created && zoomSync.meeting) {
+          try {
+            const accessToken = await getConnectedZoomAccessToken();
+            await deleteZoomMeeting(accessToken, zoomSync.meeting.id);
+          } catch (cleanupError) {
+            console.error("Failed to clean up orphaned Zoom meeting:", cleanupError);
+          }
+        }
+        throw error;
+      }
     } catch (error) {
-      res.status(500).json({ error: "Failed to update event" });
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Failed to update event:", error);
+      res.status(502).json({ error: getZoomFailureMessage(error) });
     }
   });
 

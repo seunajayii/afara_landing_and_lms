@@ -11,6 +11,7 @@ declare module "express-session" {
     userId: string;
     userRole: string;
     mustChangePassword?: boolean;
+    zoomOAuthState?: string;
   }
 }
 

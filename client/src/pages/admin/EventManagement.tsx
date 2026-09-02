@@ -45,6 +45,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { ZoomConnectionPanel } from "@/components/ZoomConnectionPanel";
 import { 
   Plus, 
   Pencil, 
@@ -399,6 +400,8 @@ export default function EventManagement() {
               Create Event
             </Button>
           </div>
+
+          <ZoomConnectionPanel />
 
           <div className="mb-6">
             <div className="relative max-w-md">

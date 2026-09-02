@@ -12,7 +12,7 @@ import {
   type MentorshipSession, type InsertMentorshipSession,
   type Event, type InsertEvent,
   type EventRegistration, type InsertEventRegistration,
-  type Resource, type InsertResource, type PrivateVideoUpload, type ZoomWebhookEvent,
+  type Resource, type InsertResource, type PrivateVideoUpload, type ZoomWebhookEvent, type ZoomOAuthConnection,
   type DiscussionThread, type InsertDiscussionThread,
   type DiscussionPost, type InsertDiscussionPost,
   type Certificate, type InsertCertificate,
@@ -26,7 +26,7 @@ import {
   users, profiles, mentorProfiles, facilitatorProfiles,
   courses, modules, lessons, enrollments, lessonProgress,
   mentorshipRequests, mentorshipSessions,
-  events, eventRegistrations, resources, privateVideoUploads, zoomWebhookEvents,
+  events, eventRegistrations, resources, privateVideoUploads, zoomWebhookEvents, zoomOAuthConnections,
   discussionThreads, discussionPosts, postLikes,
   certificates, achievements, userAchievements, notifications,
   newsletterSubscribers, newsletterCampaigns,
@@ -147,6 +147,15 @@ export interface IStorage {
   claimZoomWebhookEvent(eventId: string): Promise<ZoomWebhookEvent | undefined>;
   markZoomWebhookEventCompleted(eventId: string): Promise<void>;
   markZoomWebhookEventFailed(eventId: string, error: string): Promise<void>;
+  getZoomOAuthConnection(): Promise<ZoomOAuthConnection | undefined>;
+  saveZoomOAuthConnection(connection: {
+    accessToken: string;
+    refreshToken: string;
+    accessTokenExpiresAt: Date;
+    scope?: string | null;
+    zoomUserId?: string | null;
+    zoomUserEmail?: string | null;
+  }): Promise<ZoomOAuthConnection>;
   
   getDiscussionThread(id: string): Promise<DiscussionThread | undefined>;
   getAllDiscussionThreads(): Promise<DiscussionThread[]>;
@@ -840,6 +849,41 @@ export class DatabaseStorage implements IStorage {
         error: error.slice(0, 2000),
       })
       .where(eq(zoomWebhookEvents.eventId, eventId));
+  }
+
+  async getZoomOAuthConnection(): Promise<ZoomOAuthConnection | undefined> {
+    const [connection] = await db.select().from(zoomOAuthConnections)
+      .where(eq(zoomOAuthConnections.id, "primary"));
+    return connection;
+  }
+
+  async saveZoomOAuthConnection(connection: {
+    accessToken: string;
+    refreshToken: string;
+    accessTokenExpiresAt: Date;
+    scope?: string | null;
+    zoomUserId?: string | null;
+    zoomUserEmail?: string | null;
+  }): Promise<ZoomOAuthConnection> {
+    const [saved] = await db.insert(zoomOAuthConnections)
+      .values({
+        id: "primary",
+        ...connection,
+      })
+      .onConflictDoUpdate({
+        target: zoomOAuthConnections.id,
+        set: {
+          accessToken: connection.accessToken,
+          refreshToken: connection.refreshToken,
+          accessTokenExpiresAt: connection.accessTokenExpiresAt,
+          scope: connection.scope ?? null,
+          zoomUserId: connection.zoomUserId ?? null,
+          zoomUserEmail: connection.zoomUserEmail ?? null,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return saved;
   }
 
   async incrementResourceDownload(id: string): Promise<void> {
