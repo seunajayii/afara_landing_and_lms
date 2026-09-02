@@ -41,6 +41,13 @@ import { db } from "./db";
 import { eq, and, ne, desc, asc, sql, or, inArray, isNull, lt } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
+export class LearningPodMembershipConflictError extends Error {
+  constructor() {
+    super("A participant can only belong to one active pod in a cohort");
+    this.name = "LearningPodMembershipConflictError";
+  }
+}
+
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
@@ -222,6 +229,7 @@ export interface IStorage {
   getLearningPodsByUser(userId: string): Promise<LearningPod[]>;
   getLearningPod(id: string): Promise<LearningPod | undefined>;
   createLearningPod(data: InsertLearningPod): Promise<LearningPod>;
+  createLearningPodWithMembers(data: InsertLearningPod, userIds: string[]): Promise<LearningPod>;
   updateLearningPod(id: string, data: Partial<InsertLearningPod>): Promise<LearningPod | undefined>;
   deleteLearningPod(id: string): Promise<void>;
   getLearningPodMembers(podId: string): Promise<LearningPodMember[]>;
@@ -1269,12 +1277,86 @@ export class DatabaseStorage implements IStorage {
     return pod;
   }
 
+  async createLearningPodWithMembers(data: InsertLearningPod, userIds: string[]): Promise<LearningPod> {
+    const uniqueUserIds = Array.from(new Set(userIds));
+    return db.transaction(async (tx) => {
+      await tx.select({ id: cohorts.id })
+        .from(cohorts)
+        .where(eq(cohorts.id, data.cohortId))
+        .for("update");
+
+      if ((data.status ?? "active") === "active" && uniqueUserIds.length > 0) {
+        const [conflict] = await tx.select({ userId: learningPodMembers.userId })
+          .from(learningPodMembers)
+          .innerJoin(learningPods, eq(learningPodMembers.podId, learningPods.id))
+          .where(and(
+            eq(learningPods.cohortId, data.cohortId),
+            eq(learningPods.status, "active"),
+            isNull(learningPodMembers.removedAt),
+            inArray(learningPodMembers.userId, uniqueUserIds),
+          ))
+          .limit(1);
+        if (conflict) throw new LearningPodMembershipConflictError();
+      }
+
+      const [pod] = await tx.insert(learningPods).values(data).returning();
+      if (uniqueUserIds.length > 0) {
+        await tx.insert(learningPodMembers).values(
+          uniqueUserIds.map((userId) => ({ podId: pod.id, userId })),
+        );
+      }
+      return pod;
+    });
+  }
+
   async updateLearningPod(id: string, data: Partial<InsertLearningPod>): Promise<LearningPod | undefined> {
-    const [pod] = await db.update(learningPods)
-      .set({ ...data, updatedAt: new Date() })
-      .where(eq(learningPods.id, id))
-      .returning();
-    return pod;
+    return db.transaction(async (tx) => {
+      const [existing] = await tx.select()
+        .from(learningPods)
+        .where(eq(learningPods.id, id))
+        .for("update");
+      if (!existing) return undefined;
+
+      const nextCohortId = data.cohortId ?? existing.cohortId;
+      const nextStatus = data.status ?? existing.status;
+      const cohortIds = Array.from(new Set([existing.cohortId, nextCohortId])).sort();
+      for (const cohortId of cohortIds) {
+        await tx.select({ id: cohorts.id })
+          .from(cohorts)
+          .where(eq(cohorts.id, cohortId))
+          .for("update");
+      }
+
+      if (nextStatus === "active") {
+        const members = await tx.select({ userId: learningPodMembers.userId })
+          .from(learningPodMembers)
+          .where(and(
+            eq(learningPodMembers.podId, id),
+            isNull(learningPodMembers.removedAt),
+          ));
+        const memberIds = members.map(({ userId }) => userId);
+        if (memberIds.length > 0) {
+          const [conflict] = await tx.select({ userId: learningPodMembers.userId })
+            .from(learningPodMembers)
+            .innerJoin(learningPods, eq(learningPodMembers.podId, learningPods.id))
+            .where(and(
+              eq(learningPods.cohortId, nextCohortId),
+              eq(learningPods.status, "active"),
+              ne(learningPods.id, id),
+              isNull(learningPodMembers.removedAt),
+              inArray(learningPodMembers.userId, memberIds),
+            ))
+            .limit(1);
+          if (conflict) throw new LearningPodMembershipConflictError();
+        }
+      }
+
+      const [pod] = await tx.update(learningPods)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(learningPods.id, id))
+        .returning();
+      return pod;
+    });
   }
 
   async deleteLearningPod(id: string): Promise<void> {
@@ -1290,6 +1372,32 @@ export class DatabaseStorage implements IStorage {
   async setLearningPodMembers(podId: string, userIds: string[]): Promise<void> {
     const uniqueUserIds = Array.from(new Set(userIds));
     await db.transaction(async (tx) => {
+      const [pod] = await tx.select()
+        .from(learningPods)
+        .where(eq(learningPods.id, podId))
+        .for("update");
+      if (!pod) return;
+
+      await tx.select({ id: cohorts.id })
+        .from(cohorts)
+        .where(eq(cohorts.id, pod.cohortId))
+        .for("update");
+
+      if (pod.status === "active" && uniqueUserIds.length > 0) {
+        const [conflict] = await tx.select({ userId: learningPodMembers.userId })
+          .from(learningPodMembers)
+          .innerJoin(learningPods, eq(learningPodMembers.podId, learningPods.id))
+          .where(and(
+            eq(learningPods.cohortId, pod.cohortId),
+            eq(learningPods.status, "active"),
+            ne(learningPods.id, podId),
+            isNull(learningPodMembers.removedAt),
+            inArray(learningPodMembers.userId, uniqueUserIds),
+          ))
+          .limit(1);
+        if (conflict) throw new LearningPodMembershipConflictError();
+      }
+
       await tx.delete(learningPodMembers).where(eq(learningPodMembers.podId, podId));
       if (uniqueUserIds.length > 0) {
         await tx.insert(learningPodMembers).values(

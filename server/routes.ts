@@ -1,7 +1,7 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
-import { storage } from "./storage";
+import { storage, LearningPodMembershipConflictError } from "./storage";
 import { authenticateUser, createUserWithPassword } from "./auth";
 import { 
   insertUserSchema, insertProfileSchema, insertMentorProfileSchema, insertFacilitatorProfileSchema,
@@ -2207,22 +2207,23 @@ export async function registerRoutes(
       if (!await validateLearningPodMentor(data.mentorId)) {
         return res.status(400).json({ error: "The selected mentor is not available" });
       }
-      const pod = await storage.createLearningPod(data);
       const members = Array.isArray(req.body.userIds) ? z.array(z.string()).parse(req.body.userIds) : [];
       const eligibleIds = new Set((await getAcceptedCohortParticipants(data.cohortId)).map((participant) => participant.id));
       if (members.some((userId) => !eligibleIds.has(userId))) {
-        await storage.deleteLearningPod(pod.id);
         return res.status(400).json({ error: "Every pod member must be an accepted participant in the selected cohort" });
       }
-      const alreadyAssigned = await getActivePodMemberIdsForCohort(data.cohortId, pod.id);
+      // Keep the fast validation for a friendly response in the common case.
+      // The storage transaction below repeats this check while holding the
+      // cohort lock, which is the authority when two requests race.
+      const alreadyAssigned = await getActivePodMemberIdsForCohort(data.cohortId);
       if (members.some((userId) => alreadyAssigned.has(userId))) {
-        await storage.deleteLearningPod(pod.id);
         return res.status(400).json({ error: "A participant can only belong to one active pod in a cohort" });
       }
-      await storage.setLearningPodMembers(pod.id, members);
+      const pod = await storage.createLearningPodWithMembers(data, members);
       res.status(201).json(await getLearningPodResponse(pod, req, true));
     } catch (error) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      if (error instanceof LearningPodMembershipConflictError) return res.status(400).json({ error: error.message });
       res.status(500).json({ error: "Failed to create learning pod" });
     }
   });
@@ -2252,20 +2253,24 @@ export async function registerRoutes(
           name = `${data.namePrefix} ${nextPodNumber}`;
         }
         existingNames.add(name);
-        const pod = await storage.createLearningPod({
+        const podData = {
           cohortId: data.cohortId,
           name,
           description: `Automatically distributed pod for ${cohort.displayName || cohort.name}.`,
           mentorId: data.mentorIds[created.length % data.mentorIds.length],
           status: "active",
-        });
+        } as const;
         nextPodNumber += 1;
-        await storage.setLearningPodMembers(pod.id, participants.slice(offset, offset + data.podSize).map((participant) => participant.id));
+        const pod = await storage.createLearningPodWithMembers(
+          podData,
+          participants.slice(offset, offset + data.podSize).map((participant) => participant.id),
+        );
         created.push(await getLearningPodResponse(pod, req, true));
       }
       res.status(201).json({ pods: created });
     } catch (error) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      if (error instanceof LearningPodMembershipConflictError) return res.status(400).json({ error: error.message });
       console.error("Failed to auto-distribute learning pods:", error);
       res.status(500).json({ error: "Failed to auto-distribute learning pods" });
     }
@@ -2297,6 +2302,7 @@ export async function registerRoutes(
       res.json(await getLearningPodResponse(pod!, req, true));
     } catch (error) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      if (error instanceof LearningPodMembershipConflictError) return res.status(400).json({ error: error.message });
       res.status(500).json({ error: "Failed to update learning pod" });
     }
   });
@@ -2318,6 +2324,7 @@ export async function registerRoutes(
       res.json(await getLearningPodResponse(pod, req, true));
     } catch (error) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      if (error instanceof LearningPodMembershipConflictError) return res.status(400).json({ error: error.message });
       res.status(500).json({ error: "Failed to update pod members" });
     }
   });
