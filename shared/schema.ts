@@ -276,6 +276,17 @@ export const privateVideoUploads = pgTable("private_video_uploads", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const zoomWebhookEvents = pgTable("zoom_webhook_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventId: text("event_id").notNull().unique(),
+  eventType: text("event_type").notNull(),
+  payload: jsonb("payload").notNull(),
+  status: text("status").notNull().default("received"),
+  receivedAt: timestamp("received_at").notNull().defaultNow(),
+  processedAt: timestamp("processed_at"),
+  error: text("error"),
+});
+
 export const discussionThreads = pgTable("discussion_threads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),

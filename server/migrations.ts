@@ -126,6 +126,24 @@ export async function runSchemaMigrations() {
       CREATE INDEX IF NOT EXISTS private_video_uploads_created_at_idx
         ON private_video_uploads (created_at)
     `);
+    // Zoom may retry webhook notifications. Keep a durable receipt ledger so
+    // the recording importer can be safely retried without duplicate work.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS zoom_webhook_events (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        event_id TEXT NOT NULL UNIQUE,
+        event_type TEXT NOT NULL,
+        payload JSONB NOT NULL,
+        status TEXT NOT NULL DEFAULT 'received',
+        received_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        processed_at TIMESTAMP,
+        error TEXT
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS zoom_webhook_events_received_at_idx
+        ON zoom_webhook_events (received_at)
+    `);
     // Course curriculum additions are nullable/defaulted so existing courses
     // and seeded lessons keep working. Existing lessons are treated as
     // published to preserve the learner experience they already had.

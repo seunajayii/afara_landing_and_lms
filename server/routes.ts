@@ -14,7 +14,7 @@ import {
   type Cohort
 } from "@shared/schema";
 import { z } from "zod";
-import { randomUUID } from "crypto";
+import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
 import {
   authorizePlayback,
   canAccessVisibility,
@@ -159,6 +159,32 @@ function getAppBaseUrl(): string {
   return configured.replace(/\/+$/, ""); // strip trailing slashes
 }
 
+function getZoomWebhookSecret(): string {
+  const secret = process.env.ZOOM_WEBHOOK_SECRET_TOKEN;
+  if (!secret) {
+    throw new Error("ZOOM_WEBHOOK_SECRET_TOKEN is not configured");
+  }
+  return secret;
+}
+
+function hasValidZoomWebhookSignature(req: Request, rawBody: Buffer, secret: string): boolean {
+  const timestamp = req.header("x-zm-request-timestamp");
+  const signature = req.header("x-zm-signature");
+  if (!timestamp || !signature) return false;
+
+  const timestampMs = Number(timestamp) * 1000;
+  if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > 5 * 60 * 1000) {
+    return false;
+  }
+
+  const message = `v0:${timestamp}:${rawBody.toString("utf8")}`;
+  const expected = `v0=${createHmac("sha256", secret).update(message).digest("hex")}`;
+  const expectedBuffer = Buffer.from(expected);
+  const actualBuffer = Buffer.from(signature);
+  return expectedBuffer.length === actualBuffer.length &&
+    timingSafeEqual(expectedBuffer, actualBuffer);
+}
+
 const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
@@ -174,6 +200,55 @@ export async function registerRoutes(
   // Health check endpoint for Railway/production monitoring
   app.get("/api/health", (_req: Request, res: Response) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  // Zoom sends endpoint.url_validation before activating a subscription, then
+  // signs every subsequent notification with the same secret token.
+  app.post("/api/integrations/zoom/webhook", async (req: Request, res: Response) => {
+    try {
+      const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
+      if (!rawBody) {
+        return res.status(400).json({ error: "Raw webhook body is required" });
+      }
+
+      const secret = getZoomWebhookSecret();
+      if (!hasValidZoomWebhookSignature(req, rawBody, secret)) {
+        return res.status(401).json({ error: "Invalid Zoom webhook signature" });
+      }
+
+      if (req.body?.event === "endpoint.url_validation") {
+        const plainToken = req.body?.payload?.plainToken;
+        if (typeof plainToken !== "string" || !plainToken) {
+          return res.status(400).json({ error: "Zoom validation token is missing" });
+        }
+        const encryptedToken = createHmac("sha256", secret)
+          .update(plainToken)
+          .digest("hex");
+        return res.json({ plainToken, encryptedToken });
+      }
+
+      const eventType = typeof req.body?.event === "string"
+        ? req.body.event
+        : "unknown";
+      const eventId = createHash("sha256").update(rawBody).digest("hex");
+      const inserted = await storage.recordZoomWebhookEvent({
+        eventId,
+        eventType,
+        payload: req.body,
+      });
+
+      if (eventType === "recording.completed") {
+        console.info(`Zoom recording webhook ${inserted ? "received" : "deduplicated"}`, {
+          eventId,
+          meetingUuid: req.body?.payload?.object?.uuid,
+        });
+      }
+
+      return res.status(200).json({ received: true });
+    } catch (error) {
+      console.error("Zoom webhook handling failed:", error);
+      return res.status(503).json({ error: "Zoom webhook is not configured" });
+    }
   });
 
   // Auth Routes

@@ -26,7 +26,7 @@ import {
   users, profiles, mentorProfiles, facilitatorProfiles,
   courses, modules, lessons, enrollments, lessonProgress,
   mentorshipRequests, mentorshipSessions,
-  events, eventRegistrations, resources, privateVideoUploads,
+  events, eventRegistrations, resources, privateVideoUploads, zoomWebhookEvents,
   discussionThreads, discussionPosts, postLikes,
   certificates, achievements, userAchievements, notifications,
   newsletterSubscribers, newsletterCampaigns,
@@ -136,6 +136,12 @@ export interface IStorage {
   getExpiredPrivateVideoUploads(cutoff: Date): Promise<PrivateVideoUpload[]>;
   getResourceByVideoStorageKey(storageKey: string): Promise<Resource | undefined>;
   removePrivateVideoUpload(storageKey: string): Promise<void>;
+
+  recordZoomWebhookEvent(event: {
+    eventId: string;
+    eventType: string;
+    payload: unknown;
+  }): Promise<boolean>;
   
   getDiscussionThread(id: string): Promise<DiscussionThread | undefined>;
   getAllDiscussionThreads(): Promise<DiscussionThread[]>;
@@ -751,6 +757,22 @@ export class DatabaseStorage implements IStorage {
     await db.update(privateVideoUploads)
       .set({ cleanupStatus: "removed", resourceId: null })
       .where(eq(privateVideoUploads.storageKey, storageKey));
+  }
+
+  async recordZoomWebhookEvent(event: {
+    eventId: string;
+    eventType: string;
+    payload: unknown;
+  }): Promise<boolean> {
+    const inserted = await db.insert(zoomWebhookEvents)
+      .values({
+        eventId: event.eventId,
+        eventType: event.eventType,
+        payload: event.payload,
+      })
+      .onConflictDoNothing({ target: zoomWebhookEvents.eventId })
+      .returning({ id: zoomWebhookEvents.id });
+    return inserted.length > 0;
   }
 
   async incrementResourceDownload(id: string): Promise<void> {
