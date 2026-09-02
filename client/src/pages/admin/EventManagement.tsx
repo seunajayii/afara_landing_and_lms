@@ -509,24 +509,24 @@ export default function EventManagement() {
                   <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <div className="rounded-md border bg-muted/20 p-3">
                       <p className="text-xs text-muted-foreground">Waiting</p>
-                      <p className="mt-1 text-xl font-semibold">{zoomSync?.counts.waiting ?? 0}</p>
+                      <p className="mt-1 text-xl font-semibold">{zoomSync?.counts?.waiting ?? 0}</p>
                     </div>
                     <div className="rounded-md border bg-muted/20 p-3">
                       <p className="text-xs text-muted-foreground">Importing</p>
-                      <p className="mt-1 text-xl font-semibold">{zoomSync?.counts.importing ?? 0}</p>
+                      <p className="mt-1 text-xl font-semibold">{zoomSync?.counts?.importing ?? 0}</p>
                     </div>
                     <div className="rounded-md border bg-muted/20 p-3">
                       <p className="text-xs text-muted-foreground">Complete</p>
-                      <p className="mt-1 text-xl font-semibold">{zoomSync?.counts.complete ?? 0}</p>
+                      <p className="mt-1 text-xl font-semibold">{zoomSync?.counts?.complete ?? 0}</p>
                     </div>
                     <div className="rounded-md border bg-muted/20 p-3">
                       <p className="text-xs text-muted-foreground">Failed</p>
-                      <p className="mt-1 text-xl font-semibold">{zoomSync?.counts.failed ?? 0}</p>
+                      <p className="mt-1 text-xl font-semibold">{zoomSync?.counts?.failed ?? 0}</p>
                     </div>
                   </div>
-                  {zoomSync?.events.length ? (
+                  {zoomSync?.events?.length ? (
                     <div className="space-y-3">
-                      {zoomSync.events.map((webhook) => {
+                      {zoomSync.events?.map((webhook) => {
                         const StatusIcon = getZoomStatusIcon(webhook.status);
                         const isRecordingWebhook = webhook.eventType === "recording.completed";
                         return (
@@ -1282,8 +1282,8 @@ function getZoomStatusVariant(status: string): "default" | "secondary" | "outlin
 }
 
 type ZoomSyncStatusResponse = {
-  events: ZoomSyncEvent[];
-  counts: {
+  events?: ZoomSyncEvent[];
+  counts?: {
     waiting: number;
     importing: number;
     complete: number;
