@@ -17,7 +17,11 @@ export function ZoomConnectionPanel() {
   });
 
   const connectZoom = () => {
-    window.location.assign("/api/admin/integrations/zoom/connect");
+    window.open(
+      "/api/admin/integrations/zoom/connect",
+      "_blank",
+      "noopener,noreferrer",
+    );
   };
 
   return (
