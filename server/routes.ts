@@ -1737,6 +1737,94 @@ export async function registerRoutes(
     return Boolean(activeCohort && await storage.isCourseAssignedToCohort(course.id, activeCohort.id));
   };
 
+  const getProgrammeCertificateProgress = async (userId: string, requestedCohortId?: string) => {
+    const cohort = requestedCohortId
+      ? await storage.getCohort(requestedCohortId)
+      : await storage.getActiveCohortForUser(userId);
+    if (!cohort) {
+      return {
+        cohort: null,
+        courses: [],
+        completedCourses: 0,
+        totalCourses: 0,
+        progressPercent: 0,
+        thresholdPercent: 80,
+        eligible: false,
+      };
+    }
+
+    const progress = await storage.getLessonProgressByUser(userId);
+    const completedLessonIds = new Set(progress.filter((entry) => entry.status === "completed").map((entry) => entry.lessonId));
+    const publishedCourses = await storage.getPublishedCourses();
+    const assignedCourses = [];
+    for (const course of publishedCourses) {
+      if (course.audience === "all" || await storage.isCourseAssignedToCohort(course.id, cohort.id)) {
+        assignedCourses.push(course);
+      }
+    }
+
+    const courseProgress = await Promise.all(assignedCourses.map(async (course) => {
+      const courseModules = await storage.getModulesByCourse(course.id);
+      const lessons = [];
+      for (const module of courseModules) {
+        lessons.push(...(await storage.getLessonsByModule(module.id)).filter((lesson) => lesson.status === "published"));
+      }
+      const completedLessons = lessons.filter((lesson) => completedLessonIds.has(lesson.id)).length;
+      return {
+        id: course.id,
+        title: course.title,
+        completedLessons,
+        totalLessons: lessons.length,
+        completed: lessons.length > 0 && completedLessons === lessons.length,
+        progressPercent: lessons.length ? Math.round((completedLessons / lessons.length) * 100) : 0,
+      };
+    }));
+    const completedCourses = courseProgress.filter((course) => course.completed).length;
+    const totalCourses = courseProgress.length;
+    const progressPercent = totalCourses ? Math.round((completedCourses / totalCourses) * 100) : 0;
+    return {
+      cohort: { id: cohort.id, name: cohort.displayName || cohort.name, year: cohort.year },
+      courses: courseProgress,
+      completedCourses,
+      totalCourses,
+      progressPercent,
+      thresholdPercent: 80,
+      eligible: totalCourses > 0 && completedCourses / totalCourses >= 0.8,
+    };
+  };
+
+  const escapeCertificateHtml = (value: string) => value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
+  const renderCertificateDocument = (user: any, certificate: any, cohort: any, progress: any, course: any) => {
+    const fullName = `${user.firstName} ${user.lastName}`.trim();
+    const programmeName = "AFÁRÁ Accelerator Programme";
+    const cohortName = cohort ? `${cohort.displayName || cohort.name}${cohort.year ? ` · ${cohort.year}` : ""}` : programmeName;
+    const completion = progress && progress.totalCourses > 0
+      ? `${progress.completedCourses} of ${progress.totalCourses} assigned courses completed (${progress.progressPercent}%)`
+      : "Programme completion verified by AFÁRÁ";
+    const issuedDate = certificate.issuedAt ? new Date(certificate.issuedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "";
+    return `<!doctype html>
+<html><head><meta charset="utf-8"><title>${escapeCertificateHtml(programmeName)} Certificate</title>
+<style>
+@page{size:A4 landscape;margin:0}*{box-sizing:border-box}body{margin:0;background:#f3f6f0;color:#123524;font-family:Georgia,"Times New Roman",serif}.certificate{width:100vw;min-height:100vh;padding:7vw;display:flex;align-items:center;justify-content:center}.frame{width:100%;min-height:78vh;border:12px double #0a5c32;background:#fffdf7;padding:5vw;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center}.mark{font:700 20px Arial,sans-serif;letter-spacing:.18em;color:#0a5c32}.eyebrow{margin-top:28px;font:600 14px Arial,sans-serif;letter-spacing:.25em;text-transform:uppercase;color:#8b6a32}.title{margin:16px 0 10px;font-size:48px;color:#0a5c32}.name{margin:8px 0 20px;font-size:42px;border-bottom:2px solid #c9ab6a;padding:0 40px 10px}.copy{font:16px Arial,sans-serif;color:#4d6255;margin:0 0 8px}.cohort{font-size:24px;color:#8b6a32;margin:8px 0 26px}.meta{display:flex;gap:48px;margin-top:26px;font:12px Arial,sans-serif;color:#4d6255}.meta strong{display:block;color:#123524;font-size:13px;margin-bottom:5px}.seal{margin-top:28px;font:700 12px Arial,sans-serif;letter-spacing:.14em;color:#0a5c32}
+</style></head><body><main class="certificate"><section class="frame">
+<div class="mark">AFÁRÁ</div><div class="eyebrow">Certificate of Completion</div>
+<h1 class="title">${escapeCertificateHtml(programmeName)}</h1>
+<p class="copy">This certificate is proudly presented to</p>
+<div class="name">${escapeCertificateHtml(fullName)}</div>
+<p class="copy">for successfully completing the required programme threshold for</p>
+<div class="cohort">${escapeCertificateHtml(course?.title || cohortName)}</div>
+<p class="copy">${escapeCertificateHtml(completion)}</p>
+<div class="meta"><div><strong>Certificate number</strong>${escapeCertificateHtml(certificate.certificateNumber)}</div><div><strong>Issued</strong>${escapeCertificateHtml(issuedDate)}</div></div>
+<div class="seal">AFÁRÁ ACCELERATOR · OPSB INITIATIVE</div>
+</section></main></body></html>`;
+  };
+
   const canAccessResource = async (req: Request, resource: any): Promise<boolean> => {
     if (isAdminSession(req)) return true;
     const courses = await storage.getCoursesForResource(resource.id);
@@ -3555,13 +3643,110 @@ export async function registerRoutes(
       const userCertificates = await storage.getCertificatesByUser(req.params.userId);
       const certificatesWithCourses = await Promise.all(
         userCertificates.map(async (cert) => {
-          const course = await storage.getCourse(cert.courseId);
-          return { ...cert, course };
+          const course = cert.courseId ? await storage.getCourse(cert.courseId) : null;
+          const cohort = cert.cohortId ? await storage.getCohort(cert.cohortId) : null;
+          return {
+            ...cert,
+            course,
+            cohort,
+            certificateUrl: cert.approvalStatus === "approved" ? `/api/certificates/${cert.id}/download` : null,
+          };
         })
       );
       res.json(certificatesWithCourses);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch certificates" });
+    }
+  });
+
+  app.get("/api/certificates/progress", requireAuth, async (req: Request, res: Response) => {
+    try {
+      res.json(await getProgrammeCertificateProgress(req.session.userId!));
+    } catch (error) {
+      console.error("Failed to calculate certificate progress:", error);
+      res.status(500).json({ error: "Failed to calculate certificate progress" });
+    }
+  });
+
+  app.get("/api/certificates", requireAuth, requireAdminRole, async (_req: Request, res: Response) => {
+    try {
+      const allCertificates = await storage.getAllCertificates();
+      const certificatesWithDetails = await Promise.all(allCertificates.map(async (certificate) => {
+        const user = await storage.getUser(certificate.userId);
+        return {
+          ...certificate,
+          user: user ? sanitizeUser(user) : null,
+          course: certificate.courseId ? await storage.getCourse(certificate.courseId) : null,
+          cohort: certificate.cohortId ? await storage.getCohort(certificate.cohortId) : null,
+          certificateUrl: certificate.approvalStatus === "approved" ? `/api/certificates/${certificate.id}/download` : null,
+        };
+      }));
+      res.json(certificatesWithDetails);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch certificates" });
+    }
+  });
+
+  app.post("/api/certificates/request", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const progress = await getProgrammeCertificateProgress(req.session.userId!);
+      if (!progress.cohort) return res.status(400).json({ error: "You must be an accepted participant in a cohort before requesting a certificate.", progress });
+      if (!progress.eligible) {
+        return res.status(400).json({
+          error: `Complete at least ${progress.thresholdPercent}% of your assigned courses before requesting approval.`,
+          progress,
+        });
+      }
+      const existing = await storage.getCertificateByCohort(req.session.userId!, progress.cohort.id);
+      if (existing && existing.approvalStatus !== "rejected") {
+        return res.status(409).json({ error: "Your certificate request is already pending or approved.", certificate: existing, progress });
+      }
+      const now = new Date();
+      const certificate = existing
+        ? await storage.updateCertificate(existing.id, {
+            approvalStatus: "pending",
+            requestedAt: now,
+            approvedById: null,
+            approvedAt: null,
+            certificateUrl: null,
+          })
+        : await storage.createCertificate({
+            userId: req.session.userId!,
+            courseId: null,
+            cohortId: progress.cohort.id,
+            certificateNumber: `AFARA-${new Date().getFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`,
+            requestedAt: now,
+            issuedAt: now,
+            certificateUrl: null,
+            approvalStatus: "pending",
+            approvedById: null,
+            approvedAt: null,
+          });
+      res.status(existing ? 200 : 201).json({ certificate, progress });
+    } catch (error) {
+      console.error("Failed to request certificate:", error);
+      res.status(500).json({ error: "Failed to request certificate approval" });
+    }
+  });
+
+  app.get("/api/certificates/:id/download", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const certificate = await storage.getCertificate(req.params.id);
+      if (!certificate) return res.status(404).json({ error: "Certificate not found" });
+      if (certificate.approvalStatus !== "approved") return res.status(403).json({ error: "This certificate has not been approved for download." });
+      if (certificate.userId !== req.session.userId && !isAdminSession(req)) return res.status(403).json({ error: "Access denied" });
+      const user = await storage.getUser(certificate.userId);
+      if (!user) return res.status(404).json({ error: "Certificate owner not found" });
+      const cohort = certificate.cohortId ? await storage.getCohort(certificate.cohortId) : null;
+      const course = certificate.courseId ? await storage.getCourse(certificate.courseId) : null;
+      const progress = certificate.cohortId ? await getProgrammeCertificateProgress(certificate.userId, certificate.cohortId) : null;
+      const html = renderCertificateDocument(user, certificate, cohort, progress, course);
+      const filename = `afara-certificate-${certificate.certificateNumber.toLowerCase()}.html`;
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(html);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to download certificate" });
     }
   });
 
@@ -3572,10 +3757,17 @@ export async function registerRoutes(
       if (certificate.userId !== req.session.userId && !isAdminSession(req)) {
         return res.status(403).json({ error: "Access denied" });
       }
-      const course = await storage.getCourse(certificate.courseId);
+      const course = certificate.courseId ? await storage.getCourse(certificate.courseId) : null;
+      const cohort = certificate.cohortId ? await storage.getCohort(certificate.cohortId) : null;
       const user = await storage.getUser(certificate.userId);
       const safeUser = user ? sanitizeUser(user) : null;
-      res.json({ ...certificate, course, user: safeUser });
+      res.json({
+        ...certificate,
+        course,
+        cohort,
+        user: safeUser,
+        certificateUrl: certificate.approvalStatus === "approved" ? `/api/certificates/${certificate.id}/download` : null,
+      });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch certificate" });
     }
@@ -3594,6 +3786,31 @@ export async function registerRoutes(
         return res.status(400).json({ error: error.errors });
       }
       res.status(500).json({ error: "Failed to create certificate" });
+    }
+  });
+
+  app.patch("/api/certificates/:id", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
+    try {
+      const certificate = await storage.getCertificate(req.params.id);
+      if (!certificate) return res.status(404).json({ error: "Certificate not found" });
+      const status = z.enum(["pending", "approved", "rejected"]).parse(req.body.approvalStatus);
+      if (status === "approved" && certificate.cohortId) {
+        const progress = await getProgrammeCertificateProgress(certificate.userId, certificate.cohortId);
+        if (!progress.eligible) {
+          return res.status(400).json({ error: "This participant no longer meets the 80% assigned-course requirement.", progress });
+        }
+      }
+      const updated = await storage.updateCertificate(req.params.id, {
+        approvalStatus: status,
+        approvedById: status === "approved" ? req.session.userId! : null,
+        approvedAt: status === "approved" ? new Date() : null,
+        issuedAt: status === "approved" ? new Date() : certificate.issuedAt,
+        certificateUrl: status === "approved" ? `/api/certificates/${req.params.id}/download` : null,
+      });
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: "Invalid certificate status" });
+      res.status(500).json({ error: "Failed to update certificate" });
     }
   });
 

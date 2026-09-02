@@ -46,6 +46,7 @@ import type { Certificate, User, Course } from "@shared/schema";
 interface CertificateWithDetails extends Certificate {
   user?: User;
   course?: Course;
+  cohort?: { id: string; name: string; year: number | null } | null;
 }
 
 function CertificateTableSkeleton() {
@@ -143,6 +144,7 @@ export default function CertificateManagement() {
       cert.user?.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       cert.user?.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       cert.course?.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      cert.cohort?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       cert.certificateNumber.toLowerCase().includes(searchQuery.toLowerCase());
     
     if (activeTab === "all") return matchesSearch;
@@ -357,11 +359,11 @@ export default function CertificateManagement() {
                                 ? `${certificate.user.firstName} ${certificate.user.lastName}`
                                 : "Unknown User"}
                             </TableCell>
-                            <TableCell>{certificate.course?.title || "Unknown Course"}</TableCell>
+                             <TableCell>{certificate.course?.title || (certificate.cohort ? `${certificate.cohort.name}${certificate.cohort.year ? ` · ${certificate.cohort.year}` : ""}` : "AFÁRÁ Programme")}</TableCell>
                             <TableCell className="font-mono text-sm">
                               {certificate.certificateNumber}
                             </TableCell>
-                            <TableCell>{formatDate(certificate.issuedAt)}</TableCell>
+                             <TableCell>{formatDate(certificate.approvalStatus === "pending" ? certificate.requestedAt : certificate.issuedAt)}</TableCell>
                             <TableCell>
                               <Badge className={getStatusColor(certificate.approvalStatus)}>
                                 <span className="flex items-center gap-1">
@@ -432,8 +434,8 @@ export default function CertificateManagement() {
               <span className="font-medium">
                 {selectedCertificate?.user?.firstName} {selectedCertificate?.user?.lastName}
               </span>
-              ? They will be able to download their certificate for{" "}
-              <span className="font-medium">{selectedCertificate?.course?.title}</span>.
+               ? They will be able to download their personalized{" "}
+               <span className="font-medium">{selectedCertificate?.cohort ? `${selectedCertificate.cohort.name} programme certificate` : selectedCertificate?.course?.title}</span>.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

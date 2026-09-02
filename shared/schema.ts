@@ -349,8 +349,10 @@ export const applicationStatusEnum = pgEnum("application_status", ["draft", "sub
 export const certificates = pgTable("certificates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
-  courseId: varchar("course_id").notNull().references(() => courses.id),
+  courseId: varchar("course_id").references(() => courses.id),
+  cohortId: varchar("cohort_id").references(() => cohorts.id, { onDelete: "cascade" }),
   certificateNumber: text("certificate_number").notNull().unique(),
+  requestedAt: timestamp("requested_at").notNull().defaultNow(),
   issuedAt: timestamp("issued_at").notNull().defaultNow(),
   certificateUrl: text("certificate_url"),
   approvalStatus: certificateStatusEnum("approval_status").notNull().default("pending"),
@@ -669,7 +671,7 @@ export const applicationEvaluations = pgTable("application_evaluations", {
   evaluatedByModel: text("evaluated_by_model").notNull(),
 });
 
-export const insertCertificateSchema = createInsertSchema(certificates).omit({ id: true, issuedAt: true });
+export const insertCertificateSchema = createInsertSchema(certificates).omit({ id: true });
 export const insertAchievementSchema = createInsertSchema(achievements).omit({ id: true });
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
 export const insertNewsletterSubscriberSchema = createInsertSchema(newsletterSubscribers).omit({ id: true, subscribedAt: true });

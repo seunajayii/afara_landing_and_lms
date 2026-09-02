@@ -186,7 +186,10 @@ export interface IStorage {
   getCertificate(id: string): Promise<Certificate | undefined>;
   getCertificatesByUser(userId: string): Promise<Certificate[]>;
   getCertificateByCourse(userId: string, courseId: string): Promise<Certificate | undefined>;
+  getCertificateByCohort(userId: string, cohortId: string): Promise<Certificate | undefined>;
+  getAllCertificates(): Promise<Certificate[]>;
   createCertificate(certificate: InsertCertificate): Promise<Certificate>;
+  updateCertificate(id: string, data: Partial<InsertCertificate>): Promise<Certificate | undefined>;
   
   getAllAchievements(): Promise<Achievement[]>;
   getUserAchievements(userId: string): Promise<Achievement[]>;
@@ -1015,9 +1018,24 @@ export class DatabaseStorage implements IStorage {
     return certificate;
   }
 
+  async getCertificateByCohort(userId: string, cohortId: string): Promise<Certificate | undefined> {
+    const [certificate] = await db.select().from(certificates)
+      .where(and(eq(certificates.userId, userId), eq(certificates.cohortId, cohortId)));
+    return certificate;
+  }
+
+  async getAllCertificates(): Promise<Certificate[]> {
+    return db.select().from(certificates).orderBy(desc(certificates.requestedAt));
+  }
+
   async createCertificate(certificate: InsertCertificate): Promise<Certificate> {
     const [newCertificate] = await db.insert(certificates).values(certificate).returning();
     return newCertificate;
+  }
+
+  async updateCertificate(id: string, data: Partial<InsertCertificate>): Promise<Certificate | undefined> {
+    const [updated] = await db.update(certificates).set(data).where(eq(certificates.id, id)).returning();
+    return updated;
   }
 
   async getAllAchievements(): Promise<Achievement[]> {

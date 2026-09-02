@@ -233,6 +233,21 @@ export async function runSchemaMigrations() {
         ADD COLUMN IF NOT EXISTS audience_json JSONB,
         ADD COLUMN IF NOT EXISTS last_test_sent_at TIMESTAMP
     `);
+    // Programme certificates are cohort-scoped requests. Existing course
+    // certificates remain valid, so course_id becomes optional.
+    await db.execute(sql`
+      ALTER TABLE certificates
+        ADD COLUMN IF NOT EXISTS cohort_id VARCHAR REFERENCES cohorts(id) ON DELETE CASCADE,
+        ADD COLUMN IF NOT EXISTS requested_at TIMESTAMP NOT NULL DEFAULT NOW()
+    `);
+    await db.execute(sql`
+      ALTER TABLE certificates ALTER COLUMN course_id DROP NOT NULL
+    `);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS certificates_user_cohort_idx
+        ON certificates (user_id, cohort_id)
+        WHERE cohort_id IS NOT NULL
+    `);
     // Learning pods group accepted cohort participants around one assigned
     // mentor. Work and submissions are kept separate from one-to-one
     // mentorship sessions so both experiences can coexist.
