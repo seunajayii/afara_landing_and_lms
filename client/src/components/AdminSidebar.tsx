@@ -1,47 +1,68 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/lib/auth";
+import type { Cohort } from "@shared/schema";
 import {
-  LayoutDashboard,
-  BookOpen,
-  Users,
-  Calendar,
-  FolderOpen,
-  Award,
-  LogOut,
-  Shield,
-  FileText,
-  Mail,
-  Menu,
-  BarChart2,
-  Network,
-  TrendingUp,
-  ClipboardCheck,
+  Award, BarChart3, BookOpen, CalendarDays, ChevronDown, ClipboardCheck,
+  FileBarChart, FileText, FolderKanban, LayoutDashboard, LogOut, Mail,
+  Menu, Network, Search, ShieldCheck, Users,
 } from "lucide-react";
 import afaraLogo from "@assets/AFARA Image 1_1759521116826.png";
 
-const adminNavItems = [
-  { path: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { path: "/admin/applications", label: "Applications", icon: FileText },
-  { path: "/admin/cohorts", label: "Cohorts", icon: FolderOpen },
-  { path: "/admin/cohort-analytics", label: "Cohort Analytics", icon: BarChart2 },
-  { path: "/admin/learning-pods", label: "Learning Pods", icon: Network },
-  { path: "/admin/progress-reporting", label: "Progress Reporting", icon: TrendingUp },
-  { path: "/admin/assignments", label: "Assignments", icon: ClipboardCheck },
-  { path: "/admin/courses", label: "Course Management", icon: BookOpen },
-  { path: "/admin/users", label: "User Management", icon: Users },
-  { path: "/admin/resources", label: "Resource Management", icon: FolderOpen },
-  { path: "/admin/events", label: "Event Management", icon: Calendar },
-  { path: "/admin/certificates", label: "Certificate Management", icon: Award },
-  { path: "/admin/newsletter", label: "Newsletter", icon: Mail },
+type NavItem = { path: string; label: string; icon: typeof LayoutDashboard };
+type NavGroup = { label: string; items: NavItem[] };
+
+const navGroups: NavGroup[] = [
+  { label: "Overview", items: [{ path: "/admin/dashboard", label: "Cohort workspace", icon: LayoutDashboard }] },
+  {
+    label: "Programme Operations",
+    items: [
+      { path: "/admin/applications", label: "Applications", icon: FileText },
+      { path: "/admin/cohorts", label: "Cohorts", icon: FolderKanban },
+      { path: "/admin/cohort-analytics", label: "Analytics", icon: BarChart3 },
+    ],
+  },
+  {
+    label: "Learning Delivery",
+    items: [
+      { path: "/admin/learning-pods", label: "Learning Pods", icon: Network },
+      { path: "/admin/progress-reporting", label: "Progress", icon: FileBarChart },
+      { path: "/admin/cohort-report", label: "Reports", icon: FileText },
+      { path: "/admin/assignments", label: "Assignments", icon: ClipboardCheck },
+      { path: "/admin/courses", label: "Courses", icon: BookOpen },
+      { path: "/admin/resources", label: "Resources", icon: FolderKanban },
+    ],
+  },
+  {
+    label: "Engagement",
+    items: [
+      { path: "/admin/events", label: "Events", icon: CalendarDays },
+      { path: "/admin/newsletter", label: "Newsletter", icon: Mail },
+    ],
+  },
+  { label: "People & Access", items: [{ path: "/admin/users", label: "Users", icon: Users }] },
+  { label: "Credentials", items: [{ path: "/admin/certificates", label: "Certificates", icon: Award }] },
 ];
 
 function AdminSidebarNav({ location, onNavigate }: { location: string; onNavigate?: () => void }) {
-  const { user, logout, isSuperAdmin } = useAuth();
+  const { user, logout } = useAuth();
   const [, setLocation] = useLocation();
+  const [query, setQuery] = useState("");
+  const { data: cohorts = [] } = useQuery<Cohort[]>({ queryKey: ["/api/cohorts"] });
+  const activeCohort = cohorts.find((cohort) => cohort.status === "open") ?? cohorts[0];
+
+  const visibleGroups = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return navGroups;
+    return navGroups
+      .map((group) => ({ ...group, items: group.items.filter((item) => item.label.toLowerCase().includes(needle)) }))
+      .filter((group) => group.items.length > 0);
+  }, [query]);
 
   const handleLogout = async () => {
     onNavigate?.();
@@ -49,69 +70,86 @@ function AdminSidebarNav({ location, onNavigate }: { location: string; onNavigat
     setLocation("/login");
   };
 
+  const initials = user ? `${user.firstName?.[0] ?? ""}${user.lastName?.[0] ?? ""}`.toUpperCase() : "A";
+
   return (
-    <div className="flex flex-col h-full bg-sidebar">
-      <div className="p-6 border-b">
-        <Link href="/admin/dashboard" onClick={onNavigate}>
-          <div className="cursor-pointer">
-            <img src={afaraLogo} alt="AFÁRÁ" className="h-12 w-auto dark:brightness-0 dark:invert dark:opacity-90" />
-          </div>
-        </Link>
-        <div className="flex items-center gap-2 mt-2">
-          <Shield className="w-3 h-3 text-primary" />
-          <p className="text-xs text-primary font-medium">Admin Portal</p>
+    <div className="flex h-full flex-col bg-sidebar">
+      <div className="border-b px-5 py-5">
+        <div className="flex items-center justify-between gap-3">
+          <Link href="/admin/dashboard" onClick={onNavigate}>
+            <img src={afaraLogo} alt="AFÁRÁ" className="h-10 w-auto cursor-pointer dark:brightness-0 dark:invert dark:opacity-90" />
+          </Link>
+          <div className="grid h-8 w-8 place-items-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">{initials}</div>
+        </div>
+        <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <ShieldCheck className="h-3.5 w-3.5 text-primary" /> Admin portal
         </div>
       </div>
 
-      <nav className="flex-1 p-4 overflow-y-auto">
-        <div className="space-y-1">
-          {adminNavItems.map((item) => (
-            <Link key={item.path} href={item.path} onClick={onNavigate}>
-              <Button
-                variant="ghost"
-                className={`w-full justify-start gap-3 ${location === item.path ? "bg-sidebar-accent" : ""}`}
-                data-testid={`link-admin-${item.label.toLowerCase().replace(/ /g, "-")}`}
-              >
-                <item.icon className="w-4 h-4" />
-                {item.label}
-              </Button>
-            </Link>
-          ))}
+      <div className="space-y-3 px-3 pb-2 pt-4">
+        <Link href="/admin/cohorts" onClick={onNavigate}>
+          <button className="w-full rounded-lg border bg-card px-3 py-2.5 text-left hover-elevate" data-testid="button-admin-cohort-context">
+            <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Working in</span>
+            <span className="mt-1 flex items-center justify-between gap-2 truncate text-xs font-semibold">
+              <span className="truncate">{activeCohort?.displayName || activeCohort?.name || "All cohorts"}</span>
+              <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+            </span>
+          </button>
+        </Link>
+        <div className="relative">
+          <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Find a destination"
+            aria-label="Find an admin destination"
+            className="h-9 pl-8 text-xs"
+            data-testid="input-admin-nav-search"
+          />
         </div>
+      </div>
 
-        {isSuperAdmin && (
-          <div className="mt-6 pt-4 border-t">
-            <p className="text-xs text-muted-foreground mb-2 px-3">Super Admin</p>
+      <nav className="flex-1 overflow-y-auto px-3 pb-4" aria-label="Admin destinations">
+        {visibleGroups.map((group) => (
+          <div key={group.label} className="mt-4 first:mt-2">
+            <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{group.label}</p>
+            <div className="space-y-0.5">
+              {group.items.map((item) => {
+                const active = location === item.path;
+                return (
+                  <Link key={item.path} href={item.path} onClick={onNavigate}>
+                    <Button
+                      variant="ghost"
+                      className={`h-9 w-full justify-start gap-2.5 rounded-l-none border-l-2 px-2.5 text-xs ${
+                        active ? "border-l-primary bg-sidebar-accent font-semibold" : "border-l-transparent text-muted-foreground"
+                      }`}
+                      data-testid={`link-admin-${item.label.toLowerCase().replace(/ /g, "-")}`}
+                    >
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      {item.label}
+                    </Button>
+                  </Link>
+                );
+              })}
+            </div>
           </div>
-        )}
+        ))}
+        {visibleGroups.length === 0 && <p className="px-2 py-6 text-xs text-muted-foreground">No destinations found.</p>}
       </nav>
 
-      <div className="p-4 border-t space-y-2">
+      <div className="space-y-2 border-t p-4">
         <Link href="/lms/dashboard" onClick={onNavigate}>
-          <Button variant="outline" className="w-full justify-start gap-3" data-testid="button-switch-to-lms">
-            <LayoutDashboard className="w-4 h-4" />
-            Switch to LMS
+          <Button variant="outline" size="sm" className="w-full justify-start gap-2" data-testid="button-switch-to-lms">
+            <LayoutDashboard className="h-4 w-4" /> Switch to LMS
           </Button>
         </Link>
         <div className="flex items-center justify-between gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-2"
-            onClick={handleLogout}
-            data-testid="button-admin-logout"
-          >
-            <LogOut className="w-4 h-4" />
-            Log Out
+          <Button variant="ghost" size="sm" className="gap-2" onClick={handleLogout} data-testid="button-admin-logout">
+            <LogOut className="h-4 w-4" /> Log Out
           </Button>
           <ThemeToggle />
         </div>
-        {user && (
-          <div className="text-xs text-muted-foreground">
-            <p className="truncate font-medium">{user.firstName} {user.lastName}</p>
-            <p className="text-primary capitalize">{user.role}</p>
-          </div>
-        )}
+        {user && <p className="truncate px-2 text-[11px] text-muted-foreground">{user.firstName} {user.lastName} · <span className="capitalize text-primary">{user.role}</span></p>}
       </div>
     </div>
   );
@@ -120,40 +158,19 @@ function AdminSidebarNav({ location, onNavigate }: { location: string; onNavigat
 export function AdminSidebar() {
   const [location] = useLocation();
   const [open, setOpen] = useState(false);
-
   return (
     <>
-      {/* Desktop sidebar — hidden on mobile */}
-      <div className="hidden md:flex flex-col w-64 border-r bg-sidebar h-screen flex-shrink-0">
+      <div className="hidden h-screen w-60 flex-shrink-0 flex-col border-r bg-sidebar md:flex">
         <AdminSidebarNav location={location} />
       </div>
-
-      {/* Mobile top bar — hidden on desktop */}
-      <div className="md:hidden flex items-center px-3 h-14 bg-sidebar border-b gap-3 shrink-0 sticky top-0 z-40">
+      <div className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b bg-sidebar px-3 md:hidden">
         <Sheet open={open} onOpenChange={setOpen}>
-          <SheetTrigger asChild>
-            <Button size="icon" variant="ghost" data-testid="button-admin-mobile-menu">
-              <Menu className="w-5 h-5" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="p-0 w-72 bg-sidebar border-r">
-            <AdminSidebarNav location={location} onNavigate={() => setOpen(false)} />
-          </SheetContent>
+          <SheetTrigger asChild><Button size="icon" variant="ghost" data-testid="button-admin-mobile-menu"><Menu className="h-5 w-5" /></Button></SheetTrigger>
+          <SheetContent side="left" className="w-72 border-r bg-sidebar p-0"><AdminSidebarNav location={location} onNavigate={() => setOpen(false)} /></SheetContent>
         </Sheet>
-        <Link href="/admin/dashboard">
-          <img
-            src={afaraLogo}
-            alt="AFÁRÁ"
-            className="h-8 w-auto dark:brightness-0 dark:invert dark:opacity-90 cursor-pointer"
-          />
-        </Link>
-        <div className="flex items-center gap-2 ml-2">
-          <Shield className="w-3 h-3 text-primary" />
-          <span className="text-xs text-primary font-medium">Admin</span>
-        </div>
-        <div className="ml-auto">
-          <ThemeToggle />
-        </div>
+        <Link href="/admin/dashboard"><img src={afaraLogo} alt="AFÁRÁ" className="h-8 w-auto cursor-pointer dark:brightness-0 dark:invert dark:opacity-90" /></Link>
+        <span className="text-xs font-medium text-primary">Admin</span>
+        <div className="ml-auto"><ThemeToggle /></div>
       </div>
     </>
   );
