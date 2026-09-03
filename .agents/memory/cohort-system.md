@@ -30,6 +30,13 @@ The admin “Working in” cohort selection is the default operational context a
 
 **How to apply:** Preserve the selected cohort in admin navigation and default every cohort-aware screen to it. Shared courses may appear in every cohort; cohort-assigned courses appear only in their assigned workspace. Do not claim events or notifications are cohort-isolated until their data models store cohort targeting.
 
+## Cohort transfers preserve the participant journey
+Changing an accepted applicant’s cohort is a coordinated transfer, not an application-label edit: move their participant journey and end active membership in old-cohort pods.
+
+**Why:** Updating only the application leaves progress reporting and pod access attached to the wrong programme. Deleting the journey would erase evidence needed for reporting and graduation.
+
+**How to apply:** Make accepted-participant transfers atomic. Preserve progress evidence and historical submissions/certificates, remove current old-cohort pod membership, and require deliberate placement into a destination-cohort pod. Reject ambiguous merges when a separate destination participant journey already exists.
+
 ## Public cohort resolution conventions
 Public (unauthenticated) cohort access uses three purpose-built endpoints rather than exposing admin cohort rows directly: a public list (drafts hidden), a "primary" cohort resolver, and a by-slug resolver. All map through a `toPublicCohort`-style trimmed projection.
 

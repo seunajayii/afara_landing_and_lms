@@ -423,12 +423,13 @@ function ApplicationPreviewSheet({
   onClose: () => void;
   onUpdateStatus: (app: Application) => void;
   cohortsData: Cohort[];
-  assignCohortMutation: { mutate: (args: { appId: string; cohortId: string | null }) => void };
+  assignCohortMutation: { mutate: (args: { appId: string; cohortId: string | null }) => void; isPending: boolean };
 }) {
   const [translatedApp, setTranslatedApp] = useState<Application | null>(null);
   const [showTranslated, setShowTranslated] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
   const [detectedLang, setDetectedLang] = useState<string>("en");
+  const [pendingCohortId, setPendingCohortId] = useState<string | null | undefined>(undefined);
   const lastTranslatedId = useRef<string | null>(null);
 
   const appLang = app ? detectLanguage(
@@ -472,6 +473,7 @@ function ApplicationPreviewSheet({
   if (!app) return null;
   const displayApp = showTranslated && translatedApp ? translatedApp : app;
   const applicationCohort = cohortsData.find((c) => c.id === app.cohortId);
+  const destinationCohort = cohortsData.find((c) => c.id === pendingCohortId);
   const extraQuestions = applicationCohort?.extraQuestions ?? [];
   const extraAnswers = (app.extraAnswers as Record<string, string | boolean> | null | undefined) ?? {};
 
@@ -499,15 +501,15 @@ function ApplicationPreviewSheet({
               {cohortsData.length > 0 && (
                 <Select
                   value={app.cohortId ?? "none"}
-                  onValueChange={(val) => assignCohortMutation.mutate({ appId: app.id, cohortId: val === "none" ? null : val })}
+                  onValueChange={(val) => setPendingCohortId(val === "none" ? null : val)}
                 >
                   <SelectTrigger className="h-7 text-xs w-36" data-testid="select-cohort-assign">
                     <SelectValue placeholder="Assign cohort…" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">No cohort</SelectItem>
+                    {app.status !== "accepted" && <SelectItem value="none">No cohort</SelectItem>}
                     {cohortsData.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      <SelectItem key={c.id} value={c.id}>{c.displayName || c.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -524,6 +526,37 @@ function ApplicationPreviewSheet({
                 )}
               </div>
             </div>
+            <Dialog open={pendingCohortId !== undefined} onOpenChange={(open) => !open && setPendingCohortId(undefined)}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{app.status === "accepted" ? "Transfer participant to another cohort?" : "Change applicant cohort?"}</DialogTitle>
+                  <DialogDescription>
+                    Move {app.firstName} {app.lastName} from {applicationCohort?.displayName || applicationCohort?.name || "no cohort"} to {destinationCohort?.displayName || destinationCohort?.name || "no cohort"}.
+                  </DialogDescription>
+                </DialogHeader>
+                {app.status === "accepted" && (
+                  <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-2">
+                    <p>Their application and participant progress history will move to the destination cohort.</p>
+                    <p>Any active membership in an old-cohort learning pod will end. You can then place them in a destination-cohort pod.</p>
+                    <p>Completed submissions and certificates remain as historical records.</p>
+                  </div>
+                )}
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setPendingCohortId(undefined)}>Cancel</Button>
+                  <Button
+                    disabled={assignCohortMutation.isPending}
+                    onClick={() => {
+                      if (pendingCohortId === undefined) return;
+                      assignCohortMutation.mutate({ appId: app.id, cohortId: pendingCohortId });
+                      setPendingCohortId(undefined);
+                    }}
+                  >
+                    {assignCohortMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {app.status === "accepted" ? "Transfer participant" : "Change cohort"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
           <div className="pt-2 flex flex-wrap items-center gap-2">
             <Button size="sm" onClick={() => onUpdateStatus(app)} data-testid="button-sheet-update-status">
@@ -882,15 +915,23 @@ export default function ApplicationManagement() {
       if (!response.ok) throw new Error("Failed to assign cohort");
       return response.json();
     },
-    onSuccess: (_data, { appId, cohortId }) => {
+    onSuccess: (data: { participantTransferred?: boolean; podMembershipsEnded?: number }, { appId, cohortId }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/applications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/cohort-analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/learning-pods"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/progress"] });
       if (selectedApplication?.id === appId) {
         setSelectedApplication({ ...selectedApplication, cohortId: cohortId ?? undefined } as any);
       }
+      toast({
+        title: data.participantTransferred ? "Participant transferred" : "Applicant cohort updated",
+        description: data.podMembershipsEnded
+          ? `${data.podMembershipsEnded} old-cohort pod membership${data.podMembershipsEnded === 1 ? " was" : "s were"} ended.`
+          : undefined,
+      });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to assign cohort.", variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "Cohort change failed", description: error.message || "Failed to assign cohort.", variant: "destructive" });
     },
   });
 

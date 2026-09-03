@@ -64,6 +64,18 @@ export class LearningPodDistributionInProgressError extends Error {
   }
 }
 
+export class CohortTransferConflictError extends Error {
+  constructor(message = "This user already has a separate participant record in the destination cohort") {
+    super(message);
+    this.name = "CohortTransferConflictError";
+  }
+}
+
+export type CohortTransferResult = {
+  participantTransferred: boolean;
+  podMembershipsEnded: number;
+};
+
 function hasPostgresErrorCode(error: unknown, code: string): boolean {
   const seen = new Set<unknown>();
   let current = error;
@@ -270,6 +282,7 @@ export interface IStorage {
   setOpenCohort(id: string, open: boolean): Promise<Cohort | undefined>;
   deleteCohort(id: string): Promise<void>;
   assignApplicationToCohort(applicationId: string, cohortId: string | null): Promise<void>;
+  transferApplicationToCohort(applicationId: string, cohortId: string | null): Promise<CohortTransferResult>;
 
   getAllLearningPods(): Promise<LearningPod[]>;
   getLearningPodsByCohort(cohortId: string): Promise<LearningPod[]>;
@@ -1453,6 +1466,96 @@ export class DatabaseStorage implements IStorage {
 
   async assignApplicationToCohort(applicationId: string, cohortId: string | null): Promise<void> {
     await db.update(applications).set({ cohortId }).where(eq(applications.id, applicationId));
+  }
+
+  async transferApplicationToCohort(applicationId: string, cohortId: string | null): Promise<CohortTransferResult> {
+    return db.transaction(async (tx) => {
+      const [application] = await tx.select().from(applications).where(eq(applications.id, applicationId));
+      if (!application) throw new Error("Application not found");
+      if (application.cohortId === cohortId) {
+        return { participantTransferred: false, podMembershipsEnded: 0 };
+      }
+
+      const [user] = await tx.select().from(users).where(eq(users.email, application.email));
+      let participantTransferred = false;
+      let podMembershipsEnded = 0;
+
+      if (application.status === "accepted" && !user) {
+        throw new CohortTransferConflictError("This accepted applicant does not have a participant account yet");
+      }
+
+      if (application.status === "accepted" && user) {
+        if (!cohortId) {
+          throw new CohortTransferConflictError("Accepted participants must belong to a cohort");
+        }
+
+        const sourceConditions = [eq(cohortParticipants.applicationId, application.id)];
+        if (application.cohortId) {
+          sourceConditions.push(and(
+            eq(cohortParticipants.userId, user.id),
+            eq(cohortParticipants.cohortId, application.cohortId),
+          )!);
+        }
+        const [sourceParticipant] = await tx.select().from(cohortParticipants)
+          .where(or(...sourceConditions));
+        const [destinationParticipant] = await tx.select().from(cohortParticipants)
+          .where(and(
+            eq(cohortParticipants.userId, user.id),
+            eq(cohortParticipants.cohortId, cohortId),
+          ));
+
+        if (sourceParticipant && destinationParticipant && sourceParticipant.id !== destinationParticipant.id) {
+          throw new CohortTransferConflictError();
+        }
+
+        if (sourceParticipant) {
+          await tx.update(cohortParticipants)
+            .set({ cohortId, applicationId: application.id, updatedAt: new Date() })
+            .where(eq(cohortParticipants.id, sourceParticipant.id));
+        } else if (destinationParticipant) {
+          await tx.update(cohortParticipants)
+            .set({ applicationId: application.id, status: "active", updatedAt: new Date() })
+            .where(eq(cohortParticipants.id, destinationParticipant.id));
+        } else {
+          await tx.insert(cohortParticipants).values({
+            userId: user.id,
+            cohortId,
+            applicationId: application.id,
+            projectName: application.companyName || application.companyLegalName || null,
+            projectDescription: application.projectDescription || application.businessDescription || null,
+            projectStage: application.projectStage || application.projectCurrentStatus || null,
+            status: "active",
+            acceptedAt: new Date(),
+          });
+        }
+        participantTransferred = true;
+
+        if (application.cohortId) {
+          const oldPodIds = (await tx.select({ id: learningPods.id }).from(learningPods)
+            .where(and(
+              eq(learningPods.cohortId, application.cohortId),
+              eq(learningPods.status, "active"),
+            ))).map((pod) => pod.id);
+          if (oldPodIds.length > 0) {
+            const endedMemberships = await tx.update(learningPodMembers)
+              .set({ removedAt: new Date() })
+              .where(and(
+                eq(learningPodMembers.userId, user.id),
+                isNull(learningPodMembers.removedAt),
+                inArray(learningPodMembers.podId, oldPodIds),
+              ))
+              .returning({ id: learningPodMembers.id });
+            podMembershipsEnded = endedMemberships.length;
+          }
+        }
+      }
+
+      await tx.update(applications)
+        .set({ cohortId, updatedAt: new Date() })
+        .where(eq(applications.id, applicationId));
+
+      return { participantTransferred, podMembershipsEnded };
+    });
   }
 
   async getAllLearningPods(): Promise<LearningPod[]> {

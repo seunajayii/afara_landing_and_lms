@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import {
   storage,
+  CohortTransferConflictError,
   LearningPodDistributionInProgressError,
   LearningPodMembershipConflictError,
 } from "./storage";
@@ -5942,19 +5943,26 @@ export async function registerRoutes(
     }
   });
 
-  // Assign an application to a cohort (or remove it)
+  // Assign an applicant to a cohort. For accepted participants this also moves
+  // their programme journey and ends any active pod membership in the old cohort.
   app.patch("/api/admin/applications/:id/cohort", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
       const application = await storage.getApplication(req.params.id);
       if (!application) return res.status(404).json({ error: "Application not found" });
-      const cohortId = req.body.cohortId || null;
+      const parsed = z.object({ cohortId: z.string().min(1).nullable() }).safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "A valid cohort selection is required" });
+      const cohortId = parsed.data.cohortId;
       if (cohortId) {
         const cohort = await storage.getCohort(cohortId);
         if (!cohort) return res.status(404).json({ error: "Cohort not found" });
       }
-      await storage.assignApplicationToCohort(req.params.id, cohortId);
-      res.json({ ok: true });
+      const result = await storage.transferApplicationToCohort(req.params.id, cohortId);
+      res.json({ ok: true, ...result });
     } catch (error) {
+      if (error instanceof CohortTransferConflictError) {
+        return res.status(409).json({ error: error.message });
+      }
+      console.error("Failed to transfer application cohort:", error);
       res.status(500).json({ error: "Failed to assign cohort" });
     }
   });

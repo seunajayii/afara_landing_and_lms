@@ -8,7 +8,15 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { registerRoutes } from "./routes";
 import { storage } from "./storage";
 import { db } from "./db";
-import { applications, cohorts, learningPodMembers, learningPods, users as usersTable } from "@shared/schema";
+import {
+  applications,
+  cohortParticipants,
+  cohorts,
+  learningPodMembers,
+  learningPods,
+  progressMilestones,
+  users as usersTable,
+} from "@shared/schema";
 
 type StorageMethod = (...args: any[]) => any;
 
@@ -1079,5 +1087,93 @@ test("simultaneous auto-distribution creates one complete assignment and reports
       mentorTwoId,
       adminId,
     ]));
+  }
+});
+
+test("transferring an accepted applicant moves their journey and ends old pod membership", async () => {
+  const userId = randomUUID();
+  const mentorId = randomUUID();
+  const sourceCohortId = randomUUID();
+  const destinationCohortId = randomUUID();
+  const applicationId = randomUUID();
+  const participantId = randomUUID();
+  const podId = randomUUID();
+  const milestoneId = randomUUID();
+  const email = `${userId}@example.com`;
+
+  await db.insert(usersTable).values([
+    {
+      id: userId,
+      email,
+      firstName: "Transfer",
+      lastName: "Participant",
+      role: "participant",
+      isActive: true,
+      mustChangePassword: false,
+    },
+    {
+      id: mentorId,
+      email: `${mentorId}@example.com`,
+      firstName: "Transfer",
+      lastName: "Mentor",
+      role: "mentor",
+      isActive: true,
+      mustChangePassword: false,
+    },
+  ]);
+  await db.insert(cohorts).values([
+    { id: sourceCohortId, name: "Source cohort", slug: `source-${sourceCohortId}` },
+    { id: destinationCohortId, name: "Destination cohort", slug: `destination-${destinationCohortId}` },
+  ]);
+  await db.insert(applications).values({
+    id: applicationId,
+    email,
+    firstName: "Transfer",
+    lastName: "Participant",
+    status: "accepted",
+    cohortId: sourceCohortId,
+  });
+  await db.insert(cohortParticipants).values({
+    id: participantId,
+    userId,
+    cohortId: sourceCohortId,
+    applicationId,
+    status: "active",
+  });
+  await db.insert(progressMilestones).values({
+    id: milestoneId,
+    participantId,
+    title: "Preserved milestone",
+    createdById: mentorId,
+  });
+  await db.insert(learningPods).values({
+    id: podId,
+    cohortId: sourceCohortId,
+    name: "Source pod",
+    mentorId,
+    status: "active",
+  });
+  await db.insert(learningPodMembers).values({ podId, userId });
+
+  try {
+    const result = await storage.transferApplicationToCohort(applicationId, destinationCohortId);
+    assert.deepEqual(result, { participantTransferred: true, podMembershipsEnded: 1 });
+
+    const [movedApplication] = await db.select().from(applications).where(eq(applications.id, applicationId));
+    const [movedParticipant] = await db.select().from(cohortParticipants).where(eq(cohortParticipants.id, participantId));
+    const [preservedMilestone] = await db.select().from(progressMilestones).where(eq(progressMilestones.id, milestoneId));
+    const [endedMembership] = await db.select().from(learningPodMembers)
+      .where(and(eq(learningPodMembers.podId, podId), eq(learningPodMembers.userId, userId)));
+
+    assert.equal(movedApplication.cohortId, destinationCohortId);
+    assert.equal(movedParticipant.cohortId, destinationCohortId);
+    assert.equal(preservedMilestone.participantId, participantId);
+    assert.ok(endedMembership.removedAt);
+  } finally {
+    await db.delete(learningPods).where(eq(learningPods.id, podId));
+    await db.delete(cohortParticipants).where(eq(cohortParticipants.id, participantId));
+    await db.delete(applications).where(eq(applications.id, applicationId));
+    await db.delete(cohorts).where(inArray(cohorts.id, [sourceCohortId, destinationCohortId]));
+    await db.delete(usersTable).where(inArray(usersTable.id, [userId, mentorId]));
   }
 });
