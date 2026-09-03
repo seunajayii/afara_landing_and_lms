@@ -3,9 +3,11 @@ import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/lib/auth";
+import { getAdminCohortId, setAdminCohortId } from "@/lib/adminCohortContext";
 import type { Cohort } from "@shared/schema";
 import {
   Award, BarChart3, BookOpen, CalendarDays, ChevronDown, ClipboardCheck,
@@ -53,8 +55,18 @@ function AdminSidebarNav({ location, onNavigate }: { location: string; onNavigat
   const { user, logout } = useAuth();
   const [, setLocation] = useLocation();
   const [query, setQuery] = useState("");
-  const { data: cohorts = [] } = useQuery<Cohort[]>({ queryKey: ["/api/cohorts"] });
-  const activeCohort = cohorts.find((cohort) => cohort.status === "open") ?? cohorts[0];
+  const [selectedCohortId, setSelectedCohortId] = useState<string | null>(() => getAdminCohortId());
+  const { data: cohorts = [] } = useQuery<Cohort[]>({ queryKey: ["/api/admin/cohorts"] });
+  const activeCohort = cohorts.find((cohort) => cohort.id === selectedCohortId)
+    ?? cohorts.find((cohort) => cohort.status === "open")
+    ?? cohorts[0];
+
+  const handleCohortChange = (cohortId: string) => {
+    setSelectedCohortId(cohortId);
+    setAdminCohortId(cohortId);
+    onNavigate?.();
+    setLocation(`/admin/dashboard?cohortId=${encodeURIComponent(cohortId)}`);
+  };
 
   const visibleGroups = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -87,15 +99,26 @@ function AdminSidebarNav({ location, onNavigate }: { location: string; onNavigat
       </div>
 
       <div className="space-y-3 px-3 pb-2 pt-4">
-        <Link href="/admin/cohorts" onClick={onNavigate}>
-          <button className="w-full rounded-lg border bg-card px-3 py-2.5 text-left hover-elevate" data-testid="button-admin-cohort-context">
-            <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Working in</span>
-            <span className="mt-1 flex items-center justify-between gap-2 truncate text-xs font-semibold">
-              <span className="truncate">{activeCohort?.displayName || activeCohort?.name || "All cohorts"}</span>
-              <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-            </span>
-          </button>
-        </Link>
+        <div className="rounded-lg border bg-card px-3 py-2.5" data-testid="button-admin-cohort-context">
+          <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Working in</span>
+          <Select value={activeCohort?.id ?? ""} onValueChange={handleCohortChange}>
+            <SelectTrigger
+              className="mt-1 h-auto min-h-5 w-full border-0 bg-transparent p-0 text-left text-xs font-semibold shadow-none focus:ring-0"
+              aria-label="Choose the cohort workspace"
+              data-testid="select-admin-cohort-context"
+            >
+              <SelectValue placeholder="Choose a cohort" />
+            </SelectTrigger>
+            <SelectContent>
+              {cohorts.map((cohort) => (
+                <SelectItem key={cohort.id} value={cohort.id}>
+                  {cohort.displayName || cohort.name}{cohort.year ? ` · ${cohort.year}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {activeCohort && <p className="mt-1 text-[10px] text-muted-foreground">Select a cohort to open its workspace</p>}
+        </div>
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
           <Input

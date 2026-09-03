@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useAuth } from "@/lib/auth";
+import { getAdminCohortId } from "@/lib/adminCohortContext";
 import {
   AlertCircle, ArrowUpRight, BookOpen, CalendarDays, CheckCircle2,
   ClipboardCheck, FileText, FolderKanban, Network, Sparkles, Users,
@@ -22,10 +23,13 @@ export default function AdminDashboard() {
   const { data: events = [], isLoading: eventsLoading } = useQuery<Event[]>({ queryKey: ["/api/events"] });
   const { data: resources = [], isLoading: resourcesLoading } = useQuery<Resource[]>({ queryKey: ["/api/resources"] });
   const { data: applications = [], isLoading: applicationsLoading } = useQuery<Application[]>({ queryKey: ["/api/applications"] });
-  const { data: cohorts = [], isLoading: cohortsLoading } = useQuery<Cohort[]>({ queryKey: ["/api/cohorts"] });
+  const { data: cohorts = [], isLoading: cohortsLoading } = useQuery<Cohort[]>({ queryKey: ["/api/admin/cohorts"] });
 
   const isLoading = coursesLoading || eventsLoading || resourcesLoading || applicationsLoading || cohortsLoading;
-  const activeCohort = cohorts.find((cohort) => cohort.status === "open") ?? cohorts[0];
+  const selectedCohortId = getAdminCohortId();
+  const activeCohort = cohorts.find((cohort) => cohort.id === selectedCohortId)
+    ?? cohorts.find((cohort) => cohort.status === "open")
+    ?? cohorts[0];
   const reviewCount = applications.filter((application) => application.status === "submitted" || application.status === "under_review").length;
   const activeCourses = courses.filter((course) => course.status === "published").length;
   const upcoming = events.filter((event) => new Date(event.startTime) > new Date()).sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime));
@@ -42,7 +46,7 @@ export default function AdminDashboard() {
               <h1 className="font-serif text-3xl font-semibold tracking-tight" data-testid="text-admin-welcome">Good morning, {user?.firstName || "Admin"}.</h1>
               <p className="mt-1 text-sm text-muted-foreground">Here’s the pulse of your programme workspace.</p>
             </div>
-            <Link href="/admin/cohort-report"><Button variant="outline" size="sm" className="gap-2">View reports <ArrowUpRight className="h-3.5 w-3.5" /></Button></Link>
+             <Link href={activeCohort ? `/admin/cohort-report?cohortId=${encodeURIComponent(activeCohort.id)}` : "/admin/cohort-report"}><Button variant="outline" size="sm" className="gap-2">View reports <ArrowUpRight className="h-3.5 w-3.5" /></Button></Link>
           </header>
 
           {isLoading ? <DashboardSkeleton /> : (
