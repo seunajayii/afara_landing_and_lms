@@ -6,108 +6,46 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/lib/auth";
 import {
-  LayoutDashboard,
-  BookOpen,
-  Users,
-  Calendar,
-  FolderOpen,
-  MessageSquare,
-  Award,
-  LogOut,
-  Shield,
-  UserCircle,
-  Menu,
-  X,
-  Info,
-  TrendingUp,
-  ClipboardCheck,
+  Award, BookOpen, CalendarDays, ClipboardCheck, FolderOpen, Home,
+  LogOut, Menu, MessageCircle, Shield, Sparkles, TrendingUp, UserRound, UsersRound,
 } from "lucide-react";
 import afaraLogo from "@assets/AFARA Image 1_1759521116826.png";
 
 const TEAM_ROLES = ["mentor", "facilitator", "admin", "superadmin"] as const;
-type TeamRole = typeof TEAM_ROLES[number];
 
-const ROLE_LABELS: Record<TeamRole, string> = {
-  mentor: "Mentor",
-  facilitator: "Facilitator",
-  admin: "Admin",
-  superadmin: "Super Admin",
-};
-
-const SESSION_KEY = "lms-view-notice-dismissed";
-
-function LMSViewNotice({ onNavigate }: { onNavigate?: () => void }) {
-  const { user, isAdmin } = useAuth();
-  const [dismissed, setDismissed] = useState(() => {
-    try { return sessionStorage.getItem(SESSION_KEY) === "true"; } catch { return false; }
-  });
-
-  if (!user || !TEAM_ROLES.includes(user.role as TeamRole)) return null;
-  if (dismissed) return null;
-
-  const roleLabel = ROLE_LABELS[user.role as TeamRole] ?? user.role;
-
-  const handleDismiss = () => {
-    try { sessionStorage.setItem(SESSION_KEY, "true"); } catch {}
-    setDismissed(true);
-  };
-
-  return (
-    <div className="mx-3 mt-3 rounded-md border border-[hsl(var(--primary)/0.25)] bg-[hsl(var(--primary)/0.07)] p-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-start gap-2 min-w-0">
-          <Info className="w-4 h-4 mt-0.5 shrink-0 text-[hsl(var(--primary))]" />
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-foreground leading-snug">
-              Viewing as {roleLabel}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
-              You are currently in Participant mode
-            </p>
-            {isAdmin && (
-              <Link href="/admin/dashboard" onClick={() => { handleDismiss(); onNavigate?.(); }}>
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="mt-2 h-7 text-xs gap-1.5 w-full"
-                  data-testid="button-switch-admin-view"
-                >
-                  <Shield className="w-3 h-3" />
-                  Switch to Admin View
-                </Button>
-              </Link>
-            )}
-          </div>
-        </div>
-        <button
-          onClick={handleDismiss}
-          className="shrink-0 text-muted-foreground hover:text-foreground transition-colors mt-0.5"
-          data-testid="button-dismiss-lms-notice"
-          aria-label="Dismiss"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-const navItems = [
-  { path: "/lms/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { path: "/lms/courses", label: "My Courses", icon: BookOpen },
-  { path: "/lms/mentorship", label: "Learning Pods", icon: Users },
-  { path: "/lms/events", label: "Events", icon: Calendar },
-  { path: "/lms/resources", label: "Resources", icon: FolderOpen },
-  { path: "/lms/community", label: "Community", icon: MessageSquare },
-  { path: "/lms/certificates", label: "Certificates", icon: Award },
-  { path: "/lms/progress", label: "My Progress", icon: TrendingUp },
-  { path: "/lms/assignments", label: "Assignments", icon: ClipboardCheck },
-  { path: "/lms/profile", label: "Profile", icon: UserCircle },
+const navGroups = [
+  { label: "Home", items: [{ path: "/lms/dashboard", label: "Home", icon: Home }] },
+  {
+    label: "Learn",
+    items: [
+      { path: "/lms/courses", label: "My Courses", icon: BookOpen },
+      { path: "/lms/resources", label: "Resources", icon: FolderOpen },
+      { path: "/lms/progress", label: "My Progress", icon: TrendingUp },
+    ],
+  },
+  {
+    label: "Programme Work",
+    items: [
+      { path: "/lms/assignments", label: "Assignments", icon: ClipboardCheck },
+      { path: "/lms/certificates", label: "Certificates", icon: Award },
+    ],
+  },
+  {
+    label: "Connect",
+    items: [
+      { path: "/lms/mentorship", label: "Learning Pods", icon: UsersRound },
+      { path: "/lms/events", label: "Events", icon: CalendarDays },
+      { path: "/lms/community", label: "Community", icon: MessageCircle },
+    ],
+  },
+  { label: "Account", items: [{ path: "/lms/profile", label: "Profile", icon: UserRound }] },
 ];
 
 function SidebarNav({ location, onNavigate }: { location: string; onNavigate?: () => void }) {
   const { user, logout, isAdmin } = useAuth();
   const [, setLocation] = useLocation();
+  const initials = user ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase() : "?";
+  const isTeamMember = Boolean(user && TEAM_ROLES.includes(user.role as typeof TEAM_ROLES[number]));
 
   const handleLogout = async () => {
     onNavigate?.();
@@ -115,92 +53,66 @@ function SidebarNav({ location, onNavigate }: { location: string; onNavigate?: (
     setLocation("/login");
   };
 
-  const initials = user
-    ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase()
-    : "?";
-
   return (
-    <div className="flex flex-col h-full bg-sidebar">
-      <div className="p-6 border-b">
+    <div className="flex h-full flex-col bg-[hsl(var(--sidebar))]">
+      <div className="border-b px-5 py-5">
         <Link href="/lms/dashboard" onClick={onNavigate}>
-          <div className="cursor-pointer">
-            <img src={afaraLogo} alt="AFÁRÁ" className="h-12 w-auto dark:brightness-0 dark:invert dark:opacity-90" />
-          </div>
+          <img src={afaraLogo} alt="AFÁRÁ" className="h-10 w-auto cursor-pointer dark:brightness-0 dark:invert dark:opacity-90" />
         </Link>
-        <p className="text-xs text-muted-foreground mt-2">
-          An{" "}
-          <a
-            href="https://openspacesandbridges.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:underline"
-          >
-            OPSB
-          </a>{" "}
-          Initiative
-        </p>
+        <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">An OPSB Initiative</p>
       </div>
 
-      <LMSViewNotice onNavigate={onNavigate} />
-
-      <nav className="flex-1 p-4 overflow-y-auto">
-        <div className="space-y-1">
-          {navItems.map((item) => (
-            <Link key={item.path} href={item.path} onClick={onNavigate}>
-              <Button
-                variant="ghost"
-                className={`w-full justify-start gap-3 ${location === item.path ? "bg-sidebar-accent" : ""}`}
-                data-testid={`link-${item.label.toLowerCase().replace(" ", "-")}`}
-              >
-                <item.icon className="w-4 h-4" />
-                {item.label}
-              </Button>
-            </Link>
-          ))}
+      {isTeamMember && (
+        <div className="mx-3 mt-3 flex items-center gap-2 rounded-full border bg-background/70 px-3 py-2 text-[11px] text-muted-foreground">
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
+          Participant mode
+          {isAdmin && <Link href="/admin/dashboard" onClick={onNavigate} className="ml-auto font-semibold text-primary">Admin</Link>}
         </div>
+      )}
+
+      <nav className="flex-1 overflow-y-auto px-3 pb-4 pt-3" aria-label="Learner navigation">
+        {navGroups.map((group) => (
+          <div key={group.label} className="mb-4">
+            <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80">{group.label}</p>
+            <div className="space-y-0.5">
+              {group.items.map((item) => {
+                const active = location === item.path || (item.path !== "/lms/dashboard" && location.startsWith(`${item.path}/`));
+                return (
+                  <Link key={item.path} href={item.path} onClick={onNavigate}>
+                    <Button
+                      variant="ghost"
+                      className={`h-9 w-full justify-start gap-2.5 px-2.5 text-xs ${active ? "bg-background font-semibold shadow-sm" : "text-muted-foreground"}`}
+                      data-testid={`link-${item.label.toLowerCase().replace(/ /g, "-")}`}
+                    >
+                      <item.icon className={`h-4 w-4 ${active ? "text-primary" : ""}`} />
+                      {item.label}
+                    </Button>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
-      <div className="p-4 border-t space-y-2">
+      <div className="border-t p-4">
         {isAdmin && (
           <Link href="/admin/dashboard" onClick={onNavigate}>
-            <Button variant="default" className="w-full justify-start gap-3" data-testid="button-admin-portal">
-              <Shield className="w-4 h-4" />
-              Admin Portal
-            </Button>
+            <Button variant="outline" size="sm" className="mb-2 w-full justify-start gap-2" data-testid="button-admin-portal"><Shield className="h-4 w-4" /> Admin Portal</Button>
           </Link>
         )}
-        <div className="flex items-center justify-between gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-2"
-            onClick={handleLogout}
-            data-testid="button-logout"
-          >
-            <LogOut className="w-4 h-4" />
-            Log Out
-          </Button>
-          <ThemeToggle />
-        </div>
         {user && (
           <Link href="/lms/profile" onClick={onNavigate}>
-            <div
-              className="flex items-center gap-2 rounded-md px-2 py-1 hover-elevate cursor-pointer"
-              data-testid="link-sidebar-profile"
-            >
-              <Avatar className="h-7 w-7">
-                <AvatarImage
-                  src={user.profileImageUrl ?? undefined}
-                  alt={`${user.firstName} ${user.lastName}`}
-                />
-                <AvatarFallback className="text-xs">{initials}</AvatarFallback>
-              </Avatar>
-              <p className="text-xs text-muted-foreground truncate">
-                {user.firstName} {user.lastName}
-              </p>
+            <div className="mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 hover-elevate" data-testid="link-sidebar-profile">
+              <Avatar className="h-8 w-8"><AvatarImage src={user.profileImageUrl ?? undefined} alt={`${user.firstName} ${user.lastName}`} /><AvatarFallback className="text-xs">{initials}</AvatarFallback></Avatar>
+              <div className="min-w-0"><p className="truncate text-xs font-semibold">{user.firstName} {user.lastName}</p><p className="text-[10px] capitalize text-muted-foreground">{user.role}</p></div>
             </div>
           </Link>
         )}
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" size="sm" className="gap-2" onClick={handleLogout} data-testid="button-logout"><LogOut className="h-4 w-4" /> Log Out</Button>
+          <ThemeToggle />
+        </div>
       </div>
     </div>
   );
@@ -209,36 +121,16 @@ function SidebarNav({ location, onNavigate }: { location: string; onNavigate?: (
 export function LMSSidebar() {
   const [location] = useLocation();
   const [open, setOpen] = useState(false);
-
   return (
     <>
-      {/* Desktop sidebar — hidden on mobile */}
-      <div className="hidden md:flex flex-col w-64 border-r bg-sidebar h-screen flex-shrink-0">
-        <SidebarNav location={location} />
-      </div>
-
-      {/* Mobile top bar — hidden on desktop */}
-      <div className="md:hidden flex items-center px-3 h-14 bg-sidebar border-b gap-3 shrink-0 sticky top-0 z-40">
+      <div className="hidden h-screen w-56 flex-shrink-0 flex-col border-r bg-sidebar md:flex"><SidebarNav location={location} /></div>
+      <div className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b bg-sidebar px-3 md:hidden">
         <Sheet open={open} onOpenChange={setOpen}>
-          <SheetTrigger asChild>
-            <Button size="icon" variant="ghost" data-testid="button-mobile-menu">
-              <Menu className="w-5 h-5" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="p-0 w-72 bg-sidebar border-r">
-            <SidebarNav location={location} onNavigate={() => setOpen(false)} />
-          </SheetContent>
+          <SheetTrigger asChild><Button size="icon" variant="ghost" data-testid="button-mobile-menu"><Menu className="h-5 w-5" /></Button></SheetTrigger>
+          <SheetContent side="left" className="w-72 border-r bg-sidebar p-0"><SidebarNav location={location} onNavigate={() => setOpen(false)} /></SheetContent>
         </Sheet>
-        <Link href="/lms/dashboard">
-          <img
-            src={afaraLogo}
-            alt="AFÁRÁ"
-            className="h-8 w-auto dark:brightness-0 dark:invert dark:opacity-90 cursor-pointer"
-          />
-        </Link>
-        <div className="ml-auto">
-          <ThemeToggle />
-        </div>
+        <Link href="/lms/dashboard"><img src={afaraLogo} alt="AFÁRÁ" className="h-8 w-auto cursor-pointer dark:brightness-0 dark:invert dark:opacity-90" /></Link>
+        <div className="ml-auto"><ThemeToggle /></div>
       </div>
     </>
   );
