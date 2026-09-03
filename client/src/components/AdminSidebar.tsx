@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/lib/auth";
-import { getAdminCohortId, setAdminCohortId } from "@/lib/adminCohortContext";
+import { adminCohortHref, setAdminCohortId, useAdminCohortId } from "@/lib/adminCohortContext";
 import type { Cohort } from "@shared/schema";
 import {
   Award, BarChart3, BookOpen, CalendarDays, ChevronDown, ClipboardCheck,
@@ -55,14 +55,19 @@ function AdminSidebarNav({ location, onNavigate }: { location: string; onNavigat
   const { user, logout } = useAuth();
   const [, setLocation] = useLocation();
   const [query, setQuery] = useState("");
-  const [selectedCohortId, setSelectedCohortId] = useState<string | null>(() => getAdminCohortId());
+  const selectedCohortId = useAdminCohortId();
   const { data: cohorts = [] } = useQuery<Cohort[]>({ queryKey: ["/api/admin/cohorts"] });
   const activeCohort = cohorts.find((cohort) => cohort.id === selectedCohortId)
     ?? cohorts.find((cohort) => cohort.status === "open")
     ?? cohorts[0];
 
+  useEffect(() => {
+    if (activeCohort && activeCohort.id !== selectedCohortId) {
+      setAdminCohortId(activeCohort.id);
+    }
+  }, [activeCohort, selectedCohortId]);
+
   const handleCohortChange = (cohortId: string) => {
-    setSelectedCohortId(cohortId);
     setAdminCohortId(cohortId);
     onNavigate?.();
     setLocation(`/admin/dashboard?cohortId=${encodeURIComponent(cohortId)}`);
@@ -88,7 +93,7 @@ function AdminSidebarNav({ location, onNavigate }: { location: string; onNavigat
     <div className="flex h-full flex-col bg-sidebar">
       <div className="border-b px-5 py-5">
         <div className="flex items-center justify-between gap-3">
-          <Link href="/admin/dashboard" onClick={onNavigate}>
+          <Link href={adminCohortHref("/admin/dashboard", activeCohort?.id)} onClick={onNavigate}>
             <img src={afaraLogo} alt="AFÁRÁ" className="h-10 w-auto cursor-pointer dark:brightness-0 dark:invert dark:opacity-90" />
           </Link>
           <div className="grid h-8 w-8 place-items-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">{initials}</div>
@@ -140,7 +145,7 @@ function AdminSidebarNav({ location, onNavigate }: { location: string; onNavigat
               {group.items.map((item) => {
                 const active = location === item.path;
                 return (
-                  <Link key={item.path} href={item.path} onClick={onNavigate}>
+                  <Link key={item.path} href={adminCohortHref(item.path, activeCohort?.id)} onClick={onNavigate}>
                     <Button
                       variant="ghost"
                       className={`h-9 w-full justify-start gap-2.5 rounded-l-none border-l-2 px-2.5 text-xs ${

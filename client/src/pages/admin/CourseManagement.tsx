@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { getAdminCohortId } from "@/lib/adminCohortContext";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import {
@@ -352,9 +353,12 @@ function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () =
 
 export default function CourseManagement() {
   const { toast } = useToast();
+  const selectedCohortId = getAdminCohortId();
   const [searchQuery, setSearchQuery] = useState("");
   const [createDialog, setCreateDialog] = useState(false);
-  const [createDraft, setCreateDraft] = useState(initialCourse);
+  const [createDraft, setCreateDraft] = useState(() => selectedCohortId
+    ? { ...initialCourse, audience: "selected" as const, cohortIds: [selectedCohortId] }
+    : initialCourse);
   const [editorCourseId, setEditorCourseId] = useState<string | null>(null);
   const { data: courses, isLoading } = useQuery<CourseWithCurriculum[]>({ queryKey: ["/api/courses"] });
   const createCourse = useMutation({
@@ -366,13 +370,16 @@ export default function CourseManagement() {
     if (!window.confirm(`Delete "${course.title}" and all of its modules, lessons, enrolments, and certificate records? Reusable resources will not be deleted.`)) return;
     try { await apiRequest("DELETE", `/api/courses/${course.id}`); queryClient.invalidateQueries({ queryKey: ["/api/courses"] }); toast({ title: "Course deleted" }); } catch { toast({ title: "Could not delete course", variant: "destructive" }); }
   };
-  const filteredCourses = useMemo(() => (courses || []).filter((course) => `${course.title} ${course.description || ""} ${course.category || ""}`.toLowerCase().includes(searchQuery.toLowerCase())), [courses, searchQuery]);
+  const filteredCourses = useMemo(() => (courses || []).filter((course) =>
+    (course.audience === "all" || !selectedCohortId || course.cohortIds?.includes(selectedCohortId))
+    && `${course.title} ${course.description || ""} ${course.category || ""}`.toLowerCase().includes(searchQuery.toLowerCase())
+  ), [courses, searchQuery, selectedCohortId]);
 
   return (
     <div className="flex h-screen flex-col md:flex-row"><AdminSidebar />
       {editorCourseId ? <CurriculumEditor courseId={editorCourseId} onBack={() => setEditorCourseId(null)} /> :
         <main className="flex-1 overflow-auto"><div className="p-6 md:p-8">
-          <div className="mb-8 flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-3xl font-bold">Course Management</h1><p className="mt-1 text-muted-foreground">Create curriculum structure here and keep reusable content in Resource Management.</p></div><Button onClick={() => setCreateDialog(true)} data-testid="button-create-course"><Plus className="mr-2 h-4 w-4" />Add course</Button></div>
+          <div className="mb-8 flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-3xl font-bold">Course Management</h1><p className="mt-1 text-muted-foreground">Showing shared courses and courses assigned to the current cohort. Reusable resources remain global.</p></div><Button onClick={() => setCreateDialog(true)} data-testid="button-create-course"><Plus className="mr-2 h-4 w-4" />Add course</Button></div>
           <div className="relative mb-6 max-w-md"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search courses" /></div>
           {isLoading ? <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{[1, 2, 3].map((key) => <Skeleton key={key} className="h-56" />)}</div> :
             filteredCourses.length === 0 ? <Card className="border-dashed py-12 text-center"><CardContent><BookOpen className="mx-auto mb-3 h-10 w-10 text-muted-foreground" /><h2 className="text-lg font-semibold">No courses found</h2><p className="mt-1 text-sm text-muted-foreground">{searchQuery ? "Try a different search." : "Create your first course, then add its curriculum."}</p>{!searchQuery && <Button className="mt-5" onClick={() => setCreateDialog(true)}>Create course</Button>}</CardContent></Card> :

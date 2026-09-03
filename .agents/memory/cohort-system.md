@@ -23,6 +23,13 @@ Multiple cohorts (e.g. AFARA CORE and DOREWA) can be open for applications at th
 
 **How to apply:** Because of this, any endpoint that auto-assigns an application to "the" open cohort is ambiguous once more than one cohort is open — check current code for how each such endpoint resolves that ambiguity (e.g. requiring an explicit cohort/slug, or refusing to guess) rather than assuming a single global open cohort still exists.
 
+## Admin cohort workspace context
+The admin “Working in” cohort selection is the default operational context across applications, courses, assignments, pods, progress, analytics, reports, and newsletter audiences. Reusable resources remain global.
+
+**Why:** Admins need to stay inside AFÁRÁ, Dorewa, or future cohort workspaces without accidentally reviewing or authoring against another cohort, while shared content assets must remain reusable.
+
+**How to apply:** Preserve the selected cohort in admin navigation and default every cohort-aware screen to it. Shared courses may appear in every cohort; cohort-assigned courses appear only in their assigned workspace. Do not claim events or notifications are cohort-isolated until their data models store cohort targeting.
+
 ## Public cohort resolution conventions
 Public (unauthenticated) cohort access uses three purpose-built endpoints rather than exposing admin cohort rows directly: a public list (drafts hidden), a "primary" cohort resolver, and a by-slug resolver. All map through a `toPublicCohort`-style trimmed projection.
 

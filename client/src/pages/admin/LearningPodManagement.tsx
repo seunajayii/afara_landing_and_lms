@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { getAdminCohortId } from "@/lib/adminCohortContext";
 import { ArrowRight, Loader2, Plus, Save, Shuffle, Users, X } from "lucide-react";
 import type { Cohort, User } from "@shared/schema";
 
@@ -39,12 +40,13 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 export default function LearningPodManagement() {
   const { toast } = useToast();
-  const [createCohortId, setCreateCohortId] = useState("");
+  const selectedCohortId = getAdminCohortId();
+  const [createCohortId, setCreateCohortId] = useState(() => selectedCohortId ?? "");
   const [createName, setCreateName] = useState("");
   const [createDescription, setCreateDescription] = useState("");
   const [createMentorId, setCreateMentorId] = useState("");
   const [createMemberIds, setCreateMemberIds] = useState<string[]>([]);
-  const [autoCohortId, setAutoCohortId] = useState("");
+  const [autoCohortId, setAutoCohortId] = useState(() => selectedCohortId ?? "");
   const [autoPodSize, setAutoPodSize] = useState("4");
   const [autoMentorIds, setAutoMentorIds] = useState<string[]>([]);
   const [activePodId, setActivePodId] = useState<string | null>(null);
@@ -62,7 +64,8 @@ export default function LearningPodManagement() {
     queryKey: ["/api/users/role/mentor"],
   });
   const { data: pods = [], isLoading: podsLoading } = useQuery<Pod[]>({
-    queryKey: ["/api/admin/learning-pods"],
+    queryKey: ["/api/admin/learning-pods", selectedCohortId],
+    queryFn: async () => (await apiRequest("GET", selectedCohortId ? `/api/admin/learning-pods?cohortId=${encodeURIComponent(selectedCohortId)}` : "/api/admin/learning-pods")).json(),
   });
   const { data: eligible = [], isLoading: eligibleLoading } = useQuery<EligibleParticipant[]>({
     queryKey: ["/api/admin/learning-pods/eligible", createCohortId],
@@ -291,7 +294,7 @@ export default function LearningPodManagement() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold">Existing pods</h2>
-                <p className="text-sm text-muted-foreground">{pods.length} pod{pods.length === 1 ? "" : "s"} across all cohorts</p>
+                <p className="text-sm text-muted-foreground">{pods.length} pod{pods.length === 1 ? "" : "s"} in the current cohort workspace</p>
               </div>
               <Link href="/admin/cohorts"><Button variant="outline" size="sm">Manage cohorts <ArrowRight className="h-4 w-4 ml-2" /></Button></Link>
             </div>

@@ -4,14 +4,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useSearch } from "wouter";
+import { Link } from "wouter";
 import { useAuth } from "@/lib/auth";
-import { getAdminCohortId } from "@/lib/adminCohortContext";
+import { adminCohortHref, useAdminCohortId } from "@/lib/adminCohortContext";
 import {
   AlertCircle, ArrowUpRight, BookOpen, CalendarDays, CheckCircle2,
   ClipboardCheck, FileText, FolderKanban, Network, Sparkles, Users,
 } from "lucide-react";
 import type { Application, Cohort, Course, Event, Resource } from "@shared/schema";
+
+type AdminCourse = Course & { cohortIds?: string[] };
 
 function DashboardSkeleton() {
   return <div className="space-y-4"><Skeleton className="h-36 w-full" /><Skeleton className="h-20 w-full" /><div className="grid gap-4 lg:grid-cols-3"><Skeleton className="h-48 lg:col-span-2" /><Skeleton className="h-48" /></div></div>;
@@ -19,20 +21,21 @@ function DashboardSkeleton() {
 
 export default function AdminDashboard() {
   const { user } = useAuth();
-  const search = useSearch();
-  const { data: courses = [], isLoading: coursesLoading } = useQuery<Course[]>({ queryKey: ["/api/courses"] });
+  const { data: courses = [], isLoading: coursesLoading } = useQuery<AdminCourse[]>({ queryKey: ["/api/courses"] });
   const { data: events = [], isLoading: eventsLoading } = useQuery<Event[]>({ queryKey: ["/api/events"] });
   const { data: resources = [], isLoading: resourcesLoading } = useQuery<Resource[]>({ queryKey: ["/api/resources"] });
   const { data: applications = [], isLoading: applicationsLoading } = useQuery<Application[]>({ queryKey: ["/api/applications"] });
   const { data: cohorts = [], isLoading: cohortsLoading } = useQuery<Cohort[]>({ queryKey: ["/api/admin/cohorts"] });
 
   const isLoading = coursesLoading || eventsLoading || resourcesLoading || applicationsLoading || cohortsLoading;
-  const selectedCohortId = getAdminCohortId(search);
+  const selectedCohortId = useAdminCohortId();
   const activeCohort = cohorts.find((cohort) => cohort.id === selectedCohortId)
     ?? cohorts.find((cohort) => cohort.status === "open")
     ?? cohorts[0];
-  const reviewCount = applications.filter((application) => application.status === "submitted" || application.status === "under_review").length;
-  const activeCourses = courses.filter((course) => course.status === "published").length;
+  const cohortApplications = applications.filter((application) => !activeCohort || application.cohortId === activeCohort.id);
+  const cohortCourses = courses.filter((course) => course.audience === "all" || course.cohortIds?.includes(activeCohort?.id ?? ""));
+  const reviewCount = cohortApplications.filter((application) => application.status === "submitted" || application.status === "under_review").length;
+  const activeCourses = cohortCourses.filter((course) => course.status === "published").length;
   const upcoming = events.filter((event) => new Date(event.startTime) > new Date()).sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime));
   const nextEvent = upcoming[0];
 
@@ -58,7 +61,7 @@ export default function AdminDashboard() {
                     <div className="absolute -right-16 -top-24 h-52 w-52 rounded-full border border-primary-foreground/15" />
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-foreground/70">Current cohort</p>
                     <h2 className="mt-3 font-serif text-2xl">{activeCohort?.displayName || activeCohort?.name || "No active cohort"}</h2>
-                    <p className="mt-3 flex items-center gap-2 text-sm text-primary-foreground/75"><Users className="h-4 w-4" /> {applications.filter((application) => !activeCohort || application.cohortId === activeCohort.id).length} applications</p>
+                    <p className="mt-3 flex items-center gap-2 text-sm text-primary-foreground/75"><Users className="h-4 w-4" /> {cohortApplications.length} applications</p>
                   </CardContent>
                 </Card>
                 <Card>
@@ -74,7 +77,7 @@ export default function AdminDashboard() {
               <section className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-amber-300/60 bg-amber-50 p-4 dark:bg-amber-950/20">
                 <div className="grid h-9 w-9 place-items-center rounded-md bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"><AlertCircle className="h-5 w-5" /></div>
                 <div className="min-w-0 flex-1"><h2 className="text-sm font-semibold">Needs attention</h2><p className="text-xs text-muted-foreground">{reviewCount ? `${reviewCount} applications are waiting for review.` : "No application reviews are waiting."}</p></div>
-                <Link href="/admin/applications"><Button variant="ghost" size="sm" className="gap-1">Review queue <ArrowUpRight className="h-3.5 w-3.5" /></Button></Link>
+                <Link href={adminCohortHref("/admin/applications", activeCohort?.id)}><Button variant="ghost" size="sm" className="gap-1">Review queue <ArrowUpRight className="h-3.5 w-3.5" /></Button></Link>
               </section>
 
               <section className="mt-4 grid gap-4 lg:grid-cols-[1.25fr_.75fr]">
@@ -87,7 +90,7 @@ export default function AdminDashboard() {
                       ["/admin/learning-pods", "Open learning pods", "Check membership and facilitator activity.", Network],
                       ["/admin/courses", "Manage learning content", "Update courses and programme resources.", BookOpen],
                     ].map(([href, title, description, Icon]) => (
-                      <Link key={href as string} href={href as string}>
+                      <Link key={href as string} href={adminCohortHref(href as string, activeCohort?.id)}>
                         <div className="h-full rounded-lg border p-4 transition-colors hover:bg-accent">
                           <Icon className="h-5 w-5 text-primary" />
                           <h3 className="mt-3 text-sm font-semibold">{title as string}</h3>

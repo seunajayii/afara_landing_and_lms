@@ -38,6 +38,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { adminCohortHref, getAdminCohortId, setAdminCohortId } from "@/lib/adminCohortContext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -813,10 +815,11 @@ function ApplicationPreviewSheet({
 
 export default function ApplicationManagement() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [langFilter, setLangFilter] = useState("all");
-  const [cohortFilter, setCohortFilter] = useState("all");
+  const [cohortFilter, setCohortFilter] = useState(() => getAdminCohortId() ?? "all");
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
@@ -915,6 +918,14 @@ export default function ApplicationManagement() {
     cohortFilter === "all" ||
     (cohortFilter === "unassigned" && !app.cohortId) ||
     app.cohortId === cohortFilter;
+
+  const handleCohortFilterChange = (value: string) => {
+    setCohortFilter(value);
+    if (value !== "all" && value !== "unassigned") {
+      setAdminCohortId(value);
+      setLocation(adminCohortHref("/admin/applications", value), { replace: true });
+    }
+  };
 
   const cohortApplications = applications.filter(matchesSelectedCohort);
 
@@ -1103,7 +1114,7 @@ export default function ApplicationManagement() {
                     </SelectContent>
                   </Select>
                   {cohortsData.length > 0 && (
-                    <Select value={cohortFilter} onValueChange={setCohortFilter}>
+                    <Select value={cohortFilter} onValueChange={handleCohortFilterChange}>
                       <SelectTrigger className="w-44 gap-1" data-testid="select-cohort-filter">
                         <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
                         <SelectValue placeholder="Cohort" />

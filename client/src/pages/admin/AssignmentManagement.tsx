@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { getAdminCohortId, setAdminCohortId } from "@/lib/adminCohortContext";
 import { ClipboardCheck, Loader2, Plus, Save, Trash2 } from "lucide-react";
 import type { Cohort, Course, User } from "@shared/schema";
 
@@ -57,7 +58,7 @@ const emptyQuestion = (): Question => ({
 
 export default function AssignmentManagement() {
   const { toast } = useToast();
-  const [cohortId, setCohortId] = useState("");
+  const [cohortId, setCohortId] = useState(() => getAdminCohortId() ?? "");
   const [title, setTitle] = useState("");
   const [instructions, setInstructions] = useState("");
   const [assignmentType, setAssignmentType] = useState<Assignment["assignmentType"]>("quiz");
@@ -70,9 +71,17 @@ export default function AssignmentManagement() {
   const [reviewValues, setReviewValues] = useState<Record<string, { score: string; feedback: string; internalNotes: string }>>({});
 
   const { data: cohorts = [] } = useQuery<Cohort[]>({ queryKey: ["/api/admin/cohorts"] });
-  const { data: pods = [] } = useQuery<any[]>({ queryKey: ["/api/admin/learning-pods"] });
-  const { data: courses = [] } = useQuery<(Course & { modules?: any[] })[]>({ queryKey: ["/api/courses"] });
-  const { data: assignments = [], isLoading } = useQuery<Assignment[]>({ queryKey: ["/api/admin/assignments"] });
+  const { data: pods = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/learning-pods", cohortId],
+    queryFn: async () => (await apiRequest("GET", `/api/admin/learning-pods?cohortId=${encodeURIComponent(cohortId)}`)).json(),
+    enabled: Boolean(cohortId),
+  });
+  const { data: courses = [] } = useQuery<(Course & { modules?: any[]; cohortIds?: string[] })[]>({ queryKey: ["/api/courses"] });
+  const { data: assignments = [], isLoading } = useQuery<Assignment[]>({
+    queryKey: ["/api/admin/assignments", cohortId],
+    queryFn: async () => (await apiRequest("GET", `/api/admin/assignments?cohortId=${encodeURIComponent(cohortId)}`)).json(),
+    enabled: Boolean(cohortId),
+  });
 
   useEffect(() => {
     if (!cohortId && cohorts[0]) setCohortId(cohorts[0].id);
@@ -82,8 +91,10 @@ export default function AssignmentManagement() {
     : targetType === "pod"
       ? pods.filter((pod) => !cohortId || pod.cohortId === cohortId).map((pod) => ({ id: pod.id, label: pod.name }))
       : targetType === "course"
-        ? courses.map((course) => ({ id: course.id, label: course.title }))
-        : courses.flatMap((course) => (course.modules || []).map((module) => ({ id: module.id, label: `${course.title} · ${module.title}` })));
+        ? courses.filter((course) => course.audience === "all" || course.cohortIds?.includes(cohortId)).map((course) => ({ id: course.id, label: course.title }))
+        : courses
+          .filter((course) => course.audience === "all" || course.cohortIds?.includes(cohortId))
+          .flatMap((course) => (course.modules || []).map((module) => ({ id: module.id, label: `${course.title} · ${module.title}` })));
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -157,7 +168,7 @@ export default function AssignmentManagement() {
             <CardHeader><CardTitle className="flex items-center gap-2"><Plus className="h-5 w-5" /> Create assignment</CardTitle><CardDescription>Participant targeting is cohort-scoped; add a pod, course, or module context when needed.</CardDescription></CardHeader>
             <CardContent className="space-y-5">
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2"><Label>Cohort</Label><select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={cohortId} onChange={(event) => setCohortId(event.target.value)}>{cohorts.map((item) => <option key={item.id} value={item.id}>{item.displayName || item.name}</option>)}</select></div>
+                <div className="space-y-2"><Label>Cohort</Label><select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={cohortId} onChange={(event) => { setCohortId(event.target.value); setAdminCohortId(event.target.value); setTargetId(""); }}>{cohorts.map((item) => <option key={item.id} value={item.id}>{item.displayName || item.name}</option>)}</select></div>
                 <div className="space-y-2"><Label>Assignment type</Label><select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={assignmentType} onChange={(event) => setAssignmentType(event.target.value as Assignment["assignmentType"])}><option value="quiz">Quiz / test</option><option value="submission">Take-home submission</option><option value="reflection">Reflection / evaluation</option></select></div>
               </div>
               <div className="space-y-2"><Label htmlFor="assignment-title">Title</Label><Input id="assignment-title" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Customer discovery checkpoint" /></div>

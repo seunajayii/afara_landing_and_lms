@@ -3160,10 +3160,13 @@ export async function registerRoutes(
   // --- Learning Pods ---
   // Admin routes intentionally sit before the parameterized route below so
   // `/eligible` cannot be interpreted as a pod id.
-  app.get("/api/admin/learning-pods", requireAuth, requireAdminRole, async (_req: Request, res: Response) => {
+  app.get("/api/admin/learning-pods", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {
-      const pods = await storage.getAllLearningPods();
-      const responses = await Promise.all(pods.map((pod) => getLearningPodResponse(pod, _req, true)));
+      const cohortId = typeof req.query.cohortId === "string" ? req.query.cohortId : undefined;
+      const pods = cohortId
+        ? await storage.getLearningPodsByCohort(cohortId)
+        : await storage.getAllLearningPods();
+      const responses = await Promise.all(pods.map((pod) => getLearningPodResponse(pod, req, true)));
       res.json(responses);
     } catch (error) {
       console.error("Failed to fetch learning pods:", error);

@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Users, Send, Plus, Loader2, CheckCircle, XCircle, Clock, Trash2, Image as ImageIcon, Type, MousePointer2, Minus, Eye, FlaskConical, UserCheck } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { getAdminCohortId } from "@/lib/adminCohortContext";
 import type { NewsletterCampaign } from "@shared/schema";
 import {
   DEFAULT_NEWSLETTER_AUDIENCE,
@@ -130,12 +131,13 @@ function BlockEditor({
 
 export default function NewsletterManagement() {
   const { toast } = useToast();
+  const selectedWorkspaceCohortId = getAdminCohortId();
   const [activeTab, setActiveTab] = useState("campaigns");
   const [composerOpen, setComposerOpen] = useState(false);
   const [campaignSubject, setCampaignSubject] = useState("");
   const [blocks, setBlocks] = useState<NewsletterBlock[]>(DEFAULT_NEWSLETTER_BLOCKS.map((block) => ({ ...block })));
-  const [selectedGroups, setSelectedGroups] = useState<string[]>([DEFAULT_NEWSLETTER_AUDIENCE.segments[0].type]);
-  const [selectedCohorts, setSelectedCohorts] = useState<string[]>([]);
+  const [selectedGroups, setSelectedGroups] = useState<string[]>(() => selectedWorkspaceCohortId ? [] : [DEFAULT_NEWSLETTER_AUDIENCE.segments[0].type]);
+  const [selectedCohorts, setSelectedCohorts] = useState<string[]>(() => selectedWorkspaceCohortId ? [selectedWorkspaceCohortId] : []);
   const [applicantStatuses, setApplicantStatuses] = useState<string[]>([]);
   const [applicantCohortId, setApplicantCohortId] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -168,8 +170,8 @@ export default function NewsletterManagement() {
   const resetComposer = () => {
     setCampaignSubject("");
     setBlocks(DEFAULT_NEWSLETTER_BLOCKS.map((block) => ({ ...block })));
-    setSelectedGroups(["newsletter_subscribers"]);
-    setSelectedCohorts([]);
+    setSelectedGroups(selectedWorkspaceCohortId ? [] : ["newsletter_subscribers"]);
+    setSelectedCohorts(selectedWorkspaceCohortId ? [selectedWorkspaceCohortId] : []);
     setApplicantStatuses([]);
     setApplicantCohortId("");
     setSelectedUserIds([]);

@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { getAdminCohortId, setAdminCohortId } from "@/lib/adminCohortContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -269,7 +270,7 @@ export default function CohortAnalytics() {
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const [selectedCohortId, setSelectedCohortId] = useState<string | null>(null);
+  const [selectedCohortId, setSelectedCohortId] = useState<string | null>(() => getAdminCohortId());
   const [narrative, setNarrative] = useState<string | null>(null);
   const [isGeneratingNarrative, setIsGeneratingNarrative] = useState(false);
 
@@ -486,7 +487,9 @@ export default function CohortAnalytics() {
                 <Select
                   value={selectedCohortId ?? "all"}
                   onValueChange={(value) => {
-                    setSelectedCohortId(value === "all" ? null : value);
+                    const cohortId = value === "all" ? null : value;
+                    setSelectedCohortId(cohortId);
+                    if (cohortId) setAdminCohortId(cohortId);
                     setNarrative(null);
                   }}
                 >

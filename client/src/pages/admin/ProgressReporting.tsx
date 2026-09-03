@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { getAdminCohortId, setAdminCohortId } from "@/lib/adminCohortContext";
 import { FileText, Flag, MessageSquare, Printer, Save, Target, Users } from "lucide-react";
 import type { Cohort } from "@shared/schema";
 
@@ -57,7 +58,7 @@ function statusLabel(value: string) {
 export default function ProgressReporting() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [cohortId, setCohortId] = useState("");
+  const [cohortId, setCohortId] = useState(() => getAdminCohortId() ?? "");
   const [participantId, setParticipantId] = useState("");
   const [reviewType, setReviewType] = useState("baseline");
   const [reviewSummary, setReviewSummary] = useState("");
@@ -163,7 +164,7 @@ export default function ProgressReporting() {
             <div><p className="text-sm text-primary font-medium">Programme evidence</p><h1 className="text-3xl font-bold mt-1">Progress reporting</h1><p className="text-muted-foreground mt-2">Track participant, pod, and cohort progress from baseline to final review.</p></div>
             <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4 mr-2" />Print report</Button>
           </div>
-          <div className="max-w-sm"><Select value={cohortId} onValueChange={(value) => { setCohortId(value); setParticipantId(""); }}><SelectTrigger><SelectValue placeholder="Select a cohort" /></SelectTrigger><SelectContent>{cohorts.map((cohort) => <SelectItem key={cohort.id} value={cohort.id}>{cohort.displayName || cohort.name}{cohort.year ? ` · ${cohort.year}` : ""}</SelectItem>)}</SelectContent></Select></div>
+          <div className="max-w-sm"><Select value={cohortId} onValueChange={(value) => { setCohortId(value); setAdminCohortId(value); setParticipantId(""); }}><SelectTrigger><SelectValue placeholder="Select a cohort" /></SelectTrigger><SelectContent>{cohorts.map((cohort) => <SelectItem key={cohort.id} value={cohort.id}>{cohort.displayName || cohort.name}{cohort.year ? ` · ${cohort.year}` : ""}</SelectItem>)}</SelectContent></Select></div>
           {cohortReport && <div className="grid sm:grid-cols-2 lg:grid-cols-6 gap-3">
             <Card><CardContent className="p-4"><Users className="h-4 w-4 text-primary mb-2" /><p className="text-2xl font-bold">{cohortReport.summary.totalParticipants}</p><p className="text-xs text-muted-foreground">Participants</p></CardContent></Card>
             <Card><CardContent className="p-4"><Target className="h-4 w-4 text-primary mb-2" /><p className="text-2xl font-bold">{cohortReport.summary.activeParticipants}</p><p className="text-xs text-muted-foreground">Active</p></CardContent></Card>
