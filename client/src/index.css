@@ -239,6 +239,32 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    /*
+     * A text caret/I-beam on ordinary content is distracting and can make
+     * static copy look editable. Keep the editable controls explicit below.
+     * This does not disable selecting or copying text.
+     */
+    cursor: default;
+    caret-color: transparent;
+  }
+
+  a[href],
+  button,
+  [role="button"],
+  summary,
+  label[for],
+  input,
+  textarea,
+  select,
+  [contenteditable="true"] {
+    cursor: pointer;
+  }
+
+  input,
+  textarea,
+  [contenteditable="true"] {
+    cursor: text;
+    caret-color: auto;
   }
 
   h1, h2, h3, h4, h5, h6 {
