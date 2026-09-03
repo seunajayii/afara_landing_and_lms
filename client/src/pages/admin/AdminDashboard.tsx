@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { getAdminCohortId } from "@/lib/adminCohortContext";
 import {
@@ -19,6 +19,7 @@ function DashboardSkeleton() {
 
 export default function AdminDashboard() {
   const { user } = useAuth();
+  const search = useSearch();
   const { data: courses = [], isLoading: coursesLoading } = useQuery<Course[]>({ queryKey: ["/api/courses"] });
   const { data: events = [], isLoading: eventsLoading } = useQuery<Event[]>({ queryKey: ["/api/events"] });
   const { data: resources = [], isLoading: resourcesLoading } = useQuery<Resource[]>({ queryKey: ["/api/resources"] });
@@ -26,7 +27,7 @@ export default function AdminDashboard() {
   const { data: cohorts = [], isLoading: cohortsLoading } = useQuery<Cohort[]>({ queryKey: ["/api/admin/cohorts"] });
 
   const isLoading = coursesLoading || eventsLoading || resourcesLoading || applicationsLoading || cohortsLoading;
-  const selectedCohortId = getAdminCohortId();
+  const selectedCohortId = getAdminCohortId(search);
   const activeCohort = cohorts.find((cohort) => cohort.id === selectedCohortId)
     ?? cohorts.find((cohort) => cohort.status === "open")
     ?? cohorts[0];
