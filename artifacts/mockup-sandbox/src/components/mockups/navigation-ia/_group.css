@@ -1,0 +1,18 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap");
+
+:root {
+  --ia-background: hsl(42 60% 96%);
+  --ia-foreground: hsl(180 43% 9%);
+  --ia-sidebar: hsl(42 55% 97%);
+  --ia-sidebar-border: hsl(42 25% 90%);
+  --ia-sidebar-accent: hsl(145 22% 88%);
+  --ia-primary: hsl(145 92% 15%);
+  --ia-primary-soft: hsl(145 22% 85%);
+  --ia-muted: hsl(145 25% 36%);
+  --ia-border: hsl(42 25% 88%);
+  --ia-card: hsl(42 50% 98%);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--ia-background); color: var(--ia-foreground); font-family: "DM Sans", sans-serif; }
+button { font: inherit; }
