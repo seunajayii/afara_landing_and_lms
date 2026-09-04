@@ -114,6 +114,119 @@ async function withAssignmentRoutes<T>(callback: (baseUrl: string, state: AnyRec
   ]);
   const submissions = new Map<string, AnyRecord>();
   const answers = new Map<string, AnyRecord[]>();
+  const participants = new Map<string, AnyRecord>([
+    ["participant-a", {
+      id: "participant-a",
+      userId: users.learnerA.id,
+      cohortId: cohorts.a.id,
+      applicationId: null,
+      status: "active",
+      projectName: "Participant A project",
+      projectDescription: "Participant A project description",
+      projectStage: "idea",
+      acceptedAt: new Date("2026-09-01T00:00:00.000Z"),
+    }],
+    ["participant-b", {
+      id: "participant-b",
+      userId: users.learnerB.id,
+      cohortId: cohorts.b.id,
+      applicationId: null,
+      status: "active",
+      projectName: "Participant B project",
+      projectDescription: "Participant B project description",
+      projectStage: "growth",
+      acceptedAt: new Date("2026-09-01T00:00:00.000Z"),
+    }],
+  ]);
+  const progressFeedback = new Map<string, AnyRecord[]>([
+    ["participant-a", [
+      {
+        id: "visible-feedback-a",
+        participantId: "participant-a",
+        sourceType: "mentor",
+        authorId: users.mentorA.id,
+        contextType: "review",
+        contextId: "review-a",
+        content: "Participant-facing feedback",
+        visibility: "participant",
+        createdAt: new Date("2026-09-03T00:00:00.000Z"),
+      },
+      {
+        id: "internal-feedback-a",
+        participantId: "participant-a",
+        sourceType: "mentor",
+        authorId: users.mentorA.id,
+        contextType: "review",
+        contextId: "review-a",
+        content: "Staff-only feedback",
+        visibility: "internal",
+        createdAt: new Date("2026-09-03T01:00:00.000Z"),
+      },
+    ]],
+    ["participant-b", [{
+      id: "visible-feedback-b",
+      participantId: "participant-b",
+      sourceType: "mentor",
+      authorId: users.mentorB.id,
+      contextType: "review",
+      contextId: "review-b",
+      content: "Participant B feedback",
+      visibility: "participant",
+      createdAt: new Date("2026-09-03T00:00:00.000Z"),
+    }]],
+  ]);
+  const podAssignments = new Map<string, AnyRecord[]>([
+    [pods.a.id, [{
+      id: "pod-report-a",
+      podId: pods.a.id,
+      title: "Pod A work",
+      instructions: "Pod A work instructions",
+      workType: "group",
+      status: "published",
+      maxScore: 10,
+      createdById: users.mentorA.id,
+      sharedAssignmentId: null,
+    }]],
+    [pods.b.id, [{
+      id: "pod-report-b",
+      podId: pods.b.id,
+      title: "Pod B work",
+      instructions: "Pod B work instructions",
+      workType: "group",
+      status: "published",
+      maxScore: 10,
+      createdById: users.mentorB.id,
+      sharedAssignmentId: null,
+    }]],
+  ]);
+  const podSubmissions = new Map<string, AnyRecord[]>([
+    ["pod-report-a", [{
+      id: "pod-submission-a",
+      assignmentId: "pod-report-a",
+      podId: pods.a.id,
+      submitterId: users.learnerA.id,
+      submissionText: "Pod A submission",
+      submissionUrl: "https://example.com/pod-a",
+      submittedAt: new Date("2026-09-02T02:00:00.000Z"),
+      updatedAt: new Date("2026-09-02T02:00:00.000Z"),
+      score: 9,
+      feedback: "Pod feedback for A",
+      evaluatedAt: new Date("2026-09-03T02:00:00.000Z"),
+    }]],
+    ["pod-report-b", [{
+      id: "pod-submission-b",
+      assignmentId: "pod-report-b",
+      podId: pods.b.id,
+      submitterId: users.learnerB.id,
+      submissionText: "Pod B submission",
+      submissionUrl: "https://example.com/pod-b",
+      submittedAt: new Date("2026-09-02T02:00:00.000Z"),
+      updatedAt: new Date("2026-09-02T02:00:00.000Z"),
+      score: 8,
+      feedback: "Pod feedback for B",
+      evaluatedAt: new Date("2026-09-03T02:00:00.000Z"),
+    }]],
+  ]);
   let nextAssignmentId = 1;
   let nextSubmissionId = 1;
   const mutableStorage = storage as unknown as Record<string, StorageMethod>;
@@ -191,6 +304,7 @@ async function withAssignmentRoutes<T>(callback: (baseUrl: string, state: AnyRec
   replace("getAllCourses", async () => courses);
   replace("getCourse", async (courseId: string) => courses.find((course) => course.id === courseId));
   replace("getModulesByCourse", async (courseId: string) => modules.filter((module) => module.courseId === courseId));
+  replace("getLessonsByModule", async () => []);
   replace("isCourseAssignedToCohort", async (courseId: string, cohortId: string) => (
     (courseId === courses[0].id && cohortId === cohorts.a.id) ||
     (courseId === courses[1].id && cohortId === cohorts.b.id)
@@ -277,6 +391,26 @@ async function withAssignmentRoutes<T>(callback: (baseUrl: string, state: AnyRec
     answers.set(submissionId, stored);
     return stored;
   });
+  replace("getCohortParticipantsByUser", async (userId: string) => (
+    Array.from(participants.values()).filter((participant) => participant.userId === userId)
+  ));
+  replace("getCohortParticipant", async (participantId: string) => participants.get(participantId));
+  replace("getProgressMilestones", async () => []);
+  replace("getProgressReviews", async () => []);
+  replace("getProgressFeedback", async (participantId: string, includeInternal = false) => (
+    (progressFeedback.get(participantId) || [])
+      .filter((feedback) => includeInternal || feedback.visibility === "participant")
+  ));
+  replace("getEnrollmentsByUser", async () => []);
+  replace("getLessonProgressByUser", async () => []);
+  replace("getMentorshipSessionsByMentee", async () => []);
+  replace("getLearningPodsByUser", async (userId: string) => (
+    Object.values(pods).filter((pod) => (
+      Array.from(podMembers.get(pod.id) || []).includes(userId)
+    ))
+  ));
+  replace("getLearningPodAssignments", async (podId: string) => podAssignments.get(podId) || []);
+  replace("getLearningPodSubmissions", async (assignmentId: string) => podSubmissions.get(assignmentId) || []);
 
   const app = express();
   app.use(express.json());
@@ -309,6 +443,10 @@ async function withAssignmentRoutes<T>(callback: (baseUrl: string, state: AnyRec
       questions,
       submissions,
       answers,
+      participants,
+      progressFeedback,
+      podAssignments,
+      podSubmissions,
     });
   } finally {
     if (server) {
@@ -652,5 +790,78 @@ test("assignment evidence is protected by submission ownership and review scope"
     const assignedMentor = await request(baseUrl, users.mentorA.id, "/api/assignment-files/manual-submission-a/99");
     assert.equal(assignedMentor.status, 404);
     assert.deepEqual(assignedMentor.body, { error: "File not found" });
+  });
+});
+
+test("progress reports keep assignment evidence and feedback within each role's scope", async () => {
+  await withAssignmentRoutes(async (baseUrl) => {
+    const rawStorageKey = "assignment-evidence/private.txt";
+    const assertScopedReport = (report: AnyRecord, expectedFeedback: string[]) => {
+      const reportText = JSON.stringify(report);
+      assert.equal(reportText.includes(rawStorageKey), false);
+      assert.equal(reportText.includes("Cohort B assignment"), false);
+      assert.equal(reportText.includes("Pod B work"), false);
+      assert.deepEqual(
+        report.assignments.find((assignment: AnyRecord) => assignment.assignmentId === "manual-a").evidence,
+        [{
+          name: "private.txt",
+          contentType: "text/plain",
+          size: 7,
+          url: "/api/assignment-files/manual-submission-a/0",
+        }],
+      );
+      assert.deepEqual(
+        report.feedback
+          .filter((feedback: AnyRecord) => expectedFeedback.includes(feedback.content))
+          .map((feedback: AnyRecord) => feedback.content)
+          .sort(),
+        [...expectedFeedback].sort(),
+      );
+    };
+
+    const learner = await request(baseUrl, users.learnerA.id, "/api/progress-reporting/me");
+    assert.equal(learner.status, 200);
+    assert.equal(learner.body.report.participant.id, "participant-a");
+    assertScopedReport(learner.body.report, ["Participant-facing feedback", "Pod feedback for A"]);
+    assert.equal(learner.body.report.feedback.some((feedback: AnyRecord) => feedback.content === "Staff-only feedback"), false);
+    assert.equal(learner.body.report.assignments.some((assignment: AnyRecord) => assignment.assignmentId === "pod-report-a"), true);
+
+    const otherLearner = await request(baseUrl, users.learnerB.id, "/api/progress-reporting/me");
+    assert.equal(otherLearner.status, 200);
+    assert.equal(otherLearner.body.report.participant.id, "participant-b");
+    assert.equal(JSON.stringify(otherLearner.body.report).includes(rawStorageKey), false);
+    assert.equal(JSON.stringify(otherLearner.body.report).includes("Cohort A assignment"), false);
+    assert.equal(JSON.stringify(otherLearner.body.report).includes("Pod A work"), false);
+    assert.equal(otherLearner.body.report.feedback.some((feedback: AnyRecord) => feedback.content === "Participant B feedback"), true);
+
+    const learnerCrossScope = await request(
+      baseUrl,
+      users.learnerB.id,
+      "/api/progress-reporting/participants/participant-a",
+    );
+    assert.equal(learnerCrossScope.status, 403);
+
+    const mentor = await request(
+      baseUrl,
+      users.mentorA.id,
+      "/api/progress-reporting/participants/participant-a",
+    );
+    assert.equal(mentor.status, 200);
+    assertScopedReport(mentor.body, ["Participant-facing feedback", "Pod feedback for A", "Staff-only feedback"]);
+
+    const wrongMentor = await request(
+      baseUrl,
+      users.mentorB.id,
+      "/api/progress-reporting/participants/participant-a",
+    );
+    assert.equal(wrongMentor.status, 403);
+
+    const admin = await request(
+      baseUrl,
+      users.admin.id,
+      "/api/progress-reporting/participants/participant-a",
+    );
+    assert.equal(admin.status, 200);
+    assertScopedReport(admin.body, ["Participant-facing feedback", "Pod feedback for A", "Staff-only feedback"]);
   });
 });
