@@ -2152,6 +2152,110 @@ export async function registerRoutes(
     return false;
   };
 
+  const assignmentMatchesParticipant = async (assignment: any, userId: string, cohortId: string) => {
+    const targets = await storage.getAssignmentTargets(assignment.id);
+    let matches = targets.some((target) => target.targetType === "cohort" && target.targetId === cohortId);
+    if (!matches) {
+      for (const target of targets) {
+        if (target.targetType === "pod") {
+          const members = await storage.getLearningPodMembers(target.targetId);
+          matches = members.some((member) => member.userId === userId && !member.removedAt);
+        } else if (target.targetType === "course") {
+          const course = await storage.getCourse(target.targetId);
+          matches = Boolean(course && (course.audience === "all" || await storage.isCourseAssignedToCohort(course.id, cohortId)));
+        } else if (target.targetType === "module") {
+          const course = await getCourseForModuleId(target.targetId);
+          matches = Boolean(course && (course.audience === "all" || await storage.isCourseAssignedToCohort(course.id, cohortId)));
+        }
+        if (matches) break;
+      }
+    }
+    return matches;
+  };
+
+  const getAssignmentReviewState = (submission: any) => {
+    if (!submission) return "not_submitted";
+    if (submission.reviewedAt || submission.evaluatedAt || submission.score !== null) return "reviewed";
+    if (submission.status === "draft") return "draft";
+    return "submitted";
+  };
+
+  const getProtectedAssignmentEvidence = (submission: any) => (submission?.fileEvidence || []).map((file: AssignmentFileEvidence, index: number) => ({
+    name: file.name,
+    contentType: file.contentType,
+    size: file.size,
+    url: `/api/assignment-files/${submission.id}/${index}`,
+  }));
+
+  const getParticipantAssignmentEvidence = async (userId: string, cohortId: string, pods: any[]) => {
+    const assignments = (await storage.getAssignmentsByCohort(cohortId))
+      .filter((assignment) => assignment.status === "published");
+    const reportAssignments: any[] = [];
+
+    for (const assignment of assignments) {
+      if (!await assignmentMatchesParticipant(assignment, userId, cohortId)) continue;
+      const submission = await storage.getLatestAssignmentSubmission(assignment.id, userId);
+      reportAssignments.push({
+        id: `assignment-${assignment.id}`,
+        assignmentId: assignment.id,
+        title: assignment.title,
+        assignmentType: assignment.assignmentType,
+        sourceType: "assignment",
+        submissionId: submission?.id || null,
+        status: submission?.status || "not_submitted",
+        reviewState: getAssignmentReviewState(submission),
+        submittedAt: submission?.submittedAt || null,
+        reviewedAt: submission?.reviewedAt || null,
+        score: submission?.score ?? null,
+        passed: submission?.passed ?? null,
+        maxScore: assignment.maxScore,
+        responseText: submission?.responseText || null,
+        links: submission?.links || [],
+        feedback: submission?.feedback || null,
+        evidence: getProtectedAssignmentEvidence(submission),
+      });
+    }
+
+    for (const pod of pods) {
+      const podAssignments = (await storage.getLearningPodAssignments(pod.id))
+        .filter((assignment) => assignment.status === "published" && !assignment.sharedAssignmentId);
+      for (const assignment of podAssignments) {
+        const submissions = await storage.getLearningPodSubmissions(assignment.id, pod.id);
+        const submission = assignment.workType === "group"
+          ? submissions[0]
+          : submissions.find((entry) => entry.submitterId === userId);
+        reportAssignments.push({
+          id: `pod-assignment-${assignment.id}`,
+          assignmentId: assignment.id,
+          title: assignment.title,
+          assignmentType: assignment.workType,
+          sourceType: "pod_assignment",
+          submissionId: submission?.id || null,
+          status: submission ? "submitted" : "not_submitted",
+          reviewState: getAssignmentReviewState(submission),
+          submittedAt: submission?.submittedAt || null,
+          reviewedAt: submission?.evaluatedAt || null,
+          score: submission?.score ?? null,
+          passed: submission?.score == null ? null : submission.score >= assignment.maxScore,
+          maxScore: assignment.maxScore,
+          responseText: submission?.submissionText || null,
+          links: submission?.submissionUrl ? [submission.submissionUrl] : [],
+          feedback: submission?.feedback || null,
+          evidence: [],
+        });
+      }
+    }
+
+    return reportAssignments.sort((a, b) => {
+      const aDate = a.submittedAt || a.reviewedAt;
+      const bDate = b.submittedAt || b.reviewedAt;
+      if (!aDate && !bDate) return a.title.localeCompare(b.title);
+      if (!aDate) return 1;
+      if (!bDate) return -1;
+      return new Date(bDate).getTime() - new Date(aDate).getTime();
+    });
+  };
+
   const getSharedAssignmentActivity = async (userId: string, cohortId: string) => {
     const assignments = (await storage.getAssignmentsByCohort(cohortId)).filter((assignment) => assignment.status === "published");
     let assigned = 0;
@@ -2159,24 +2263,7 @@ export async function registerRoutes(
     let reviewed = 0;
     const feedback: Array<{ id: string; content: string; sourceType: string; visibility: string; contextType: string; contextId: string; createdAt: Date }> = [];
     for (const assignment of assignments) {
-      const targets = await storage.getAssignmentTargets(assignment.id);
-      let matches = targets.some((target) => target.targetType === "cohort" && target.targetId === cohortId);
-      if (!matches) {
-        for (const target of targets) {
-          if (target.targetType === "pod") {
-            const members = await storage.getLearningPodMembers(target.targetId);
-            matches = members.some((member) => member.userId === userId && !member.removedAt);
-          } else if (target.targetType === "course") {
-            const course = await storage.getCourse(target.targetId);
-            matches = Boolean(course && (course.audience === "all" || await storage.isCourseAssignedToCohort(course.id, cohortId)));
-          } else if (target.targetType === "module") {
-            const course = await getCourseForModuleId(target.targetId);
-            matches = Boolean(course && (course.audience === "all" || await storage.isCourseAssignedToCohort(course.id, cohortId)));
-          }
-          if (matches) break;
-        }
-      }
-      if (!matches) continue;
+      if (!await assignmentMatchesParticipant(assignment, userId, cohortId)) continue;
       assigned += 1;
       const submission = await storage.getLatestAssignmentSubmission(assignment.id, userId);
       if (!submission || submission.status === "draft") continue;
@@ -2294,6 +2381,7 @@ export async function registerRoutes(
     const completedCourses = assignedCourses.filter((course) => course.completed).length;
     const courseCompletionPercent = assignedCourses.length ? Math.round((completedCourses / assignedCourses.length) * 100) : 0;
     const sharedAssignmentActivity = await getSharedAssignmentActivity(participant.userId, participant.cohortId);
+    const assignmentEvidence = await getParticipantAssignmentEvidence(participant.userId, participant.cohortId, pods);
     const assignmentCount = podReports.reduce((total, pod) => total + pod.assignmentCount, 0) + sharedAssignmentActivity.assigned;
     const submittedAssignments = podReports.reduce((total, pod) => total + pod.submittedAssignments, 0) + sharedAssignmentActivity.submitted;
     const reviewedAssignments = podReports.reduce((total, pod) => total + pod.reviewedAssignments, 0) + sharedAssignmentActivity.reviewed;
@@ -2330,6 +2418,7 @@ export async function registerRoutes(
       progressAreas,
       milestones,
       reviews,
+      assignments: assignmentEvidence,
       feedback: [...feedback, ...sharedAssignmentActivity.feedback, ...submissionFeedback, ...sessionFeedback].sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       ),

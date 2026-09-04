@@ -10,7 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getAdminCohortId, setAdminCohortId } from "@/lib/adminCohortContext";
-import { FileText, Flag, MessageSquare, Printer, Save, Target, Users } from "lucide-react";
+import { ExternalLink, FileText, Flag, MessageSquare, Paperclip, Printer, Save, Target, Users } from "lucide-react";
 import type { Cohort } from "@shared/schema";
 
 const AREAS = [
@@ -46,13 +46,37 @@ type DetailReport = ProgressRow & {
   admissionEvaluation: { overallScore: number; recommendation: string; summary: string } | null;
   milestones: { id: string; title: string; description?: string | null; status: string; evidence?: string | null }[];
   reviews: { id: string; reviewType: string; status: string; participantReflection?: string | null; summary?: string | null; achievements?: string | null; challenges?: string | null; nextSteps?: string | null; areaUpdates: Record<string, { status: string; evidence?: string }> }[];
+  assignments: AssignmentEvidence[];
   feedback: { id: string; content: string; sourceType: string; visibility: string; createdAt: string }[];
   courses: { title: string; progressPercent: number; completed: boolean }[];
   activity: ProgressRow["activity"] & { completedMentorshipSessions: number };
 };
+type AssignmentEvidence = {
+  id: string;
+  assignmentId: string;
+  title: string;
+  assignmentType: string;
+  sourceType: string;
+  submissionId?: string | null;
+  status: string;
+  reviewState: "not_submitted" | "draft" | "submitted" | "reviewed";
+  submittedAt?: string | null;
+  reviewedAt?: string | null;
+  score?: number | null;
+  passed?: boolean | null;
+  maxScore: number;
+  responseText?: string | null;
+  links: string[];
+  feedback?: string | null;
+  evidence: { name: string; contentType?: string; size: number; url: string }[];
+};
 
 function statusLabel(value: string) {
   return STATUSES.find((status) => status.value === value)?.label || value.replace(/_/g, " ");
+}
+
+function assignmentReviewLabel(value: AssignmentEvidence["reviewState"]) {
+  return { not_submitted: "Not submitted", draft: "Draft", submitted: "Awaiting review", reviewed: "Reviewed" }[value];
 }
 
 export default function ProgressReporting() {
@@ -185,6 +209,17 @@ export default function ProgressReporting() {
               <div className="grid lg:grid-cols-2 gap-6">
                 <Card><CardHeader><CardTitle>Progress review</CardTitle></CardHeader><CardContent className="space-y-3"><Select value={reviewType} onValueChange={setReviewType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="baseline">Baseline review</SelectItem><SelectItem value="midpoint">Midpoint review</SelectItem><SelectItem value="final">Final review</SelectItem></SelectContent></Select><Textarea value={reviewSummary} onChange={(event) => setReviewSummary(event.target.value)} placeholder="Overall progress summary" /><Textarea value={achievements} onChange={(event) => setAchievements(event.target.value)} placeholder="Achievements and evidence" /><Textarea value={challenges} onChange={(event) => setChallenges(event.target.value)} placeholder="Challenges or support needs" /><Textarea value={nextSteps} onChange={(event) => setNextSteps(event.target.value)} placeholder="Recommended next steps" /><div className="space-y-3 border-t pt-3"><p className="text-sm font-semibold">Five progress areas</p>{AREAS.map((area) => <div key={area.key} className="space-y-1"><div className="flex justify-between gap-3 items-center"><label className="text-sm">{area.label}</label><select className="h-8 rounded-md border bg-background px-2 text-xs" value={areaUpdates[area.key]?.status || "not_started"} onChange={(event) => setAreaUpdates((current) => ({ ...current, [area.key]: { status: event.target.value, evidence: current[area.key]?.evidence || "" } }))}>{STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></div><Input value={areaUpdates[area.key]?.evidence || ""} onChange={(event) => setAreaUpdates((current) => ({ ...current, [area.key]: { status: current[area.key]?.status || "not_started", evidence: event.target.value } }))} placeholder="Evidence or observation (optional)" /></div>)}</div><Button onClick={() => reviewMutation.mutate()} disabled={reviewMutation.isPending}><Save className="h-4 w-4 mr-2" />{reviewMutation.isPending ? "Saving…" : "Publish review"}</Button></CardContent></Card>
                 <div className="space-y-6">
+                  <Card><CardHeader><CardTitle className="flex items-center gap-2"><Paperclip className="h-4 w-4 text-primary" />Assignment evidence</CardTitle></CardHeader><CardContent className="space-y-4">
+                    {detail.assignments.length === 0 ? <p className="text-sm text-muted-foreground">No published assignments are linked to this participant yet.</p> : detail.assignments.map((assignment) => <div key={assignment.id} className="border-b last:border-0 pb-4 last:pb-0 space-y-2">
+                      <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-semibold">{assignment.title}</p><p className="text-xs text-muted-foreground capitalize">{assignment.sourceType.replace("_", " ")} · {assignment.assignmentType.replace("_", " ")}</p></div><Badge variant={assignment.reviewState === "reviewed" ? "default" : "outline"}>{assignmentReviewLabel(assignment.reviewState)}</Badge></div>
+                      {assignment.submittedAt && <p className="text-xs text-muted-foreground">Submitted {new Date(assignment.submittedAt).toLocaleDateString()}</p>}
+                      {assignment.score !== null && assignment.score !== undefined && <p className="text-sm">Score: <span className="font-medium">{assignment.score}/{assignment.maxScore}</span>{assignment.passed !== null && assignment.passed !== undefined ? ` · ${assignment.passed ? "Passed" : "Needs revision"}` : ""}</p>}
+                      {assignment.responseText && <p className="text-sm whitespace-pre-wrap">{assignment.responseText}</p>}
+                      {assignment.links.length > 0 && <div className="space-y-1">{assignment.links.map((link) => <a key={link} href={link} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-sm text-primary hover:underline break-all"><ExternalLink className="h-3 w-3 shrink-0" />{link}</a>)}</div>}
+                      {assignment.evidence.length > 0 && <div className="space-y-1"><p className="text-xs font-medium text-muted-foreground">Files</p>{assignment.evidence.map((file) => <a key={file.url} href={file.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline"><Paperclip className="h-3 w-3 shrink-0" />{file.name}</a>)}</div>}
+                      {assignment.feedback && <div className="rounded-md bg-muted/50 p-3"><p className="text-xs font-medium text-muted-foreground mb-1">Participant-facing feedback</p><p className="text-sm whitespace-pre-wrap">{assignment.feedback}</p></div>}
+                    </div>)}
+                  </CardContent></Card>
                   <Card><CardHeader><CardTitle className="flex items-center gap-2"><Flag className="h-4 w-4 text-primary" />Milestones</CardTitle></CardHeader><CardContent className="space-y-3">{detail.milestones.map((milestone) => <div key={milestone.id} className="border-b last:border-0 pb-2 last:pb-0"><div className="flex justify-between gap-2 items-center"><p className="text-sm font-medium">{milestone.title}</p><select className="h-8 rounded-md border bg-background px-2 text-xs" value={milestone.status} onChange={(event) => milestoneUpdateMutation.mutate({ id: milestone.id, status: event.target.value })}><option value="planned">Planned</option><option value="in_progress">In progress</option><option value="completed">Completed</option><option value="blocked">Blocked</option></select></div>{milestone.evidence && <p className="text-xs text-muted-foreground mt-1">{milestone.evidence}</p>}</div>)}<Input value={milestoneTitle} onChange={(event) => setMilestoneTitle(event.target.value)} placeholder="New milestone" /><Textarea value={milestoneDescription} onChange={(event) => setMilestoneDescription(event.target.value)} placeholder="What evidence will show progress?" /><Button variant="outline" onClick={() => milestoneMutation.mutate()} disabled={milestoneMutation.isPending || !milestoneTitle.trim()}>Add milestone</Button></CardContent></Card>
                   <Card><CardHeader><CardTitle className="flex items-center gap-2"><MessageSquare className="h-4 w-4 text-primary" />Feedback</CardTitle></CardHeader><CardContent className="space-y-3">{detail.feedback.slice(0, 6).map((item) => <div key={item.id} className="border-b last:border-0 pb-2 last:pb-0"><p className="text-sm">{item.content}</p><p className="text-xs text-muted-foreground mt-1">{item.sourceType} · {item.visibility}</p></div>)}<Textarea value={feedback} onChange={(event) => setFeedback(event.target.value)} placeholder="Add mentor or facilitator feedback" /><select className="w-full h-9 rounded-md border bg-background px-2 text-sm" value={feedbackVisibility} onChange={(event) => setFeedbackVisibility(event.target.value)}><option value="participant">Visible to participant</option><option value="internal">Internal note</option></select><Button variant="outline" onClick={() => feedbackMutation.mutate()} disabled={feedbackMutation.isPending || !feedback.trim()}>Add feedback</Button></CardContent></Card>
                 </div>

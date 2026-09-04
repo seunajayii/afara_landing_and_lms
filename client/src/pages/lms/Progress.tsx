@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress as ProgressBar } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { BookOpen, CheckCircle2, Flag, MessageSquare, Target, Users } from "lucide-react";
+import { BookOpen, CheckCircle2, ExternalLink, Flag, MessageSquare, Paperclip, Target, Users } from "lucide-react";
 
 type Report = {
   participant: { id: string; status: string; user: { firstName: string; lastName: string } };
@@ -19,10 +19,30 @@ type Report = {
   progressAreas: { key: string; label: string }[];
   milestones: { id: string; title: string; description?: string | null; status: string; evidence?: string | null; targetAt?: string | null }[];
   reviews: { id: string; reviewType: string; status: string; participantReflection?: string | null; summary?: string | null; achievements?: string | null; challenges?: string | null; nextSteps?: string | null; areaUpdates: Record<string, { status: string; evidence?: string }> }[];
+  assignments: AssignmentEvidence[];
   feedback: { id: string; content: string; sourceType: string; visibility: string; createdAt: string }[];
   courses: { id: string; title: string; progressPercent: number; completed: boolean; completedLessons: number; totalLessons: number }[];
   pods: { id: string; name: string; mentor?: { name: string } | null; assignmentCount: number; submittedAssignments: number; reviewedAssignments: number }[];
   activity: { assignedCourses: number; completedCourses: number; courseCompletionPercent: number; assignments: number; submittedAssignments: number; reviewedAssignments: number; completedMentorshipSessions: number };
+};
+type AssignmentEvidence = {
+  id: string;
+  assignmentId: string;
+  title: string;
+  assignmentType: string;
+  sourceType: string;
+  submissionId?: string | null;
+  status: string;
+  reviewState: "not_submitted" | "draft" | "submitted" | "reviewed";
+  submittedAt?: string | null;
+  reviewedAt?: string | null;
+  score?: number | null;
+  passed?: boolean | null;
+  maxScore: number;
+  responseText?: string | null;
+  links: string[];
+  feedback?: string | null;
+  evidence: { name: string; contentType?: string; size: number; url: string }[];
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -42,6 +62,10 @@ function statusVariant(status: string): "default" | "secondary" | "outline" {
   if (status === "achieved" || status === "completed") return "default";
   if (status === "strong_progress" || status === "progressing" || status === "in_progress") return "secondary";
   return "outline";
+}
+
+function assignmentReviewLabel(value: AssignmentEvidence["reviewState"]) {
+  return { not_submitted: "Not submitted", draft: "Draft", submitted: "Awaiting review", reviewed: "Reviewed" }[value];
 }
 
 export default function ProgressPage() {
@@ -189,6 +213,21 @@ export default function ProgressPage() {
                       <Button onClick={() => reflectionMutation.mutate()} disabled={reflectionMutation.isPending || !reflection.trim()}>{reflectionMutation.isPending ? "Saving…" : "Save reflection"}</Button>
                     </div>
                     {report.feedback.length > 0 && <div className="border-t pt-4 space-y-3"><p className="text-sm font-semibold">Recent feedback</p>{report.feedback.slice(0, 5).map((item) => <div key={item.id} className="text-sm"><p>{item.content}</p><p className="text-xs text-muted-foreground mt-1">{item.sourceType} · {new Date(item.createdAt).toLocaleDateString()}</p></div>)}</div>}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader><CardTitle className="flex items-center gap-2"><Paperclip className="h-5 w-5 text-primary" />Assignment evidence</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">Your submitted work, supporting files, review status, and feedback in one place.</p>
+                    {report.assignments.length === 0 ? <p className="text-sm text-muted-foreground">No published assignments are linked to your progress record yet.</p> : report.assignments.map((assignment) => <div key={assignment.id} className="border-b last:border-0 pb-4 last:pb-0 space-y-2">
+                      <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-medium">{assignment.title}</p><p className="text-xs text-muted-foreground capitalize">{assignment.sourceType.replace("_", " ")} · {assignment.assignmentType.replace("_", " ")}</p></div><Badge variant={assignment.reviewState === "reviewed" ? "default" : "outline"}>{assignmentReviewLabel(assignment.reviewState)}</Badge></div>
+                      {assignment.submittedAt && <p className="text-xs text-muted-foreground">Submitted {new Date(assignment.submittedAt).toLocaleDateString()}</p>}
+                      {assignment.score !== null && assignment.score !== undefined && <p className="text-sm">Score: <span className="font-medium">{assignment.score}/{assignment.maxScore}</span>{assignment.passed !== null && assignment.passed !== undefined ? ` · ${assignment.passed ? "Passed" : "Needs revision"}` : ""}</p>}
+                      {assignment.responseText && <p className="text-sm whitespace-pre-wrap">{assignment.responseText}</p>}
+                      {assignment.links.length > 0 && <div className="space-y-1">{assignment.links.map((link) => <a key={link} href={link} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-sm text-primary hover:underline break-all"><ExternalLink className="h-3 w-3 shrink-0" />{link}</a>)}</div>}
+                      {assignment.evidence.length > 0 && <div className="space-y-1"><p className="text-xs font-medium text-muted-foreground">Files</p>{assignment.evidence.map((file) => <a key={file.url} href={file.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline"><Paperclip className="h-3 w-3 shrink-0" />{file.name}</a>)}</div>}
+                      {assignment.feedback && <div className="rounded-md bg-muted/50 p-3"><p className="text-xs font-medium text-muted-foreground mb-1">Feedback from your cohort team</p><p className="text-sm whitespace-pre-wrap">{assignment.feedback}</p></div>}
+                    </div>)}
                   </CardContent>
                 </Card>
               </div>
