@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, boolean, timestamp, pgEnum, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, timestamp, pgEnum, jsonb, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import type { NewsletterAudience, NewsletterBlock } from "./newsletter";
@@ -680,6 +680,23 @@ export const assignmentSubmissions = pgTable("assignment_submissions", {
 }, (table) => ({
   assignmentUserAttemptUnique: uniqueIndex("assignment_submissions_assignment_user_attempt_idx")
     .on(table.assignmentId, table.userId, table.attemptNumber),
+}));
+
+export const assignmentAttemptReconciliationLog = pgTable("assignment_attempt_reconciliation_log", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  assignmentId: varchar("assignment_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  submissionId: varchar("submission_id").notNull(),
+  originalAttemptNumber: integer("original_attempt_number").notNull(),
+  reconciledAttemptNumber: integer("reconciled_attempt_number").notNull(),
+  duplicateGroupSize: integer("duplicate_group_size").notNull(),
+  policy: text("policy").notNull(),
+  reconciledAt: timestamp("reconciled_at").notNull().defaultNow(),
+}, (table) => ({
+  submissionUnique: uniqueIndex("assignment_attempt_reconciliation_log_submission_idx")
+    .on(table.submissionId),
+  groupIdx: index("assignment_attempt_reconciliation_group_idx")
+    .on(table.assignmentId, table.userId, table.reconciledAt),
 }));
 
 export const assignmentAnswers = pgTable("assignment_answers", {

@@ -449,8 +449,26 @@ export async function runSchemaMigrations() {
       );
       CREATE INDEX IF NOT EXISTS assignment_submissions_assignment_user_idx ON assignment_submissions (assignment_id, user_id, updated_at);
       CREATE INDEX IF NOT EXISTS assignment_submissions_assignment_idx ON assignment_submissions (assignment_id);
-      CREATE UNIQUE INDEX IF NOT EXISTS assignment_submissions_assignment_user_attempt_idx
-        ON assignment_submissions (assignment_id, user_id, attempt_number);
+    `);
+    // Older databases may contain duplicate attempt numbers. Keep the
+    // assignment rows (including their grading history) and reconcile only
+    // the attempt number before creating the new uniqueness safeguard.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS assignment_attempt_reconciliation_log (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        assignment_id VARCHAR NOT NULL,
+        user_id VARCHAR NOT NULL,
+        submission_id VARCHAR NOT NULL,
+        original_attempt_number INTEGER NOT NULL,
+        reconciled_attempt_number INTEGER NOT NULL,
+        duplicate_group_size INTEGER NOT NULL,
+        policy TEXT NOT NULL,
+        reconciled_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS assignment_attempt_reconciliation_log_submission_idx
+        ON assignment_attempt_reconciliation_log (submission_id);
+      CREATE INDEX IF NOT EXISTS assignment_attempt_reconciliation_group_idx
+        ON assignment_attempt_reconciliation_log (assignment_id, user_id, reconciled_at);
     `);
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS assignment_answers (
@@ -550,6 +568,89 @@ export async function runSchemaMigrations() {
         END LOOP;
       END
       $$;
+    `);
+    // Reconcile legacy duplicate attempts before adding the unique index.
+    // The first row in each duplicate group is retained at its original
+    // number. Graded/returned rows take precedence, then the remaining rows
+    // are ordered by historical timestamps and id. Extra rows are assigned
+    // numbers above the existing maximum, in deterministic group order.
+    // Only identifiers and attempt metadata are recorded; submission
+    // response text, links, files, and answers are never selected or logged.
+    await db.execute(sql`
+      DO $$
+      DECLARE
+        duplicate_group RECORD;
+        duplicate_submission RECORD;
+        next_attempt_number INTEGER;
+      BEGIN
+        FOR duplicate_group IN
+          SELECT assignment_id, user_id, attempt_number, COUNT(*)::INTEGER AS duplicate_group_size
+          FROM assignment_submissions
+          GROUP BY assignment_id, user_id, attempt_number
+          HAVING COUNT(*) > 1
+          ORDER BY assignment_id, user_id, attempt_number
+        LOOP
+          SELECT COALESCE(MAX(attempt_number), 0) + 1
+          INTO next_attempt_number
+          FROM assignment_submissions
+          WHERE assignment_id = duplicate_group.assignment_id
+            AND user_id = duplicate_group.user_id;
+
+          FOR duplicate_submission IN
+            SELECT id, attempt_number
+            FROM assignment_submissions
+            WHERE assignment_id = duplicate_group.assignment_id
+              AND user_id = duplicate_group.user_id
+              AND attempt_number = duplicate_group.attempt_number
+            ORDER BY
+              CASE status
+                WHEN 'graded' THEN 0
+                WHEN 'returned' THEN 0
+                WHEN 'submitted' THEN 1
+                WHEN 'draft' THEN 2
+                ELSE 3
+              END,
+              submitted_at ASC NULLS LAST,
+              reviewed_at ASC NULLS LAST,
+              created_at ASC,
+              updated_at ASC,
+              id ASC
+            OFFSET 1
+          LOOP
+            INSERT INTO assignment_attempt_reconciliation_log (
+              assignment_id,
+              user_id,
+              submission_id,
+              original_attempt_number,
+              reconciled_attempt_number,
+              duplicate_group_size,
+              policy
+            ) VALUES (
+              duplicate_group.assignment_id,
+              duplicate_group.user_id,
+              duplicate_submission.id,
+              duplicate_submission.attempt_number,
+              next_attempt_number,
+              duplicate_group.duplicate_group_size,
+              'Retain one deterministic survivor per original attempt; move additional rows above the existing maximum'
+            )
+            ON CONFLICT (submission_id) DO NOTHING;
+
+            UPDATE assignment_submissions
+            SET attempt_number = next_attempt_number
+            WHERE id = duplicate_submission.id;
+
+            next_attempt_number := next_attempt_number + 1;
+          END LOOP;
+        END LOOP;
+      END
+      $$;
+    `);
+    // This runs after reconciliation, so a pre-existing duplicate history
+    // cannot prevent the safeguard from being installed.
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS assignment_submissions_assignment_user_attempt_idx
+        ON assignment_submissions (assignment_id, user_id, attempt_number);
     `);
     // Cohort-scoped participant progress records keep the admissions
     // application as an immutable starting point while collecting project
