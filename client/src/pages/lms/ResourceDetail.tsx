@@ -4,7 +4,7 @@ import { useParams, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Lock, Download, FileText, Video, ShieldCheck, AlertTriangle, Loader2 } from "lucide-react";
+import { ArrowLeft, Lock, Download, ExternalLink, FileText, Video, ShieldCheck, AlertTriangle, Loader2 } from "lucide-react";
 import type { Resource } from "@shared/schema";
 
 export default function ResourceDetail() {
@@ -103,7 +103,55 @@ export default function ResourceDetail() {
                 )}
               </div>
 
-              {resource.resourceType === "video" && resource.videoSource === "upload" ? (
+              {resource.resourceType === "resource_partner" ? (
+                <div className="space-y-4 rounded-lg border p-5">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Provided by</p>
+                    <p className="font-semibold">{resource.partnerName || "Resource partner"}</p>
+                  </div>
+                  {(resource.partnerLinkType === "external" || resource.partnerResourceUrl) ? (
+                    resource.partnerResourceUrl ? (
+                      <Button asChild className="gap-2" data-testid="button-open-partner-resource">
+                        <a href={resource.partnerResourceUrl} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="h-4 w-4" />
+                          Open External Resource
+                        </a>
+                      </Button>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">The external link has not been added yet.</p>
+                    )
+                  ) : (
+                    <div className="space-y-4">
+                      {(resource.partnerLoginUsername || resource.partnerLoginPassword) && (
+                        <div className="grid gap-3 rounded-md bg-muted p-4 text-sm sm:grid-cols-2">
+                          {resource.partnerLoginUsername && (
+                            <div>
+                              <p className="text-muted-foreground">Username / Email</p>
+                              <p className="font-medium break-all">{resource.partnerLoginUsername}</p>
+                            </div>
+                          )}
+                          {resource.partnerLoginPassword && (
+                            <div>
+                              <p className="text-muted-foreground">Password</p>
+                              <p className="font-mono font-medium break-all">{resource.partnerLoginPassword}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {resource.partnerLoginUrl ? (
+                        <Button asChild className="gap-2" data-testid="button-open-partner-lms">
+                          <a href={resource.partnerLoginUrl} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="h-4 w-4" />
+                            Open Partner LMS
+                          </a>
+                        </Button>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">The partner LMS link has not been added yet.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : resource.resourceType === "video" && resource.videoSource === "upload" ? (
                 <div className="space-y-3">
                   {privatePlayback.isLoading && (
                     <div className="flex aspect-video items-center justify-center rounded-lg border bg-muted" data-testid="private-video-loading">

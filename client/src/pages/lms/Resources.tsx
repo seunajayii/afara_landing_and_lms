@@ -22,6 +22,19 @@ function getFileType(fileName: string | null): string {
   return ext || "FILE";
 }
 
+function getResourceSummary(resource: Resource): { fileType: string; size: string } {
+  if (resource.resourceType === "resource_partner") {
+    return {
+      fileType: resource.partnerLinkType === "lms" ? "PARTNER LMS" : "EXTERNAL LINK",
+      size: resource.partnerName || "Partner resource",
+    };
+  }
+  return {
+    fileType: getFileType(resource.fileName),
+    size: formatFileSize(resource.fileSize),
+  };
+}
+
 function ResourceCardSkeleton() {
   return (
     <div className="border rounded-lg p-6 space-y-4">
@@ -91,8 +104,9 @@ export default function Resources() {
                   <ResourceCard
                     title={resource.title}
                     category={resource.category || "General"}
-                    fileType={getFileType(resource.fileName)}
-                    size={formatFileSize(resource.fileSize)}
+                    fileType={getResourceSummary(resource).fileType}
+                    size={getResourceSummary(resource).size}
+                    isExternal={resource.resourceType === "resource_partner"}
                   />
                 </Link>
               ))}

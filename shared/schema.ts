@@ -258,6 +258,8 @@ export const resources = pgTable("resources", {
   visibility: visibilityEnum("visibility").notNull().default("community"),
   status: contentStatusEnum("status").notNull().default("published"),
   partnerName: text("partner_name"),
+  partnerLinkType: text("partner_link_type").notNull().default("lms"),
+  partnerResourceUrl: text("partner_resource_url"),
   partnerLoginUrl: text("partner_login_url"),
   partnerLoginUsername: text("partner_login_username"),
   partnerLoginPassword: text("partner_login_password"),

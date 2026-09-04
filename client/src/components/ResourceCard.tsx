@@ -1,16 +1,17 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, Download } from "lucide-react";
+import { ExternalLink, FileText, Download } from "lucide-react";
 
 interface ResourceCardProps {
   title: string;
   category: string;
   fileType: string;
   size: string;
+  isExternal?: boolean;
 }
 
-export function ResourceCard({ title, category, fileType, size }: ResourceCardProps) {
+export function ResourceCard({ title, category, fileType, size, isExternal = false }: ResourceCardProps) {
   return (
     <Card className="hover-elevate transition-all duration-300" data-testid={`card-resource-${title.toLowerCase().replace(/\s+/g, "-")}`}>
       <CardHeader className="pb-3">
@@ -20,7 +21,9 @@ export function ResourceCard({ title, category, fileType, size }: ResourceCardPr
             <CardTitle className="text-base">{title}</CardTitle>
           </div>
           <div className="w-10 h-10 rounded-md bg-chart-2/10 flex items-center justify-center flex-shrink-0">
-            <FileText className="w-5 h-5 text-chart-2" />
+            {isExternal
+              ? <ExternalLink className="w-5 h-5 text-chart-2" />
+              : <FileText className="w-5 h-5 text-chart-2" />}
           </div>
         </div>
       </CardHeader>
@@ -28,7 +31,7 @@ export function ResourceCard({ title, category, fileType, size }: ResourceCardPr
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">{fileType} • {size}</span>
           <Button size="sm" variant="ghost" data-testid={`button-download-${title.toLowerCase().replace(/\s+/g, "-")}`}>
-            <Download className="w-4 h-4" />
+            {isExternal ? <ExternalLink className="w-4 h-4" /> : <Download className="w-4 h-4" />}
           </Button>
         </div>
       </CardContent>

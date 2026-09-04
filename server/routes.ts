@@ -256,6 +256,46 @@ const youtubeVideoResourceSchema = insertResourceSchema.superRefine((resource, c
       });
     }
   }
+  if (resource.resourceType === "resource_partner") {
+    if (!resource.partnerName?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["partnerName"],
+        message: "Partner name is required.",
+      });
+    }
+    const linkType = resource.partnerLinkType || "lms";
+    if (linkType !== "external" && linkType !== "lms") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["partnerLinkType"],
+        message: "Choose an external resource link or partner LMS access.",
+      });
+    }
+    const targetUrl = linkType === "external"
+      ? resource.partnerResourceUrl
+      : resource.partnerLoginUrl;
+    if (!targetUrl?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [linkType === "external" ? "partnerResourceUrl" : "partnerLoginUrl"],
+        message: linkType === "external"
+          ? "External resource URL is required."
+          : "Partner LMS URL is required.",
+      });
+    } else {
+      try {
+        const parsedUrl = new URL(targetUrl);
+        if (!["http:", "https:"].includes(parsedUrl.protocol)) throw new Error("Unsupported protocol");
+      } catch {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [linkType === "external" ? "partnerResourceUrl" : "partnerLoginUrl"],
+          message: "Enter a valid http or https URL.",
+        });
+      }
+    }
+  }
 });
 
 const youtubeUploadMetadataSchema = z.object({

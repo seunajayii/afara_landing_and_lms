@@ -99,6 +99,11 @@ export async function runSchemaMigrations() {
         ADD COLUMN IF NOT EXISTS video_content_type TEXT,
         ADD COLUMN IF NOT EXISTS video_file_size INTEGER
     `);
+    await db.execute(sql`
+      ALTER TABLE resources
+        ADD COLUMN IF NOT EXISTS partner_link_type TEXT NOT NULL DEFAULT 'lms',
+        ADD COLUMN IF NOT EXISTS partner_resource_url TEXT
+    `);
     // Private video objects are created before the resource form is saved.
     // Keep a durable owner/timestamp ledger so abandoned objects can be
     // removed after a retention period without touching attached resources.

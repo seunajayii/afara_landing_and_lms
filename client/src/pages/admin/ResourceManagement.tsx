@@ -757,9 +757,34 @@ const resourceFormSchema = z.object({
   visibility: z.enum(["public", "community", "cohort_only"]).default("community"),
   status: z.enum(["draft", "pending_review", "published", "archived"]),
   partnerName: z.string().optional(),
+  partnerLinkType: z.enum(["external", "lms"]).default("external"),
+  partnerResourceUrl: z.string().optional().or(z.literal("")),
   partnerLoginUrl: z.string().optional().or(z.literal("")),
   partnerLoginUsername: z.string().optional(),
   partnerLoginPassword: z.string().optional(),
+}).superRefine((resource, ctx) => {
+  if (resource.resourceType !== "resource_partner") return;
+  if (!resource.partnerName?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["partnerName"], message: "Partner name is required" });
+  }
+  const field = resource.partnerLinkType === "external" ? "partnerResourceUrl" : "partnerLoginUrl";
+  const value = resource[field];
+  if (!value?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [field],
+      message: resource.partnerLinkType === "external"
+        ? "External resource URL is required"
+        : "Partner LMS URL is required",
+    });
+    return;
+  }
+  try {
+    const url = new URL(value);
+    if (!["http:", "https:"].includes(url.protocol)) throw new Error("Unsupported protocol");
+  } catch {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: "Enter a valid http or https URL" });
+  }
 });
 
 type ResourceFormData = z.infer<typeof resourceFormSchema>;
@@ -831,6 +856,8 @@ const emptyDefaults: ResourceFormData = {
   visibility: "community",
   status: "published",
   partnerName: "",
+  partnerLinkType: "external",
+  partnerResourceUrl: "",
   partnerLoginUrl: "",
   partnerLoginUsername: "",
   partnerLoginPassword: "",
@@ -973,6 +1000,9 @@ export default function ResourceManagement() {
       visibility: (resource.visibility as ResourceFormData["visibility"]) || "community",
       status: (resource.status as ResourceFormData["status"]) || "published",
       partnerName: (resource as any).partnerName || "",
+      partnerLinkType: ((resource as any).partnerLinkType as ResourceFormData["partnerLinkType"])
+        || ((resource as any).partnerResourceUrl ? "external" : "lms"),
+      partnerResourceUrl: (resource as any).partnerResourceUrl || "",
       partnerLoginUrl: (resource as any).partnerLoginUrl || "",
       partnerLoginUsername: (resource as any).partnerLoginUsername || "",
       partnerLoginPassword: (resource as any).partnerLoginPassword || "",
@@ -1005,6 +1035,7 @@ export default function ResourceManagement() {
     const [showPassword, setShowPassword] = useState(false);
     const watchedType = form.watch("resourceType");
     const isPartner = watchedType === "resource_partner";
+    const partnerLinkType = form.watch("partnerLinkType");
     const isVideo = watchedType === "video";
     const youtubeVideoId = form.watch("youtubeVideoId");
     const youtubeThumbnailUrl = form.watch("youtubeThumbnailUrl");
@@ -1118,7 +1149,7 @@ export default function ResourceManagement() {
                     <SelectItem value="toolkit">Toolkit</SelectItem>
                     <SelectItem value="guide">Guide</SelectItem>
                     <SelectItem value="video">YouTube Video</SelectItem>
-                    <SelectItem value="resource_partner">Resource Partner</SelectItem>
+                    <SelectItem value="resource_partner">Partner Resource / External Link</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -1248,7 +1279,7 @@ export default function ResourceManagement() {
           <div className="space-y-4 rounded-md border p-4">
             <div className="flex items-center gap-2 text-sm font-medium text-teal-600 dark:text-teal-400">
               <ExternalLink className="w-4 h-4" />
-              Resource Partner Details
+              Partner Resource Details
             </div>
             <FormField
               control={form.control}
@@ -1269,72 +1300,132 @@ export default function ResourceManagement() {
             />
             <FormField
               control={form.control}
-              name="partnerLoginUrl"
+              name="partnerLinkType"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Partner LMS / Login URL *</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="https://partner-lms.example.com/login"
-                      {...field}
-                      data-testid={`input-${idPrefix}-partner-login-url`}
-                    />
-                  </FormControl>
+                  <FormLabel>Link Type</FormLabel>
+                  <Select
+                    value={field.value}
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      if (value === "external") {
+                        form.setValue("partnerLoginUrl", "");
+                        form.setValue("partnerLoginUsername", "");
+                        form.setValue("partnerLoginPassword", "");
+                      } else {
+                        form.setValue("partnerResourceUrl", "");
+                      }
+                    }}
+                  >
+                    <FormControl>
+                      <SelectTrigger data-testid={`select-${idPrefix}-partner-link-type`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="external">External resource or website</SelectItem>
+                      <SelectItem value="lms">Partner LMS with login access</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-2 gap-4">
+            {partnerLinkType === "external" ? (
               <FormField
                 control={form.control}
-                name="partnerLoginUsername"
+                name="partnerResourceUrl"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Login Username / Email</FormLabel>
+                    <FormLabel>External Resource URL *</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="shared@example.com"
+                        type="url"
+                        placeholder="https://partner.example.com/resource"
                         {...field}
-                        data-testid={`input-${idPrefix}-partner-username`}
+                        data-testid={`input-${idPrefix}-partner-resource-url`}
                       />
                     </FormControl>
                     <FormMessage />
+                    <p className="text-xs text-muted-foreground">
+                      Participants will click a button to open this resource or website in a new tab.
+                    </p>
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="partnerLoginPassword"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Login Password</FormLabel>
-                    <FormControl>
-                      <div className="relative">
+            ) : (
+              <>
+                <FormField
+                  control={form.control}
+                  name="partnerLoginUrl"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Partner LMS / Login URL *</FormLabel>
+                      <FormControl>
                         <Input
-                          type={showPassword ? "text" : "password"}
-                          placeholder="Shared access password"
+                          type="url"
+                          placeholder="https://partner-lms.example.com/login"
                           {...field}
-                          data-testid={`input-${idPrefix}-partner-password`}
+                          data-testid={`input-${idPrefix}-partner-login-url`}
                         />
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="absolute right-0 top-0"
-                          onClick={() => setShowPassword(p => !p)}
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </Button>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Login credentials are only visible to admins and will be displayed securely to enrolled participants when they access this resource.
-            </p>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="partnerLoginUsername"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Login Username / Email</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="shared@example.com"
+                            {...field}
+                            data-testid={`input-${idPrefix}-partner-username`}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="partnerLoginPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Login Password</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Input
+                              type={showPassword ? "text" : "password"}
+                              placeholder="Shared access password"
+                              {...field}
+                              data-testid={`input-${idPrefix}-partner-password`}
+                            />
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="absolute right-0 top-0"
+                              onClick={() => setShowPassword(p => !p)}
+                            >
+                              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </Button>
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Login details are shown to participants who can access this resource.
+                </p>
+              </>
+            )}
           </div>
         )}
 
