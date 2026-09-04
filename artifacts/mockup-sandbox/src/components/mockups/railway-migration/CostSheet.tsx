@@ -13,7 +13,6 @@ import {
   Server,
   ShieldCheck,
   Sparkles,
-  Wrench,
 } from "lucide-react";
 
 const usdToNgn = 1329;
@@ -29,8 +28,6 @@ const naira = (value: number) =>
   `₦${new Intl.NumberFormat("en-NG", { maximumFractionDigits: 0 }).format(value * usdToNgn)}`;
 
 const monthlyBase = {
-  care: 300,
-  ai: 300,
   railway: 20,
   r2: 23.47 / 12,
   zoom: 14.16,
@@ -39,7 +36,10 @@ const monthlyBase = {
 const monthlySubtotal = Object.values(monthlyBase).reduce((sum, value) => sum + value, 0);
 const annualRecurring = monthlySubtotal * 12;
 const migrationAllowance = 1200;
-const firstYearTotal = annualRecurring + migrationAllowance;
+const septemberTokenUsage = 300;
+const octoberTokenUsage = 300;
+const twoMonthTokenUsage = septemberTokenUsage + octoberTokenUsage;
+const firstYearTotal = annualRecurring + migrationAllowance + twoMonthTokenUsage;
 
 const options = [
   {
@@ -73,18 +73,11 @@ const options = [
 
 const quoteRows = [
   {
-    icon: Wrench,
-    item: "Build, maintenance & support",
-    plain: "Ongoing fixes, releases, monitoring, and routine platform care.",
-    monthly: monthlyBase.care,
-    annual: monthlyBase.care * 12,
-  },
-  {
     icon: Sparkles,
-    item: "AI and token usage allowance",
-    plain: "Based on the average monthly usage supplied for the last two months.",
-    monthly: monthlyBase.ai,
-    annual: monthlyBase.ai * 12,
+    item: "September + October AI/token usage",
+    plain: "Two exceptional iteration months only. Ongoing maintenance/retainer is excluded from this proposal.",
+    monthly: septemberTokenUsage,
+    annual: twoMonthTokenUsage,
   },
   {
     icon: Server,
@@ -142,8 +135,8 @@ export function CostSheet() {
             <p className="mt-2 text-sm text-[#c6dbc9]">Approximately {naira(firstYearTotal)} at the indicative planning rate.</p>
             <div className="mt-7 grid gap-3 sm:grid-cols-3">
               <div className="rounded-xl bg-white/8 p-4"><p className="text-xs text-[#b8d0bd]">One-time migration</p><p className="mt-1 text-2xl font-semibold">{money(migrationAllowance)}</p></div>
-              <div className="rounded-xl bg-white/8 p-4"><p className="text-xs text-[#b8d0bd]">Monthly running cost</p><p className="mt-1 text-2xl font-semibold">{money(monthlySubtotal)}</p></div>
-              <div className="rounded-xl bg-[#dcecce] p-4 text-[#204b39]"><p className="text-xs text-[#557866]">Annual recurring</p><p className="mt-1 text-2xl font-semibold">{money(annualRecurring)}</p></div>
+              <div className="rounded-xl bg-white/8 p-4"><p className="text-xs text-[#b8d0bd]">Platform / month</p><p className="mt-1 text-2xl font-semibold">{money(monthlySubtotal)}</p></div>
+              <div className="rounded-xl bg-[#dcecce] p-4 text-[#204b39]"><p className="text-xs text-[#557866]">Sep + Oct tokens</p><p className="mt-1 text-2xl font-semibold">{money(twoMonthTokenUsage)}</p></div>
             </div>
             <p className="mt-5 border-t border-white/15 pt-4 text-xs leading-5 text-[#bcd2c1]">
               This is a planning quote, not a final invoice. Taxes, foreign-exchange movement, exceptional feature work, and any additional paid vendor seats are excluded.
@@ -169,7 +162,7 @@ export function CostSheet() {
           </div>
           <div className="overflow-hidden rounded-xl border border-[#dce5dd]">
             <div className="hidden grid-cols-[1.05fr_1.45fr_0.45fr_0.5fr] gap-4 bg-[#edf2ed] px-5 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-[#6b8374] md:grid">
-              <span>Cost line</span><span>What it means</span><span className="text-right">Monthly</span><span className="text-right">12 months</span>
+              <span>Cost line</span><span>What it means</span><span className="text-right">Monthly / period</span><span className="text-right">12 months</span>
             </div>
             {quoteRows.map(({ icon: Icon, item, plain, monthly, annual }) => (
               <div key={item} className="grid gap-3 border-t border-[#e1e8e1] px-5 py-4 first:border-t-0 md:grid-cols-[1.05fr_1.45fr_0.45fr_0.5fr] md:items-center md:gap-4">
@@ -180,14 +173,14 @@ export function CostSheet() {
               </div>
             ))}
             <div className="grid gap-3 border-t-2 border-[#b8cdbd] bg-[#f0f5f0] px-5 py-4 md:grid-cols-[2.5fr_0.45fr_0.5fr] md:items-center">
-              <p className="font-semibold">Recurring operating subtotal</p>
+              <p className="font-semibold">12-month infrastructure subtotal</p>
               <p className="text-right text-lg font-semibold">{money(monthlySubtotal)}</p>
               <p className="text-right text-lg font-semibold text-[#245f43]">{money(annualRecurring)}</p>
             </div>
           </div>
           <div className="mt-4 flex items-start gap-3 rounded-xl bg-[#faf2df] px-4 py-3 text-xs leading-5 text-[#765f35]">
             <Info size={16} className="mt-0.5 shrink-0" />
-            The {money(migrationAllowance)} one-time migration allowance covers the ten-day move, environment setup, database migration, storage cutover, callback updates, verification, and rollback preparation. Confirm the final fee after a storage inventory.
+              The {money(migrationAllowance)} one-time migration allowance covers the ten-day move, environment setup, database migration, storage cutover, callback updates, verification, and rollback preparation. The existing maintenance retainer is intentionally excluded. AI/token usage is included only for September and October.
           </div>
         </section>
 
@@ -269,7 +262,8 @@ export function CostSheet() {
           <div className="mt-4 grid gap-x-8 gap-y-2 text-xs leading-5 text-[#62796b] sm:grid-cols-2">
             <p>• USD figures use current public prices checked on 4 Sep 2026.</p>
             <p>• NGN figures use an indicative ₦1,329/$ planning rate.</p>
-            <p>• Build/maintenance and AI allowances use the client-provided two-month averages.</p>
+              <p>• The existing build/maintenance retainer is excluded from this proposal.</p>
+              <p>• AI/token usage includes $300 for September and $300 for October only; later usage is billed only if incurred.</p>
             <p>• One Zoom Pro licence is included at the annual-billed public rate; remove it if already owned.</p>
             <p>• R2 calculation assumes recordings are retained for the full year and 10 GB/month free storage.</p>
             <p>• Quote excludes VAT/withholding, domain renewal, paid email overages, and major new product scope.</p>
