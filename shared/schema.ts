@@ -250,6 +250,7 @@ export const resources = pgTable("resources", {
   resourceType: resourceTypeEnum("resource_type").notNull(),
   category: text("category"),
   fileUrl: text("file_url"),
+  fileStorageKey: text("file_storage_key"),
   fileName: text("file_name"),
   fileSize: integer("file_size"),
   thumbnailUrl: text("thumbnail_url"),

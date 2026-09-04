@@ -200,7 +200,7 @@ function QuickResourceDialog({
 
   const createResource = useMutation({
     mutationFn: async () => {
-      let uploaded: { fileUrl: string; fileName: string; fileSize: number } | null = null;
+      let uploaded: { fileUrl: string | null; fileStorageKey: string | null; fileName: string; fileSize: number } | null = null;
       if (file) {
         const body = new FormData();
         body.append("file", file);
@@ -223,6 +223,7 @@ function QuickResourceDialog({
         resourceType: draft.resourceType,
         category: draft.category,
         fileUrl: isPartner ? null : uploaded?.fileUrl || draft.fileUrl.trim() || null,
+        fileStorageKey: isPartner ? null : uploaded?.fileStorageKey || null,
         fileName: isPartner ? null : uploaded?.fileName || null,
         fileSize: isPartner ? null : uploaded?.fileSize || null,
         visibility: "community",

@@ -88,6 +88,7 @@ export async function runSchemaMigrations() {
     `);
     await db.execute(sql`
       ALTER TABLE resources
+        ADD COLUMN IF NOT EXISTS file_storage_key TEXT,
         ADD COLUMN IF NOT EXISTS youtube_video_id TEXT,
         ADD COLUMN IF NOT EXISTS youtube_url TEXT,
         ADD COLUMN IF NOT EXISTS youtube_thumbnail_url TEXT,
@@ -98,6 +99,15 @@ export async function runSchemaMigrations() {
         ADD COLUMN IF NOT EXISTS video_storage_key TEXT,
         ADD COLUMN IF NOT EXISTS video_content_type TEXT,
         ADD COLUMN IF NOT EXISTS video_file_size INTEGER
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS resource_file_uploads (
+        id VARCHAR PRIMARY KEY,
+        contents BYTEA NOT NULL,
+        content_type TEXT NOT NULL,
+        file_name TEXT NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
     `);
     await db.execute(sql`
       ALTER TABLE resources

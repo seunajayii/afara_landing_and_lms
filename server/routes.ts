@@ -57,6 +57,8 @@ import {
   type YouTubeVideoMetadata,
 } from "./youtube";
 import { isPrivateVideoStorageKey } from "./r2-storage";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 import {
   isObjectStorageConfigured,
   isObjectStorageAvailable as checkObjectStorageAvailable,
@@ -1192,9 +1194,14 @@ export async function registerRoutes(
   // learner can still receive the resource metadata, but playback must go
   // through the authorization endpoint below.
   const toResourceResponse = (resource: any, isAdminUser: boolean) => {
-    if (isAdminUser || !resourceIsRestricted(resource)) return resource;
-    return {
+    const response = {
       ...resource,
+      fileUrl: resource.fileStorageKey ? `/api/resources/${resource.id}/file` : resource.fileUrl,
+      fileStorageKey: isAdminUser ? resource.fileStorageKey : null,
+    };
+    if (isAdminUser || !resourceIsRestricted(resource)) return response;
+    return {
+      ...response,
       fileUrl: null,
       youtubeVideoId: null,
       youtubeUrl: null,
@@ -4354,17 +4361,26 @@ export async function registerRoutes(
         const { randomUUID } = await import("crypto");
         const key = `resources/${randomUUID()}.${ext}`;
 
-        let fileUrl: string;
+        let fileUrl: string | null = null;
+        let fileStorageKey: string | null = null;
         if (isR2Configured()) {
           const result = await uploadFile(key, req.file.buffer, req.file.mimetype, true);
           fileUrl = result.url;
+        } else if (isObjectStorageConfigured() && await checkObjectStorageAvailable()) {
+          const result = await uploadPrivateObject(key, req.file.buffer);
+          fileStorageKey = result.key;
         } else {
-          const base64 = req.file.buffer.toString("base64");
-          fileUrl = `data:${req.file.mimetype};base64,${base64}`;
+          const fileId = randomUUID();
+          await db.execute(sql`
+            INSERT INTO resource_file_uploads (id, contents, content_type, file_name)
+            VALUES (${fileId}, ${req.file.buffer}, ${req.file.mimetype || "application/octet-stream"}, ${originalName})
+          `);
+          fileStorageKey = `db:${fileId}`;
         }
 
         res.json({
           fileUrl,
+          fileStorageKey,
           fileName: originalName,
           fileSize: req.file.size,
           contentType: req.file.mimetype,
@@ -4375,6 +4391,49 @@ export async function registerRoutes(
       }
     }
   );
+
+  app.get("/api/resources/:id/file", async (req: Request, res: Response) => {
+    try {
+      const resource = await storage.getResource(req.params.id);
+      if (!resource || !resource.fileStorageKey) {
+        return res.status(404).json({ error: "Resource file not found" });
+      }
+      const userRole = (req.session?.userRole as string) || null;
+      const isAdminUser = userRole === "admin" || userRole === "superadmin";
+      if (!isAdminUser) {
+        if (resource.status !== "published" || !canAccessVisibility(resource.visibility, userRole)) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+        if (!(await canAccessResource(req, resource))) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+      }
+      res.setHeader("Content-Disposition", `attachment; filename="${(resource.fileName || "resource").replace(/["\r\n]/g, "_")}"`);
+      res.setHeader("Cache-Control", "private, no-store");
+      if (resource.fileStorageKey.startsWith("db:")) {
+        const fileId = resource.fileStorageKey.slice(3);
+        const result = await db.execute(sql`
+          SELECT contents, content_type
+          FROM resource_file_uploads
+          WHERE id = ${fileId}
+          LIMIT 1
+        `);
+        const row = result.rows[0] as { contents?: Buffer; content_type?: string } | undefined;
+        if (!row?.contents) return res.status(404).json({ error: "Resource file not found" });
+        const contents = Buffer.isBuffer(row.contents) ? row.contents : Buffer.from(row.contents);
+        res.setHeader("Content-Type", row.content_type || "application/octet-stream");
+        res.setHeader("Content-Length", contents.length);
+        return res.send(contents);
+      }
+      const file = await getObjectStorageFileStream(resource.fileStorageKey);
+      res.setHeader("Content-Type", file.contentType || "application/octet-stream");
+      if (file.contentLength !== undefined) res.setHeader("Content-Length", file.contentLength);
+      (file.body as any).pipe(res);
+    } catch (error) {
+      console.error("Resource file download failed:", error);
+      if (!res.headersSent) res.status(502).json({ error: "Unable to download this resource file" });
+    }
+  });
 
   app.post("/api/resources", requireAuth, requireAdminRole, async (req: Request, res: Response) => {
     try {

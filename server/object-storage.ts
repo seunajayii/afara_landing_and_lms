@@ -28,7 +28,8 @@ export async function isObjectStorageAvailable(): Promise<boolean> {
 
 function getClient(): Client {
   if (!client) {
-    client = new Client();
+    const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID?.trim();
+    client = new Client(bucketId ? { bucketId } : undefined);
   }
   return client;
 }

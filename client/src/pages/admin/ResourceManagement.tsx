@@ -89,7 +89,8 @@ function getRequestErrorMessage(error: unknown, fallback: string): string {
 }
 
 interface UploadedFile {
-  fileUrl: string;
+  fileUrl: string | null;
+  fileStorageKey?: string | null;
   fileName: string;
   fileSize: number;
 }
@@ -741,6 +742,7 @@ const resourceFormSchema = z.object({
   resourceType: z.enum(["document", "template", "toolkit", "guide", "resource_partner", "video"]),
   category: z.string().min(1, "Category is required"),
   fileUrl: z.string().optional().or(z.literal("")),
+  fileStorageKey: z.string().optional().or(z.literal("")),
   fileName: z.string().optional(),
   fileSize: z.number().optional(),
   thumbnailUrl: z.string().optional().or(z.literal("")),
@@ -840,6 +842,7 @@ const emptyDefaults: ResourceFormData = {
   resourceType: "document",
   category: "Business Strategy",
   fileUrl: "",
+  fileStorageKey: "",
   fileName: "",
   fileSize: undefined,
   thumbnailUrl: "",
@@ -945,7 +948,8 @@ export default function ResourceManagement() {
 
   function handleCreateUpload(file: UploadedFile) {
     setCreateUpload(file);
-    createForm.setValue("fileUrl", file.fileUrl);
+    createForm.setValue("fileUrl", file.fileUrl || "");
+    createForm.setValue("fileStorageKey", file.fileStorageKey || "");
     createForm.setValue("fileName", file.fileName);
     createForm.setValue("fileSize", file.fileSize);
   }
@@ -953,13 +957,15 @@ export default function ResourceManagement() {
   function handleCreateClearUpload() {
     setCreateUpload(null);
     createForm.setValue("fileUrl", "");
+    createForm.setValue("fileStorageKey", "");
     createForm.setValue("fileName", "");
     createForm.setValue("fileSize", undefined);
   }
 
   function handleEditUpload(file: UploadedFile) {
     setEditUpload(file);
-    editForm.setValue("fileUrl", file.fileUrl);
+    editForm.setValue("fileUrl", file.fileUrl || "");
+    editForm.setValue("fileStorageKey", file.fileStorageKey || "");
     editForm.setValue("fileName", file.fileName);
     editForm.setValue("fileSize", file.fileSize);
   }
@@ -967,6 +973,7 @@ export default function ResourceManagement() {
   function handleEditClearUpload() {
     setEditUpload(null);
     editForm.setValue("fileUrl", "");
+    editForm.setValue("fileStorageKey", "");
     editForm.setValue("fileName", "");
     editForm.setValue("fileSize", undefined);
   }
@@ -974,8 +981,8 @@ export default function ResourceManagement() {
   function openEditDialog(resource: Resource) {
     setSelectedResource(resource);
     setEditUpload(
-      resource.fileUrl && resource.fileName
-        ? { fileUrl: resource.fileUrl, fileName: resource.fileName, fileSize: resource.fileSize ?? 0 }
+      (resource.fileUrl || resource.fileStorageKey) && resource.fileName
+        ? { fileUrl: resource.fileUrl, fileStorageKey: resource.fileStorageKey, fileName: resource.fileName, fileSize: resource.fileSize ?? 0 }
         : null
     );
     editForm.reset({
@@ -984,6 +991,7 @@ export default function ResourceManagement() {
       resourceType: resource.resourceType as ResourceFormData["resourceType"],
       category: resource.category || "Business Strategy",
       fileUrl: resource.fileUrl || "",
+      fileStorageKey: resource.fileStorageKey || "",
       fileName: resource.fileName || "",
       fileSize: resource.fileSize ?? undefined,
       thumbnailUrl: resource.thumbnailUrl || "",
