@@ -1932,10 +1932,19 @@ export async function registerRoutes(
         const pod = await storage.getLearningPod(target.targetId);
         if (!pod || pod.cohortId !== cohortId) errors.push("Every pod target must belong to the assignment cohort.");
       } else if (target.targetType === "course") {
-        if (!await storage.getCourse(target.targetId)) errors.push("One or more course targets could not be found.");
+        const course = await storage.getCourse(target.targetId);
+        if (!course) {
+          errors.push("One or more course targets could not be found.");
+        } else if (course.audience === "selected" && !await storage.isCourseAssignedToCohort(course.id, cohortId)) {
+          errors.push("Every selected course target must be assigned to the assignment cohort.");
+        }
       } else if (target.targetType === "module") {
         const course = await getCourseForModuleId(target.targetId);
-        if (!course) errors.push("One or more module targets could not be found.");
+        if (!course) {
+          errors.push("One or more module targets could not be found.");
+        } else if (course.audience === "selected" && !await storage.isCourseAssignedToCohort(course.id, cohortId)) {
+          errors.push("Every selected module target must be assigned to the assignment cohort.");
+        }
       }
     }
     return errors.length ? errors[0] : null;
@@ -1950,13 +1959,13 @@ export async function registerRoutes(
     if (!req.session.userId) return false;
     if (req.session.userRole === "mentor") {
       const podTargets = targets.filter((target) => target.targetType === "pod");
-      if (podTargets.length === 0) return false;
+      if (podTargets.length === 0 || podTargets.length !== targets.length) return false;
       const pods = await Promise.all(podTargets.map((target) => storage.getLearningPod(target.targetId)));
       return pods.every((pod) => pod?.cohortId === cohortId && pod.mentorId === req.session.userId);
     }
     if (req.session.userRole === "facilitator") {
       const scopedTargets = targets.filter((target) => target.targetType === "course" || target.targetType === "module");
-      if (scopedTargets.length === 0) return false;
+      if (scopedTargets.length === 0 || scopedTargets.length !== targets.length) return false;
       for (const target of scopedTargets) {
         const course = target.targetType === "course"
           ? await storage.getCourse(target.targetId)
