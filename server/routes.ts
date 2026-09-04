@@ -1803,7 +1803,7 @@ export async function registerRoutes(
           const partnerUrl = linkType === "external" ? resource.partnerResourceUrl : resource.partnerLoginUrl;
           return partnerUrl ? null : "The selected partner resource does not have a working link.";
         }
-        if (!resource.fileUrl) return "The selected resource does not have a downloadable file.";
+        if (!resource.fileUrl && !resource.fileStorageKey) return "The selected resource does not have a downloadable file.";
         return null;
       }
       return lesson.downloadableUrl ? null : "Attach a downloadable resource or provide a file URL before publishing.";
