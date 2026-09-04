@@ -449,6 +449,8 @@ export async function runSchemaMigrations() {
       );
       CREATE INDEX IF NOT EXISTS assignment_submissions_assignment_user_idx ON assignment_submissions (assignment_id, user_id, updated_at);
       CREATE INDEX IF NOT EXISTS assignment_submissions_assignment_idx ON assignment_submissions (assignment_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS assignment_submissions_assignment_user_attempt_idx
+        ON assignment_submissions (assignment_id, user_id, attempt_number);
     `);
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS assignment_answers (

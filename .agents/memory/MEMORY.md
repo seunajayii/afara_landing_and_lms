@@ -14,3 +14,4 @@
 - [Participant progress reporting](progress-reporting-workflow.md) — use evidence and qualitative statuses across baseline, midpoint, and final reviews for individual, pod, and cohort reports
 - [Course live classes](course-live-classes.md) — scheduled classes are event-linked lessons; one event can list multiple facilitators and remains visible in the programme calendar
 - [Calendar provider links](calendar-provider-links.md) — use provider compose URLs with UTC instants; keep .ics only as a fallback
+- [Assignment attempt allocation](assignment-attempt-allocation.md) — allocate learner attempt numbers inside a transaction; uniqueness must cover assignment, learner, and attempt

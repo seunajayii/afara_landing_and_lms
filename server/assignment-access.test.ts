@@ -249,10 +249,16 @@ async function withAssignmentRoutes<T>(callback: (baseUrl: string, state: AnyRec
     questions.delete(assignmentId);
   });
   replace("createAssignmentSubmission", async (data: AnyRecord) => {
+    // Match the database storage path: determine the attempt at persistence
+    // time, after any request overlap, rather than in the route.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const attempts = Array.from(submissions.values())
+      .filter((submission) => submission.assignmentId === data.assignmentId && submission.userId === data.userId)
+      .map((submission) => submission.attemptNumber);
     const created = {
       ...data,
       id: `submission-${nextSubmissionId++}`,
-      attemptNumber: data.attemptNumber || 1,
+      attemptNumber: data.attemptNumber ?? (attempts.length ? Math.max(...attempts) + 1 : 1),
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -546,6 +552,42 @@ test("drafts resume, resubmissions get new attempts, and objective quizzes are m
     }));
     assert.equal(foreignAnswer.status, 400);
     assert.deepEqual(foreignAnswer.body, { error: "One or more answers do not belong to this assignment" });
+  });
+});
+
+test("simultaneous new submissions receive distinct persisted attempts", async () => {
+  await withAssignmentRoutes(async (baseUrl, state) => {
+    const [first, second] = await Promise.all([
+      request(baseUrl, users.learnerA.id, "/api/assignments/pod-a/submissions", jsonBody({
+        responseText: "First concurrent submission",
+        submit: true,
+      })),
+      request(baseUrl, users.learnerA.id, "/api/assignments/pod-a/submissions", jsonBody({
+        responseText: "Second concurrent submission",
+        submit: true,
+      })),
+    ]);
+
+    assert.equal(first.status, 201);
+    assert.equal(second.status, 201);
+    assert.notEqual(first.body.id, second.body.id);
+    assert.deepEqual(
+      [first.body.attemptNumber, second.body.attemptNumber].sort((a, b) => a - b),
+      [1, 2],
+    );
+
+    const stored = Array.from(state.submissions.values())
+      .filter((submission) => submission.assignmentId === "pod-a" && submission.userId === users.learnerA.id)
+      .sort((a, b) => a.attemptNumber - b.attemptNumber);
+    assert.deepEqual(stored.map((submission) => submission.attemptNumber), [1, 2]);
+    assert.deepEqual(
+      stored.map((submission) => submission.id),
+      [first.body.id, second.body.id].sort(),
+    );
+    assert.deepEqual(
+      stored.map((submission) => submission.responseText).sort(),
+      ["First concurrent submission", "Second concurrent submission"],
+    );
   });
 });
 

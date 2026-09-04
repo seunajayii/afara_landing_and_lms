@@ -677,7 +677,10 @@ export const assignmentSubmissions = pgTable("assignment_submissions", {
   reviewedById: varchar("reviewed_by_id").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  assignmentUserAttemptUnique: uniqueIndex("assignment_submissions_assignment_user_attempt_idx")
+    .on(table.assignmentId, table.userId, table.attemptNumber),
+}));
 
 export const assignmentAnswers = pgTable("assignment_answers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

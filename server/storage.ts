@@ -1940,8 +1940,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createAssignmentSubmission(data: InsertAssignmentSubmission & { attemptNumber?: number }): Promise<AssignmentSubmission> {
-    const [submission] = await db.insert(assignmentSubmissions).values(data).returning();
-    return submission;
+    return db.transaction(async (tx) => {
+      // Allocation must happen in the same transaction as the insert. The
+      // advisory lock serializes submissions for this learner and assignment,
+      // including the first submission when there is no row to lock yet.
+      const lockKey = `${data.assignmentId}:${data.userId}`;
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
+
+      let attemptNumber = data.attemptNumber;
+      if (attemptNumber === undefined) {
+        const [latest] = await tx.select({ attemptNumber: assignmentSubmissions.attemptNumber })
+          .from(assignmentSubmissions)
+          .where(and(
+            eq(assignmentSubmissions.assignmentId, data.assignmentId),
+            eq(assignmentSubmissions.userId, data.userId),
+          ))
+          .orderBy(desc(assignmentSubmissions.attemptNumber))
+          .limit(1);
+        attemptNumber = (latest?.attemptNumber ?? 0) + 1;
+      }
+
+      const [submission] = await tx.insert(assignmentSubmissions)
+        .values({ ...data, attemptNumber })
+        .returning();
+      return submission;
+    });
   }
 
   async updateAssignmentSubmission(id: string, data: Partial<AssignmentSubmission>): Promise<AssignmentSubmission | undefined> {

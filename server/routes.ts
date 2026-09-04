@@ -3272,7 +3272,7 @@ export async function registerRoutes(
       };
       const submission = draft
         ? await storage.updateAssignmentSubmission(draft.id, submissionValues)
-        : await storage.createAssignmentSubmission({ ...submissionValues, attemptNumber: await storage.getNextAssignmentAttemptNumber(assignment.id, req.session.userId!) });
+        : await storage.createAssignmentSubmission(submissionValues);
       if (!submission) return res.status(500).json({ error: "Could not save submission" });
       await storage.replaceAssignmentAnswers(submission.id, data.answers.map((answer) => {
         const marked = autoRows.find((row) => row.questionId === answer.questionId);
