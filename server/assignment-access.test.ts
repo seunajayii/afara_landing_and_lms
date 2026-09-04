@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import express from "express";
 import test from "node:test";
 import type { Server } from "node:http";
+import { asc, eq } from "drizzle-orm";
 
 import { registerRoutes } from "./routes";
 import { storage } from "./storage";
+import { db } from "./db";
+import { assignmentSubmissions, assignments, cohorts as cohortsTable, users as usersTable } from "@shared/schema";
 
 type AnyRecord = Record<string, any>;
 type StorageMethod = (...args: any[]) => any;
@@ -727,6 +731,86 @@ test("simultaneous new submissions receive distinct persisted attempts", async (
       ["First concurrent submission", "Second concurrent submission"],
     );
   });
+});
+
+test("DatabaseStorage keeps concurrent submissions in separate sequential attempts", async () => {
+  const userId = randomUUID();
+  const cohortId = randomUUID();
+  const assignmentId = randomUUID();
+
+  try {
+    await db.insert(usersTable).values({
+      id: userId,
+      email: `${userId}@example.com`,
+      firstName: "Concurrent",
+      lastName: "Learner",
+      role: "participant",
+      isActive: true,
+      mustChangePassword: false,
+    });
+    await db.insert(cohortsTable).values({
+      id: cohortId,
+      name: "Concurrent submissions test cohort",
+      slug: `concurrent-submissions-${cohortId}`,
+    });
+    await db.insert(assignments).values({
+      id: assignmentId,
+      cohortId,
+      title: "Concurrent submissions test assignment",
+      assignmentType: "submission",
+      status: "published",
+      createdById: userId,
+    });
+
+    const [first, second] = await Promise.all([
+      storage.createAssignmentSubmission({
+        assignmentId,
+        userId,
+        status: "submitted",
+        responseText: "First database submission",
+        links: [],
+        fileEvidence: [],
+      }),
+      storage.createAssignmentSubmission({
+        assignmentId,
+        userId,
+        status: "submitted",
+        responseText: "Second database submission",
+        links: [],
+        fileEvidence: [],
+      }),
+    ]);
+
+    assert.notEqual(first.id, second.id);
+    assert.deepEqual(
+      [first.attemptNumber, second.attemptNumber].sort((a, b) => a - b),
+      [1, 2],
+    );
+
+    const persisted = await db.select({
+      id: assignmentSubmissions.id,
+      attemptNumber: assignmentSubmissions.attemptNumber,
+      responseText: assignmentSubmissions.responseText,
+    })
+      .from(assignmentSubmissions)
+      .where(eq(assignmentSubmissions.assignmentId, assignmentId))
+      .orderBy(asc(assignmentSubmissions.attemptNumber));
+
+    assert.deepEqual(persisted.map(({ attemptNumber }) => attemptNumber), [1, 2]);
+    assert.deepEqual(
+      new Set(persisted.map(({ id }) => id)),
+      new Set([first.id, second.id]),
+    );
+    assert.deepEqual(
+      persisted.map(({ responseText }) => responseText),
+      ["First database submission", "Second database submission"],
+    );
+  } finally {
+    await db.delete(assignmentSubmissions).where(eq(assignmentSubmissions.assignmentId, assignmentId));
+    await db.delete(assignments).where(eq(assignments.id, assignmentId));
+    await db.delete(cohortsTable).where(eq(cohortsTable.id, cohortId));
+    await db.delete(usersTable).where(eq(usersTable.id, userId));
+  }
 });
 
 test("only the assigned mentor, scoped facilitator, or administrator can manually grade", async () => {
