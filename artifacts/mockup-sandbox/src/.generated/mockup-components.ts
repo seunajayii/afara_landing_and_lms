@@ -4,5 +4,8 @@ export const modules: ModuleMap = {
   "./components/mockups/navigation-ia/CurrentAdmin.tsx": () => import("../components/mockups/navigation-ia/CurrentAdmin.tsx"),
   "./components/mockups/navigation-ia/CurrentLMS.tsx": () => import("../components/mockups/navigation-ia/CurrentLMS.tsx"),
   "./components/mockups/navigation-ia/GroupedAdmin.tsx": () => import("../components/mockups/navigation-ia/GroupedAdmin.tsx"),
-  "./components/mockups/navigation-ia/GroupedLMS.tsx": () => import("../components/mockups/navigation-ia/GroupedLMS.tsx")
+  "./components/mockups/navigation-ia/GroupedLMS.tsx": () => import("../components/mockups/navigation-ia/GroupedLMS.tsx"),
+  "./components/mockups/railway-migration/CostSheet.tsx": () => import("../components/mockups/railway-migration/CostSheet.tsx"),
+  "./components/mockups/railway-migration/MigrationOverview.tsx": () => import("../components/mockups/railway-migration/MigrationOverview.tsx"),
+  "./components/mockups/railway-migration/WorkflowGuide.tsx": () => import("../components/mockups/railway-migration/WorkflowGuide.tsx")
 };

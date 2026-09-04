@@ -1,0 +1,30 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "0gy8CamRIF4F6FXCwXF35"
+uri = "file://deliverables/AFARA-Railway-Migration-Workflow-and-Setup-Guide.pdf"
+type = "pdf"
+title = "Railway Migration Workflow & Setup Guide"
+description = "A four-page AFÁRÁ runbook covering preparation, setup, data movement, cutover, rollback, owners, and secure configuration."
+logical_id = "2fa20e86-a31d-44ea-817d-837df6bda6a5"
+content_hash = "sha256:e2efd92d97c0456ba46855f37b845827e1f44d28c1a9cceebf550e26512e4bc6"
+size = 378825
+mtime_ms = 1788542380146
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:8b9ab373-9765-405e-8e49-29ebe59d9861/2fa20e86-a31d-44ea-817d-837df6bda6a5/fc3967f0-9750-4c63-98fb-686d0dde3a38"
+storage_version_token = "1788542397657165"
+content_type = "application/pdf"
+
+[[outputs]]
+id = "dOQzHC5E95DYZYUDn9fMy"
+uri = "file://deliverables/AFARA-Railway-Requirements-and-Cost-Sheet.pdf"
+type = "pdf"
+title = "Railway Requirements & Cost Sheet"
+description = "A three-page requirements and budget sheet with current Railway and Cloudflare R2 rates, three usage scenarios, NGN estimates, and sizing guidance."
+logical_id = "89f0d013-67b5-48a9-b83a-90cef50500f6"
+content_hash = "sha256:c5cc1cee423b529f76310fff4a42870dcc6304af1780c863eb07baa91f708712"
+size = 353947
+mtime_ms = 1788542360258
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:8b9ab373-9765-405e-8e49-29ebe59d9861/89f0d013-67b5-48a9-b83a-90cef50500f6/f5bdf9b8-4e7e-495e-b761-41216f21849e"
+storage_version_token = "1788542398318036"
+content_type = "application/pdf"
