@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/hooks/use-toast";
 import { CalendarDays, CheckCircle2, ExternalLink, Loader2, MessageSquare, Plus, Send, Trash2, Users } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { CalendarActions } from "@/components/CalendarActions";
 
 type Person = { id: string; firstName: string; lastName: string; email?: string; role?: string };
 type Submission = {
@@ -49,6 +50,7 @@ type PodEvent = {
   description?: string | null;
   startTime: string;
   endTime?: string | null;
+  durationMinutes?: number | null;
   meetingPlatform?: string | null;
   meetingLink?: string | null;
   host?: Person | null;
@@ -241,7 +243,16 @@ export default function LearningPods() {
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold">Pod meetings</h2><p className="text-sm text-muted-foreground">Private live sessions for this learning pod.</p></div>{selectedPod.canManageEvents && <Button onClick={() => setEventDialogOpen(true)}><Plus className="mr-2 h-4 w-4" />Schedule meeting</Button>}</div>
             {selectedPod.events.length === 0 ? <Card><CardContent className="py-10 text-center"><CalendarDays className="mx-auto mb-3 h-8 w-8 text-muted-foreground" /><p className="font-medium">No pod meetings scheduled</p><p className="mt-1 text-sm text-muted-foreground">{selectedPod.canManageEvents ? "Schedule a time for this pod to meet." : "Your mentor or facilitator will add meetings here."}</p></CardContent></Card> :
-              <div className="grid gap-4">{selectedPod.events.map((event) => <Card key={event.id} className="overflow-hidden"><CardContent className="p-5"><div className="flex items-start justify-between gap-4"><div className="flex min-w-0 gap-3"><div className="mt-0.5 rounded-lg bg-primary/10 p-2 text-primary"><CalendarDays className="h-5 w-5" /></div><div><h3 className="font-semibold">{event.title}</h3><p className="mt-1 text-sm font-medium">{dateLabel(event.startTime)}</p>{event.description && <p className="mt-2 text-sm text-muted-foreground">{event.description}</p>}<div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span>{event.meetingPlatform || "Online meeting"}</span>{event.host && <span>Set up by {event.host.firstName} {event.host.lastName}</span>}</div></div></div>{selectedPod.canManageEvents && <Button variant="ghost" size="icon" onClick={() => deleteEventMutation.mutate(event.id)} aria-label={`Remove ${event.title}`}><Trash2 className="h-4 w-4 text-destructive" /></Button>}</div>{event.meetingLink && <Button asChild className="mt-4"><a href={event.meetingLink} target="_blank" rel="noreferrer">Join pod meeting<ExternalLink className="ml-2 h-4 w-4" /></a></Button>}</CardContent></Card>)}</div>}
+              <div className="grid gap-4">{selectedPod.events.map((event) => {
+                const calendarEvent = {
+                  ...event,
+                  description: [
+                    event.description,
+                    `Private meeting for the ${selectedPod.name} learning pod.`,
+                  ].filter(Boolean).join("\n\n"),
+                };
+                return <Card key={event.id} className="overflow-hidden"><CardContent className="p-5"><div className="flex items-start justify-between gap-4"><div className="flex min-w-0 gap-3"><div className="mt-0.5 rounded-lg bg-primary/10 p-2 text-primary"><CalendarDays className="h-5 w-5" /></div><div><h3 className="font-semibold">{event.title}</h3><p className="mt-1 text-sm font-medium">{dateLabel(event.startTime)}</p>{event.description && <p className="mt-2 text-sm text-muted-foreground">{event.description}</p>}<div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span>{event.meetingPlatform || "Online meeting"}</span>{event.host && <span>Set up by {event.host.firstName} {event.host.lastName}</span>}</div></div></div>{selectedPod.canManageEvents && <Button variant="ghost" size="icon" onClick={() => deleteEventMutation.mutate(event.id)} aria-label={`Remove ${event.title}`}><Trash2 className="h-4 w-4 text-destructive" /></Button>}</div><div className="mt-4 flex flex-wrap gap-2">{event.meetingLink && <Button asChild><a href={event.meetingLink} target="_blank" rel="noreferrer">Join pod meeting<ExternalLink className="ml-2 h-4 w-4" /></a></Button>}<CalendarActions event={calendarEvent} eventPageUrl={`${window.location.origin}/lms/mentorship`} testId={`button-add-pod-meeting-${event.id}-to-calendar`} /></div></CardContent></Card>;
+              })}</div>}
           </div>
           <div className="space-y-4">
             <h2 className="text-xl font-bold">Pod work</h2>
