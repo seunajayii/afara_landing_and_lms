@@ -35,11 +35,17 @@ const monthlyBase = {
 
 const monthlySubtotal = Object.values(monthlyBase).reduce((sum, value) => sum + value, 0);
 const annualRecurring = monthlySubtotal * 12;
-const migrationAllowance = 1200;
+const migrationAllowance = 1110;
 const septemberTokenUsage = 300;
 const octoberTokenUsage = 300;
 const twoMonthTokenUsage = septemberTokenUsage + octoberTokenUsage;
 const firstYearTotal = annualRecurring + migrationAllowance + twoMonthTokenUsage;
+
+const migrationBreakdown = [
+  ["Railway launch setup", 350],
+  ["Database + storage transfer", 400],
+  ["Integrations + verification", 360],
+] as const;
 
 const options = [
   {
@@ -134,7 +140,7 @@ export function CostSheet() {
             </div>
             <p className="mt-2 text-sm text-[#c6dbc9]">Approximately {naira(firstYearTotal)} at the indicative planning rate.</p>
             <div className="mt-7 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl bg-white/8 p-4"><p className="text-xs text-[#b8d0bd]">One-time migration</p><p className="mt-1 text-2xl font-semibold">{money(migrationAllowance)}</p></div>
+              <div className="rounded-xl bg-white/8 p-4"><p className="text-xs text-[#b8d0bd]">One-time setup</p><p className="mt-1 text-2xl font-semibold">{money(migrationAllowance)}</p></div>
               <div className="rounded-xl bg-white/8 p-4"><p className="text-xs text-[#b8d0bd]">Platform / month</p><p className="mt-1 text-2xl font-semibold">{money(monthlySubtotal)}</p></div>
               <div className="rounded-xl bg-[#dcecce] p-4 text-[#204b39]"><p className="text-xs text-[#557866]">Sep + Oct tokens</p><p className="mt-1 text-2xl font-semibold">{money(twoMonthTokenUsage)}</p></div>
             </div>
@@ -180,7 +186,16 @@ export function CostSheet() {
           </div>
           <div className="mt-4 flex items-start gap-3 rounded-xl bg-[#faf2df] px-4 py-3 text-xs leading-5 text-[#765f35]">
             <Info size={16} className="mt-0.5 shrink-0" />
-              The {money(migrationAllowance)} one-time migration allowance covers the ten-day move, environment setup, database migration, storage cutover, callback updates, verification, and rollback preparation. The existing maintenance retainer is intentionally excluded. AI/token usage is included only for September and October.
+            The existing maintenance retainer is intentionally excluded. One-time setup is shown as practical launch activities below rather than as a separate vendor charge. AI/token usage is included only for September and October.
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {migrationBreakdown.map(([label, amount]) => (
+              <div key={label} className="rounded-xl border border-[#dce5dd] bg-[#f8fbf8] p-4">
+                <p className="text-xs font-semibold text-[#486555]">{label}</p>
+                <p className="mt-2 text-xl font-semibold">{money(amount)}</p>
+                <p className="mt-1 text-[11px] leading-4 text-[#718477]">one-time launch activity</p>
+              </div>
+            ))}
           </div>
         </section>
 
