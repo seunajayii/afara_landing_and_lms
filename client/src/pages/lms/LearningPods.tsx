@@ -7,8 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle2, ExternalLink, Loader2, MessageSquare, Send, Users } from "lucide-react";
+import { CalendarDays, CheckCircle2, ExternalLink, Loader2, MessageSquare, Plus, Send, Trash2, Users } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
 type Person = { id: string; firstName: string; lastName: string; email?: string; role?: string };
@@ -39,6 +40,19 @@ type Pod = {
   mentor?: Person | null;
   members: Person[];
   assignments: Assignment[];
+  events: PodEvent[];
+  canManageEvents: boolean;
+};
+type PodEvent = {
+  id: string;
+  title: string;
+  description?: string | null;
+  startTime: string;
+  endTime?: string | null;
+  meetingPlatform?: string | null;
+  meetingLink?: string | null;
+  host?: Person | null;
+  facilitators?: Person[];
 };
 
 function dateLabel(value?: string | null) {
@@ -162,13 +176,51 @@ export function LearningPodSummary() {
 }
 
 export default function LearningPods() {
+  const { toast } = useToast();
   const { user } = useAuth();
   const [selectedPodId, setSelectedPodId] = useState<string | null>(null);
+  const [eventDialogOpen, setEventDialogOpen] = useState(false);
+  const [eventDraft, setEventDraft] = useState({
+    title: "", description: "", startTime: "", endTime: "", durationMinutes: 60, meetingPlatform: "Zoom", meetingLink: "",
+  });
   const { data: pods = [], isLoading } = useQuery<Pod[]>({
     queryKey: ["/api/learning-pods"],
   });
   const selectedPod = useMemo(() => pods.find((pod) => pod.id === (selectedPodId || pods[0]?.id)), [pods, selectedPodId]);
-  const isStaff = user?.role === "mentor" || user?.role === "admin" || user?.role === "superadmin";
+  const isStaff = user?.role === "mentor" || user?.role === "facilitator" || user?.role === "admin" || user?.role === "superadmin";
+  const eventMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedPod) throw new Error("Select a pod first.");
+      const response = await apiRequest("POST", `/api/learning-pods/${selectedPod.id}/events`, {
+        title: eventDraft.title,
+        description: eventDraft.description || null,
+        startTime: new Date(eventDraft.startTime).toISOString(),
+        endTime: eventDraft.endTime ? new Date(eventDraft.endTime).toISOString() : null,
+        durationMinutes: eventDraft.durationMinutes,
+        meetingPlatform: eventDraft.meetingPlatform || "Zoom",
+        meetingLink: eventDraft.meetingLink || null,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/learning-pods"] });
+      setEventDialogOpen(false);
+      setEventDraft({ title: "", description: "", startTime: "", endTime: "", durationMinutes: 60, meetingPlatform: "Zoom", meetingLink: "" });
+      toast({ title: "Pod meeting scheduled", description: "Everyone in this pod can now see the meeting." });
+    },
+    onError: (error) => toast({ title: "Could not schedule pod meeting", description: error instanceof Error ? error.message.replace(/^\d+:\s*/, "") : "Try again.", variant: "destructive" }),
+  });
+  const deleteEventMutation = useMutation({
+    mutationFn: async (eventId: string) => {
+      if (!selectedPod) return;
+      await apiRequest("DELETE", `/api/learning-pods/${selectedPod.id}/events/${eventId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/learning-pods"] });
+      toast({ title: "Pod meeting removed" });
+    },
+    onError: () => toast({ title: "Could not remove pod meeting", variant: "destructive" }),
+  });
 
   if (isLoading) return <Card><CardContent className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /></CardContent></Card>;
   if (!selectedPod) return <Card><CardContent className="py-12 text-center space-y-2"><Users className="h-8 w-8 mx-auto text-muted-foreground" /><h2 className="font-semibold">No learning pod assigned yet</h2><p className="text-sm text-muted-foreground">An administrator will add you to a pod after your cohort placement is confirmed.</p></CardContent></Card>;
@@ -187,6 +239,11 @@ export default function LearningPods() {
         <div className="space-y-4">
           <Card><CardHeader><CardTitle>{selectedPod.name}</CardTitle><CardDescription>{selectedPod.description || "Work together, learn from one another, and ask your mentor for support."}</CardDescription></CardHeader><CardContent><div className="flex flex-wrap gap-2">{selectedPod.members.map((member) => <Badge key={member.id} variant="secondary">{member.firstName} {member.lastName}</Badge>)}</div></CardContent></Card>
           <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold">Pod meetings</h2><p className="text-sm text-muted-foreground">Private live sessions for this learning pod.</p></div>{selectedPod.canManageEvents && <Button onClick={() => setEventDialogOpen(true)}><Plus className="mr-2 h-4 w-4" />Schedule meeting</Button>}</div>
+            {selectedPod.events.length === 0 ? <Card><CardContent className="py-10 text-center"><CalendarDays className="mx-auto mb-3 h-8 w-8 text-muted-foreground" /><p className="font-medium">No pod meetings scheduled</p><p className="mt-1 text-sm text-muted-foreground">{selectedPod.canManageEvents ? "Schedule a time for this pod to meet." : "Your mentor or facilitator will add meetings here."}</p></CardContent></Card> :
+              <div className="grid gap-4">{selectedPod.events.map((event) => <Card key={event.id} className="overflow-hidden"><CardContent className="p-5"><div className="flex items-start justify-between gap-4"><div className="flex min-w-0 gap-3"><div className="mt-0.5 rounded-lg bg-primary/10 p-2 text-primary"><CalendarDays className="h-5 w-5" /></div><div><h3 className="font-semibold">{event.title}</h3><p className="mt-1 text-sm font-medium">{dateLabel(event.startTime)}</p>{event.description && <p className="mt-2 text-sm text-muted-foreground">{event.description}</p>}<div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span>{event.meetingPlatform || "Online meeting"}</span>{event.host && <span>Set up by {event.host.firstName} {event.host.lastName}</span>}</div></div></div>{selectedPod.canManageEvents && <Button variant="ghost" size="icon" onClick={() => deleteEventMutation.mutate(event.id)} aria-label={`Remove ${event.title}`}><Trash2 className="h-4 w-4 text-destructive" /></Button>}</div>{event.meetingLink && <Button asChild className="mt-4"><a href={event.meetingLink} target="_blank" rel="noreferrer">Join pod meeting<ExternalLink className="ml-2 h-4 w-4" /></a></Button>}</CardContent></Card>)}</div>}
+          </div>
+          <div className="space-y-4">
             <h2 className="text-xl font-bold">Pod work</h2>
             {selectedPod.assignments.length === 0 ? <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Your mentor or administrator has not added any assignments yet.</CardContent></Card> : selectedPod.assignments.map((assignment) => <PodAssignment key={assignment.id} pod={selectedPod} assignment={assignment} user={user as Person} isStaff={isStaff} />)}
           </div>
@@ -196,6 +253,7 @@ export default function LearningPods() {
           <Card className="bg-muted/40"><CardContent className="pt-6 text-sm text-muted-foreground">Need private one-to-one support? The mentor directory and session tools are still available below this pod workspace.</CardContent></Card>
         </aside>
       </div>
+      <Dialog open={eventDialogOpen} onOpenChange={setEventDialogOpen}><DialogContent className="max-w-xl"><DialogHeader><DialogTitle>Schedule a pod meeting</DialogTitle><DialogDescription>This meeting is private to {selectedPod.name}. Leave the meeting link blank to create it with the connected Zoom account.</DialogDescription></DialogHeader><div className="space-y-4"><div><Label>Meeting title</Label><Input value={eventDraft.title} onChange={(event) => setEventDraft({ ...eventDraft, title: event.target.value })} placeholder="Weekly pod check-in" /></div><div><Label>Description (optional)</Label><Textarea value={eventDraft.description} onChange={(event) => setEventDraft({ ...eventDraft, description: event.target.value })} placeholder="Topics or preparation for the meeting…" /></div><div className="grid gap-4 sm:grid-cols-2"><div><Label>Starts</Label><Input type="datetime-local" value={eventDraft.startTime} onChange={(event) => setEventDraft({ ...eventDraft, startTime: event.target.value })} /></div><div><Label>Ends (optional)</Label><Input type="datetime-local" value={eventDraft.endTime} onChange={(event) => setEventDraft({ ...eventDraft, endTime: event.target.value })} /></div></div><div className="grid gap-4 sm:grid-cols-2"><div><Label>Duration (minutes)</Label><Input type="number" min="1" value={eventDraft.durationMinutes} onChange={(event) => setEventDraft({ ...eventDraft, durationMinutes: Number(event.target.value) || 60 })} /></div><div><Label>Platform</Label><Input value={eventDraft.meetingPlatform} onChange={(event) => setEventDraft({ ...eventDraft, meetingPlatform: event.target.value })} /></div></div><div><Label>Meeting link (optional)</Label><Input type="url" value={eventDraft.meetingLink} onChange={(event) => setEventDraft({ ...eventDraft, meetingLink: event.target.value })} placeholder="Leave blank for Zoom auto-creation" /></div></div><DialogFooter><Button variant="outline" onClick={() => setEventDialogOpen(false)}>Cancel</Button><Button disabled={!eventDraft.title.trim() || !eventDraft.startTime || eventMutation.isPending} onClick={() => eventMutation.mutate()}>{eventMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Schedule meeting</Button></DialogFooter></DialogContent></Dialog>
     </div>
   );
 }

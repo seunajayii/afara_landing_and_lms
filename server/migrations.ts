@@ -121,6 +121,10 @@ export async function runSchemaMigrations() {
       )
     `);
     await db.execute(sql`
+      ALTER TABLE events
+        ADD COLUMN IF NOT EXISTS pod_id VARCHAR REFERENCES learning_pods(id) ON DELETE CASCADE
+    `);
+    await db.execute(sql`
       CREATE TABLE IF NOT EXISTS resource_file_uploads (
         id VARCHAR PRIMARY KEY,
         contents BYTEA NOT NULL,

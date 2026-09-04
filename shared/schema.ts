@@ -219,6 +219,9 @@ export const events = pgTable("events", {
   description: text("description"),
   eventType: eventTypeEnum("event_type").notNull(),
   hostId: varchar("host_id").references(() => users.id),
+  // Pod events are private to one learning pod. This remains an ID here
+  // because learningPods is declared later in the schema.
+  podId: varchar("pod_id"),
   thumbnailUrl: text("thumbnail_url"),
   startTime: timestamp("start_time").notNull(),
   endTime: timestamp("end_time"),

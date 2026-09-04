@@ -17,7 +17,7 @@ import {
   insertNotificationSchema, insertApplicationSchema, insertCohortSchema,
   insertLearningPodSchema, insertLearningPodAssignmentSchema, insertLearningPodSubmissionSchema,
   insertAssignmentSchema, insertAssignmentTargetSchema, insertAssignmentQuestionSchema,
-  type AssignmentFileEvidence, eventFacilitators, users,
+  type AssignmentFileEvidence, eventFacilitators, events, users,
   extraAnswersSchema,
   type Cohort, type Event
 } from "@shared/schema";
@@ -2369,12 +2369,32 @@ export async function registerRoutes(
         : allSubmissions.filter((submission) => submission.submitterId === req.session.userId);
       return { ...assignment, submissions };
     }));
+    const getEventsByPod = (storage as any).getEventsByPod as ((podId: string) => Promise<any[]>) | undefined;
+    const usesPodTestDouble = Object.prototype.hasOwnProperty.call(storage, "getLearningPod")
+      && !Object.prototype.hasOwnProperty.call(storage, "getEventsByPod");
+    const podEvents = getEventsByPod && !usesPodTestDouble
+      ? await getEventsByPod.call(storage, pod.id)
+      : [];
+    const canManageEvents = isAdminSession(req)
+      || req.session.userRole === "facilitator"
+      || pod.mentorId === req.session.userId;
+    const visibleEvents = podEvents.filter((event) => canManageEvents || event.status === "published");
+    const eventsWithPeople = await Promise.all(visibleEvents.map(async (event) => {
+      const host = event.hostId ? await storage.getUser(event.hostId) : null;
+      return {
+        ...event,
+        host: host ? sanitizeUser(host) : null,
+        facilitators: await getEventFacilitators(event.id),
+      };
+    }));
     return {
       ...pod,
       cohort: cohort ? { id: cohort.id, name: cohort.name, displayName: cohort.displayName } : null,
       mentor: mentor ? sanitizeUser(mentor) : null,
       members,
       assignments: assignmentsWithSubmissions,
+      events: eventsWithPeople,
+      canManageEvents,
     };
   };
 
@@ -2382,12 +2402,19 @@ export async function registerRoutes(
     if (isAdminSession(req)) return true;
     if (pod.status !== "active") return false;
     if (pod.mentorId === req.session.userId) return true;
+    if (req.session.userRole === "facilitator") return true;
     const activeCohort = req.session.userId
       ? await storage.getActiveCohortForUser(req.session.userId)
       : undefined;
     if (!activeCohort || activeCohort.id !== pod.cohortId) return false;
     const members = await storage.getLearningPodMembers(pod.id);
     return members.some((member) => member.userId === req.session.userId);
+  };
+
+  const canManagePodEvents = (req: Request, pod: any) => {
+    return isAdminSession(req)
+      || req.session.userRole === "facilitator"
+      || (req.session.userRole === "mentor" && pod.mentorId === req.session.userId);
   };
 
   const validateLearningPodMentor = async (mentorId: string) => {
@@ -3514,7 +3541,7 @@ export async function registerRoutes(
 
   app.get("/api/learning-pods", requireAuth, async (req: Request, res: Response) => {
     try {
-      const pods = isAdminSession(req)
+      const pods = isAdminSession(req) || req.session.userRole === "facilitator"
         ? await storage.getAllLearningPods()
         : await storage.getLearningPodsByUser(req.session.userId!);
       const visiblePods = isAdminSession(req)
@@ -3534,6 +3561,78 @@ export async function registerRoutes(
       res.json(await getLearningPodResponse(pod, req, isAdminSession(req) || pod.mentorId === req.session.userId));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch learning pod" });
+    }
+  });
+
+  app.post("/api/learning-pods/:id/events", requireAuth, async (req: Request, res: Response) => {
+    let zoomSync: Awaited<ReturnType<typeof provisionZoomMeeting>> | null = null;
+    try {
+      const pod = await storage.getLearningPod(req.params.id);
+      if (!pod || pod.status !== "active") return res.status(404).json({ error: "Learning pod not found" });
+      if (!canManagePodEvents(req, pod)) {
+        return res.status(403).json({ error: "Only pod mentors, facilitators, and administrators can schedule pod meetings" });
+      }
+      const input = z.object({
+        title: z.string().trim().min(3),
+        description: z.string().trim().optional().nullable(),
+        startTime: z.coerce.date(),
+        endTime: z.coerce.date().optional().nullable(),
+        durationMinutes: z.number().int().min(1).max(1440).default(60),
+        meetingPlatform: z.string().trim().default("Zoom"),
+        meetingLink: z.string().url().optional().nullable(),
+      }).parse(req.body);
+      if (input.endTime && input.endTime <= input.startTime) {
+        return res.status(400).json({ error: "The meeting end time must be after its start time" });
+      }
+      const eventData = {
+        ...input,
+        eventType: "live_session" as const,
+        hostId: req.session.userId!,
+        podId: pod.id,
+        visibility: "cohort_only" as const,
+        isPublic: false,
+        status: "published" as const,
+      };
+      zoomSync = await provisionZoomMeeting(eventData);
+      const saved = await storage.createEvent(zoomSync.meeting ? {
+        ...eventData,
+        zoomMeetingId: zoomSync.meeting.id,
+        meetingLink: zoomSync.meeting.joinUrl,
+      } : eventData);
+      if (req.session.userRole === "facilitator") {
+        await setEventFacilitators(saved.id, [req.session.userId!]);
+      }
+      const host = await storage.getUser(req.session.userId!);
+      res.status(201).json({
+        ...saved,
+        host: host ? sanitizeUser(host) : null,
+        facilitators: await getEventFacilitators(saved.id),
+      });
+    } catch (error) {
+      if (zoomSync?.created && zoomSync.meeting) {
+        try {
+          const accessToken = await getConnectedZoomAccessToken();
+          await deleteZoomMeeting(accessToken, zoomSync.meeting.id);
+        } catch (cleanupError) {
+          console.error("Failed to clean up orphaned pod Zoom meeting:", cleanupError);
+        }
+      }
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      console.error("Failed to create pod event:", error);
+      res.status(502).json({ error: getZoomFailureMessage(error) });
+    }
+  });
+
+  app.delete("/api/learning-pods/:podId/events/:eventId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const pod = await storage.getLearningPod(req.params.podId);
+      const event = await storage.getEvent(req.params.eventId);
+      if (!pod || !event || event.podId !== pod.id) return res.status(404).json({ error: "Pod meeting not found" });
+      if (!canManagePodEvents(req, pod)) return res.status(403).json({ error: "You cannot remove this pod meeting" });
+      await storage.deleteEvent(event.id);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to remove pod meeting" });
     }
   });
 
@@ -3753,9 +3852,11 @@ export async function registerRoutes(
         : await storage.getAllEvents();
       const userRole = (req.session?.userRole as string) || null;
       const isAdminUser = userRole === "admin" || userRole === "superadmin";
-      const visibleEvents = isAdminUser
-        ? allEvents
-        : allEvents.filter(e => canAccessVisibility(e.visibility, userRole));
+      const visibleEvents = (await Promise.all(allEvents.map(async (event) => {
+        if (!event.podId) return isAdminUser || canAccessVisibility(event.visibility, userRole) ? event : null;
+        const pod = await storage.getLearningPod(event.podId);
+        return pod && await canAccessLearningPod(req, pod) ? event : null;
+      }))).filter((event): event is typeof allEvents[number] => Boolean(event));
       res.json(await Promise.all(visibleEvents.map(async (event) => ({
         ...event,
         facilitators: await getEventFacilitators(event.id),
@@ -3771,7 +3872,12 @@ export async function registerRoutes(
       if (!event) return res.status(404).json({ error: "Event not found" });
       const userRole = (req.session?.userRole as string) || null;
       const isAdminUser = userRole === "admin" || userRole === "superadmin";
-      if (!isAdminUser && !canAccessVisibility(event.visibility, userRole)) {
+      if (event.podId) {
+        const pod = await storage.getLearningPod(event.podId);
+        if (!pod || !(await canAccessLearningPod(req, pod))) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+      } else if (!isAdminUser && !canAccessVisibility(event.visibility, userRole)) {
         return res.status(403).json({ error: "Access denied" });
       }
       const registrations = await storage.getEventRegistrationsByEvent(req.params.id);

@@ -14,3 +14,9 @@ Pod submission request validation must treat assignment, pod, and submitter iden
 **Why:** Requiring those fields in the body rejects valid submissions, while accepting client-selected values would permit ownership and cross-pod confusion.
 
 **How to apply:** Omit server-derived identifiers from learner submission payload schemas and set them from the matched assignment, pod, and authenticated participant.
+
+Pod meetings are private events linked directly to one active pod. Administrators, facilitators, and the pod's assigned mentor may schedule them; participants can only discover or join meetings for their own active pod.
+
+**Why:** Pod collaboration needs the same Zoom and event infrastructure as cohort classes without exposing small-group schedules or meeting links to the rest of the cohort.
+
+**How to apply:** Filter pod events through server-authoritative pod access, show them in the pod workspace, keep them out of unrelated users' event feeds, and use the event record as the source of truth for meeting details.

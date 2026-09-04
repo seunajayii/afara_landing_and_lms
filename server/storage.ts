@@ -160,6 +160,7 @@ export interface IStorage {
   
   getEvent(id: string): Promise<Event | undefined>;
   getAllEvents(): Promise<Event[]>;
+  getEventsByPod(podId: string): Promise<Event[]>;
   getUpcomingEvents(): Promise<Event[]>;
   createEvent(event: InsertEvent): Promise<Event>;
   updateEvent(id: string, data: Partial<InsertEvent>): Promise<Event | undefined>;
@@ -745,6 +746,12 @@ export class DatabaseStorage implements IStorage {
 
   async getAllEvents(): Promise<Event[]> {
     return db.select().from(events).orderBy(desc(events.startTime));
+  }
+
+  async getEventsByPod(podId: string): Promise<Event[]> {
+    return db.select().from(events)
+      .where(eq(events.podId, podId))
+      .orderBy(asc(events.startTime));
   }
 
   async getUpcomingEvents(): Promise<Event[]> {
