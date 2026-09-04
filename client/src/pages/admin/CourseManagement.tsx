@@ -17,11 +17,13 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import {
   ArrowDown, ArrowLeft, ArrowUp, BookOpen, Clock, FileText, GripVertical,
-  Loader2, Pencil, Plus, Search, Settings2, Trash2, UploadCloud, Video, X,
+  CalendarDays, Loader2, Pencil, Plus, Search, Settings2, Trash2, UploadCloud, Users, Video, X,
 } from "lucide-react";
-import type { Cohort, Course, Lesson, Module, Resource } from "@shared/schema";
+import type { Cohort, Course, Event, Lesson, Module, Resource } from "@shared/schema";
 
-type LessonWithResource = Lesson & { resource?: Resource | null };
+type EventFacilitator = { id: string; firstName: string; lastName: string; role: string };
+type CourseEvent = Event & { facilitators?: EventFacilitator[] };
+type LessonWithResource = Lesson & { resource?: Resource | null; event?: CourseEvent | null };
 type ModuleWithLessons = Module & { lessons: LessonWithResource[] };
 type CourseWithCurriculum = Course & {
   modules: ModuleWithLessons[];
@@ -41,6 +43,12 @@ function formatDuration(minutes: number | null | undefined) {
   if (!minutes) return "Self-paced";
   if (minutes < 60) return `${minutes} min`;
   return `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}`;
+}
+
+function toDateTimeLocal(value: string | Date | null | undefined) {
+  if (!value) return "";
+  const date = new Date(value);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 
 function statusBadge(status: string | null) {
@@ -402,11 +410,13 @@ function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () =
   const [lessonDraft, setLessonDraft] = useState({
     title: "", description: "", lessonType: "video", status: "draft", durationMinutes: 0,
     content: "", source: "resource", resourceId: "", youtubeValue: "", videoId: "", videoDurationSeconds: 0,
+    eventId: "", eventStartTime: "", eventEndTime: "", meetingPlatform: "Zoom", meetingLink: "", facilitatorIds: [] as string[],
   });
   const [settingsDraft, setSettingsDraft] = useState<typeof initialCourse>(initialCourse);
 
   const courseQuery = useQuery<CourseWithCurriculum>({ queryKey: ["/api/courses", courseId] });
   const resourcesQuery = useQuery<Resource[]>({ queryKey: ["/api/resources"] });
+  const facilitatorsQuery = useQuery<Array<{ id: string; firstName: string; lastName: string }>>({ queryKey: ["/api/facilitators"] });
   const course = courseQuery.data;
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/courses"] });
@@ -421,6 +431,28 @@ function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () =
   const lessonMutation = useMutation({
     mutationFn: async () => {
       if (!lessonDialog) return;
+      let eventId = lessonDraft.lessonType === "live_session" ? lessonDraft.eventId : "";
+      if (lessonDraft.lessonType === "live_session") {
+        const eventPayload = {
+          title: lessonDraft.title,
+          description: lessonDraft.description || null,
+          eventType: "live_session",
+          startTime: new Date(lessonDraft.eventStartTime).toISOString(),
+          endTime: lessonDraft.eventEndTime ? new Date(lessonDraft.eventEndTime).toISOString() : undefined,
+          durationMinutes: lessonDraft.durationMinutes || 60,
+          meetingPlatform: lessonDraft.meetingPlatform || "Zoom",
+          meetingLink: lessonDraft.meetingLink || undefined,
+          visibility: "community",
+          isPublic: false,
+          status: "published",
+          facilitatorIds: lessonDraft.facilitatorIds,
+        };
+        const response = eventId
+          ? await apiRequest("PATCH", `/api/events/${eventId}`, eventPayload)
+          : await apiRequest("POST", "/api/events", eventPayload);
+        const savedEvent = await response.json();
+        eventId = savedEvent.id;
+      }
       const payload = {
         moduleId: lessonDialog.moduleId, title: lessonDraft.title, description: lessonDraft.description || null,
         lessonType: lessonDraft.lessonType, status: lessonDraft.status, durationMinutes: lessonDraft.durationMinutes || null,
@@ -431,6 +463,7 @@ function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () =
         videoId: lessonDraft.lessonType === "video" && lessonDraft.source === "youtube" ? lessonDraft.videoId : null,
         videoDurationSeconds: lessonDraft.videoDurationSeconds || null,
         downloadableUrl: null,
+        eventId: eventId || null,
         orderIndex: lessonDialog.lesson?.orderIndex ?? (course?.modules.find((module) => module.id === lessonDialog.moduleId)?.lessons.length || 0),
       };
       return lessonDialog.lesson
@@ -453,6 +486,10 @@ function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () =
       status: lesson?.status || "draft", durationMinutes: lesson?.durationMinutes || 0, content: lesson?.content || "",
       source: lesson?.resourceId ? "resource" : "youtube", resourceId: lesson?.resourceId || "",
       youtubeValue: lesson?.videoUrl || "", videoId: lesson?.videoId || "", videoDurationSeconds: lesson?.videoDurationSeconds || 0,
+      eventId: lesson?.eventId || "", eventStartTime: toDateTimeLocal(lesson?.event?.startTime),
+      eventEndTime: toDateTimeLocal(lesson?.event?.endTime),
+      meetingPlatform: lesson?.event?.meetingPlatform || "Zoom", meetingLink: lesson?.event?.meetingLink || "",
+      facilitatorIds: lesson?.event?.facilitators?.map((facilitator) => facilitator.id) || [],
     });
   }
   async function resolveYouTube() {
@@ -541,8 +578,8 @@ function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () =
                 <div className="divide-y">{module.lessons.map((lesson, lessonIndex) => (
                   <div key={lesson.id} className="flex flex-wrap items-center gap-3 p-4">
                     <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    {lesson.lessonType === "video" ? <Video className="h-4 w-4 text-primary" /> : <FileText className="h-4 w-4 text-primary" />}
-                    <div className="min-w-[180px] flex-1"><p className="font-medium">{lesson.title}</p><p className="text-xs text-muted-foreground">{lesson.resource?.title || (lesson.videoId ? "YouTube video" : lesson.lessonType)} · {formatDuration(lesson.durationMinutes)}</p></div>
+                    {lesson.lessonType === "video" ? <Video className="h-4 w-4 text-primary" /> : lesson.lessonType === "live_session" ? <CalendarDays className="h-4 w-4 text-primary" /> : <FileText className="h-4 w-4 text-primary" />}
+                    <div className="min-w-[180px] flex-1"><p className="font-medium">{lesson.title}</p><p className="text-xs text-muted-foreground">{lesson.lessonType === "live_session" && lesson.event ? `${new Date(lesson.event.startTime).toLocaleString()} · ${lesson.event.facilitators?.map((f) => `${f.firstName} ${f.lastName}`).join(", ") || "Facilitator pending"}` : `${lesson.resource?.title || (lesson.videoId ? "YouTube video" : lesson.lessonType)} · ${formatDuration(lesson.durationMinutes)}`}</p></div>
                     {statusBadge(lesson.status)}
                     <div className="flex">
                       <Button variant="ghost" size="icon" disabled={lessonIndex === 0} onClick={() => reorder("lessons", lesson, -1, module.id)} aria-label="Move lesson up"><ArrowUp className="h-4 w-4" /></Button>
@@ -568,18 +605,24 @@ function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () =
             <div><Label>Lesson title</Label><Input value={lessonDraft.title} onChange={(e) => setLessonDraft({ ...lessonDraft, title: e.target.value })} /></div>
             <div><Label>Description (optional)</Label><Textarea value={lessonDraft.description} onChange={(e) => setLessonDraft({ ...lessonDraft, description: e.target.value })} /></div>
             <div className="grid gap-4 sm:grid-cols-3">
-              <div><Label>Lesson type</Label><Select value={lessonDraft.lessonType} onValueChange={(lessonType) => setLessonDraft({ ...lessonDraft, lessonType, source: lessonType === "video" ? lessonDraft.source : "resource", resourceId: "" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="video">Video</SelectItem><SelectItem value="downloadable">PDF / download</SelectItem><SelectItem value="text">Written lesson</SelectItem></SelectContent></Select></div>
+              <div><Label>Lesson type</Label><Select value={lessonDraft.lessonType} onValueChange={(lessonType) => setLessonDraft({ ...lessonDraft, lessonType, source: lessonType === "video" ? lessonDraft.source : "resource", resourceId: "" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="video">Video</SelectItem><SelectItem value="downloadable">PDF / download</SelectItem><SelectItem value="text">Written lesson</SelectItem><SelectItem value="live_session">Live class</SelectItem></SelectContent></Select></div>
               <div><Label>Duration (minutes)</Label><Input type="number" min="0" value={lessonDraft.durationMinutes || ""} onChange={(e) => setLessonDraft({ ...lessonDraft, durationMinutes: Number(e.target.value) || 0 })} /></div>
               <div><Label>Status</Label><Select value={lessonDraft.status} onValueChange={(status) => setLessonDraft({ ...lessonDraft, status })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="draft">Draft</SelectItem><SelectItem value="published">Published</SelectItem></SelectContent></Select></div>
             </div>
             {lessonDraft.lessonType === "text" && <div><Label>Lesson content</Label><Textarea rows={7} value={lessonDraft.content} onChange={(e) => setLessonDraft({ ...lessonDraft, content: e.target.value })} placeholder="Write the learning content here" /></div>}
-            {lessonDraft.lessonType !== "text" && <>
+            {lessonDraft.lessonType === "live_session" && <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
+              <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-primary" /><div><p className="font-medium">Schedule this live class</p><p className="text-xs text-muted-foreground">This creates a connected event that also appears in the programme calendar.</p></div></div>
+              <div className="grid gap-4 sm:grid-cols-2"><div><Label>Starts</Label><Input type="datetime-local" value={lessonDraft.eventStartTime} onChange={(e) => setLessonDraft({ ...lessonDraft, eventStartTime: e.target.value })} /></div><div><Label>Ends (optional)</Label><Input type="datetime-local" value={lessonDraft.eventEndTime} onChange={(e) => setLessonDraft({ ...lessonDraft, eventEndTime: e.target.value })} /></div></div>
+              <div className="grid gap-4 sm:grid-cols-2"><div><Label>Platform</Label><Input value={lessonDraft.meetingPlatform} onChange={(e) => setLessonDraft({ ...lessonDraft, meetingPlatform: e.target.value })} placeholder="Zoom" /></div><div><Label>Meeting link (optional)</Label><Input value={lessonDraft.meetingLink} onChange={(e) => setLessonDraft({ ...lessonDraft, meetingLink: e.target.value })} placeholder="Leave blank to create with Zoom" /></div></div>
+              <div><Label className="flex items-center gap-2"><Users className="h-4 w-4" />Facilitators</Label><div className="mt-2 grid gap-2 sm:grid-cols-2">{(facilitatorsQuery.data || []).map((facilitator) => <label key={facilitator.id} className="flex items-center gap-2 rounded-md border p-3 text-sm"><Checkbox checked={lessonDraft.facilitatorIds.includes(facilitator.id)} onCheckedChange={(checked) => setLessonDraft({ ...lessonDraft, facilitatorIds: checked ? [...lessonDraft.facilitatorIds, facilitator.id] : lessonDraft.facilitatorIds.filter((id) => id !== facilitator.id) })} /><span>{facilitator.firstName} {facilitator.lastName}</span></label>)}</div>{facilitatorsQuery.data?.length === 0 && <p className="mt-2 text-sm text-muted-foreground">Create facilitator accounts before scheduling this class.</p>}</div>
+            </div>}
+            {lessonDraft.lessonType !== "text" && lessonDraft.lessonType !== "live_session" && <>
               {lessonDraft.lessonType === "video" && <div><Label>Content source</Label><Select value={lessonDraft.source} onValueChange={(source) => setLessonDraft({ ...lessonDraft, source, resourceId: "", youtubeValue: "", videoId: "" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="resource">Reusable video resource</SelectItem><SelectItem value="youtube">YouTube URL / ID</SelectItem></SelectContent></Select></div>}
               {lessonDraft.lessonType === "video" && lessonDraft.source === "youtube" ? <div className="rounded-md border p-4"><Label>YouTube URL or video ID</Label><div className="mt-2 flex gap-2"><Input value={lessonDraft.youtubeValue} onChange={(e) => setLessonDraft({ ...lessonDraft, youtubeValue: e.target.value, videoId: "" })} placeholder="https://youtube.com/watch?v=…" /><Button type="button" variant="outline" onClick={resolveYouTube}>Validate</Button></div><p className="mt-2 text-xs text-muted-foreground">{lessonDraft.videoId ? `Validated video ID: ${lessonDraft.videoId}` : "Validate before publishing so learners receive a playable video."}</p></div> :
                 <div className="rounded-md border p-4"><Label>Attach a reusable {lessonDraft.lessonType === "video" ? "video" : "resource"}</Label><Select value={lessonDraft.resourceId || "none"} onValueChange={(resourceId) => setLessonDraft({ ...lessonDraft, resourceId: resourceId === "none" ? "" : resourceId })}><SelectTrigger className="mt-2"><SelectValue placeholder="Choose a resource" /></SelectTrigger><SelectContent><SelectItem value="none">Choose a resource</SelectItem>{resourceOptions.map((resource) => <SelectItem key={resource.id} value={resource.id}>{resource.title}{resource.status !== "published" ? " (draft)" : ""}</SelectItem>)}</SelectContent></Select>{lessonDraft.lessonType !== "video" ? <Button type="button" variant="outline" className="mt-3 w-full gap-2" onClick={() => setQuickResourceDialog(true)} data-testid="button-create-resource-from-lesson"><Plus className="h-4 w-4" />Create and attach a new resource</Button> : <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"><Video className="h-3.5 w-3.5" />Use a YouTube URL above or choose an existing protected video.</div>}</div>}
             </>}
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => setLessonDialog(null)}>Cancel</Button><Button disabled={!lessonDraft.title.trim() || lessonMutation.isPending} onClick={() => lessonMutation.mutate()}>{lessonMutation.isPending ? "Saving…" : "Save lesson"}</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setLessonDialog(null)}>Cancel</Button><Button disabled={!lessonDraft.title.trim() || lessonMutation.isPending || (lessonDraft.lessonType === "live_session" && (!lessonDraft.eventStartTime || lessonDraft.facilitatorIds.length === 0))} onClick={() => lessonMutation.mutate()}>{lessonMutation.isPending ? "Saving…" : "Save lesson"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 

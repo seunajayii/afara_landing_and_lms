@@ -12,3 +12,4 @@
 - [Email image delivery](email-image-delivery.md) — uploaded newsletter images stay private and are sent as inline CID attachments for client compatibility
 - [Postgres lock errors](postgres-lock-errors.md) — Drizzle may wrap provider error codes in a cause chain; inspect nested causes when mapping lock conflicts
 - [Participant progress reporting](progress-reporting-workflow.md) — use evidence and qualitative statuses across baseline, midpoint, and final reviews for individual, pod, and cohort reports
+- [Course live classes](course-live-classes.md) — scheduled classes are event-linked lessons; one event can list multiple facilitators and remains visible in the programme calendar

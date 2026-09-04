@@ -34,7 +34,7 @@ export const extraAnswersSchema = z.record(z.union([z.string(), z.boolean()])).d
 export type ExtraAnswers = z.infer<typeof extraAnswersSchema>;
 
 export const userRoleEnum = pgEnum("user_role", ["participant", "mentor", "facilitator", "admin", "superadmin", "community_member"]);
-export const lessonTypeEnum = pgEnum("lesson_type", ["video", "text", "quiz", "downloadable"]);
+export const lessonTypeEnum = pgEnum("lesson_type", ["video", "text", "quiz", "downloadable", "live_session"]);
 export const videoSourceEnum = pgEnum("video_source", ["youtube", "vimeo", "upload"]);
 export const progressStatusEnum = pgEnum("progress_status", ["not_started", "in_progress", "completed"]);
 export const sessionStatusEnum = pgEnum("session_status", ["scheduled", "completed", "cancelled"]);
@@ -159,6 +159,9 @@ export const lessons = pgTable("lessons", {
   // A lesson references a reusable resource instead of copying its file or
   // video provider data. Direct YouTube fields remain for existing lessons.
   resourceId: varchar("resource_id").references(() => resources.id),
+  // Kept as an ID rather than a schema-level reference to avoid a circular
+  // declaration: events can also point back to a recording lesson.
+  eventId: varchar("event_id"),
   durationMinutes: integer("duration_minutes"),
   status: contentStatusEnum("status").notNull().default("draft"),
   isFree: boolean("is_free").default(false),
@@ -234,6 +237,14 @@ export const events = pgTable("events", {
   status: contentStatusEnum("status").notNull().default("published"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+export const eventFacilitators = pgTable("event_facilitators", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventId: varchar("event_id").notNull().references(() => events.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+}, (table) => ({
+  eventUserUnique: uniqueIndex("event_facilitators_event_user_unique").on(table.eventId, table.userId),
+}));
 
 export const eventRegistrations = pgTable("event_registrations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -878,6 +889,7 @@ export type InsertMentorshipSession = z.infer<typeof insertMentorshipSessionSche
 export type MentorshipSession = typeof mentorshipSessions.$inferSelect;
 export type InsertEvent = z.infer<typeof insertEventSchema>;
 export type Event = typeof events.$inferSelect;
+export type EventFacilitator = typeof eventFacilitators.$inferSelect;
 export type InsertEventRegistration = z.infer<typeof insertEventRegistrationSchema>;
 export type EventRegistration = typeof eventRegistrations.$inferSelect;
 export type InsertResource = z.infer<typeof insertResourceSchema>;

@@ -101,6 +101,26 @@ export async function runSchemaMigrations() {
         ADD COLUMN IF NOT EXISTS video_file_size INTEGER
     `);
     await db.execute(sql`
+      DO $$
+      BEGIN
+        ALTER TYPE lesson_type ADD VALUE IF NOT EXISTS 'live_session';
+      EXCEPTION
+        WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    await db.execute(sql`
+      ALTER TABLE lessons
+        ADD COLUMN IF NOT EXISTS event_id VARCHAR REFERENCES events(id) ON DELETE SET NULL
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS event_facilitators (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        event_id VARCHAR NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+        user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE(event_id, user_id)
+      )
+    `);
+    await db.execute(sql`
       CREATE TABLE IF NOT EXISTS resource_file_uploads (
         id VARCHAR PRIMARY KEY,
         contents BYTEA NOT NULL,

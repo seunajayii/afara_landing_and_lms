@@ -17,7 +17,7 @@ import {
   insertNotificationSchema, insertApplicationSchema, insertCohortSchema,
   insertLearningPodSchema, insertLearningPodAssignmentSchema, insertLearningPodSubmissionSchema,
   insertAssignmentSchema, insertAssignmentTargetSchema, insertAssignmentQuestionSchema,
-  type AssignmentFileEvidence,
+  type AssignmentFileEvidence, eventFacilitators, users,
   extraAnswersSchema,
   type Cohort, type Event
 } from "@shared/schema";
@@ -58,7 +58,7 @@ import {
 } from "./youtube";
 import { isPrivateVideoStorageKey } from "./r2-storage";
 import { db } from "./db";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   isObjectStorageConfigured,
   isObjectStorageAvailable as checkObjectStorageAvailable,
@@ -1775,6 +1775,13 @@ export async function registerRoutes(
   });
 
   const getPublishedLessonIssue = async (lesson: any): Promise<string | null> => {
+    if (lesson.lessonType === "live_session") {
+      if (!lesson.eventId) return "Schedule and attach a live class before publishing.";
+      const event = await storage.getEvent(lesson.eventId);
+      if (!event) return "The scheduled live class no longer exists.";
+      if (event.status !== "published") return "Publish the scheduled event before publishing this lesson.";
+      return null;
+    }
     if (lesson.lessonType === "video") {
       if (lesson.resourceId) {
         const resource = await storage.getResource(lesson.resourceId);
@@ -1830,6 +1837,28 @@ export async function registerRoutes(
     return null;
   };
 
+  const getEventFacilitators = async (eventId: string) => {
+    return db.select({
+      id: users.id,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      role: users.role,
+    })
+      .from(eventFacilitators)
+      .innerJoin(users, eq(eventFacilitators.userId, users.id))
+      .where(eq(eventFacilitators.eventId, eventId));
+  };
+
+  const setEventFacilitators = async (eventId: string, facilitatorIds: string[]) => {
+    const uniqueIds = Array.from(new Set(facilitatorIds));
+    await db.transaction(async (tx) => {
+      await tx.delete(eventFacilitators).where(eq(eventFacilitators.eventId, eventId));
+      if (uniqueIds.length > 0) {
+        await tx.insert(eventFacilitators).values(uniqueIds.map((userId) => ({ eventId, userId })));
+      }
+    });
+  };
+
   const getCourseResponse = async (course: any, admin: boolean, userRole: string | null) => {
     const courseModules = await storage.getModulesByCourse(course.id);
     let calculatedDurationMinutes = 0;
@@ -1839,6 +1868,8 @@ export async function registerRoutes(
       const visibleLessons = admin ? allLessons : allLessons.filter((lesson) => lesson.status === "published");
       const lessonsWithResources = await Promise.all(visibleLessons.map(async (lesson) => {
         const resource = lesson.resourceId ? await storage.getResource(lesson.resourceId) : null;
+        const event = lesson.eventId ? await storage.getEvent(lesson.eventId) : null;
+        const facilitators = event ? await getEventFacilitators(event.id) : [];
         const canUseResource = !resource || (
           resource.status === "published" &&
           canAccessVisibility(resource.visibility, admin ? "admin" : userRole)
@@ -1846,6 +1877,7 @@ export async function registerRoutes(
         return {
           ...lesson,
           resource: resource && canUseResource ? toResourceResponse(resource, admin) : null,
+          event: event ? { ...event, facilitators } : null,
           contentAvailable: Boolean(!lesson.resourceId || canUseResource),
         };
       }));
@@ -3724,7 +3756,10 @@ export async function registerRoutes(
       const visibleEvents = isAdminUser
         ? allEvents
         : allEvents.filter(e => canAccessVisibility(e.visibility, userRole));
-      res.json(visibleEvents);
+      res.json(await Promise.all(visibleEvents.map(async (event) => ({
+        ...event,
+        facilitators: await getEventFacilitators(event.id),
+      }))));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch events" });
     }
@@ -3740,7 +3775,7 @@ export async function registerRoutes(
         return res.status(403).json({ error: "Access denied" });
       }
       const registrations = await storage.getEventRegistrationsByEvent(req.params.id);
-      res.json({ ...event, registrations });
+      res.json({ ...event, registrations, facilitators: await getEventFacilitators(event.id) });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch event" });
     }
@@ -3750,6 +3785,10 @@ export async function registerRoutes(
     try {
       // Convert datetime-local strings to Date objects
       const body = { ...req.body };
+      const facilitatorIds = body.facilitatorIds === undefined
+        ? null
+        : z.array(z.string().uuid()).parse(body.facilitatorIds);
+      delete body.facilitatorIds;
       if (body.startTime && typeof body.startTime === 'string') {
         body.startTime = new Date(body.startTime);
       }
@@ -3769,7 +3808,13 @@ export async function registerRoutes(
 
       try {
         const event = await storage.createEvent(eventData);
-        return res.status(201).json(event);
+        if (facilitatorIds) {
+          await setEventFacilitators(event.id, facilitatorIds);
+        }
+        return res.status(201).json({
+          ...event,
+          facilitators: facilitatorIds ? await getEventFacilitators(event.id) : [],
+        });
       } catch (error) {
         if (zoomSync.created && zoomSync.meeting) {
           try {
@@ -3797,6 +3842,10 @@ export async function registerRoutes(
 
       // Convert datetime-local strings to Date objects
       const body = { ...req.body };
+      const facilitatorIds = body.facilitatorIds === undefined
+        ? null
+        : z.array(z.string().uuid()).parse(body.facilitatorIds);
+      delete body.facilitatorIds;
       if (body.startTime && typeof body.startTime === 'string') {
         body.startTime = new Date(body.startTime);
       }
@@ -3825,7 +3874,11 @@ export async function registerRoutes(
           }
           return res.status(404).json({ error: "Event not found" });
         }
-        return res.json(event);
+        if (facilitatorIds) await setEventFacilitators(event.id, facilitatorIds);
+        return res.json({
+          ...event,
+          ...(facilitatorIds ? { facilitators: await getEventFacilitators(event.id) } : {}),
+        });
       } catch (error) {
         if (zoomSync.created && zoomSync.meeting) {
           try {
