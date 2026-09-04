@@ -1791,6 +1791,11 @@ export async function registerRoutes(
         if (!resource) return "The selected downloadable resource no longer exists.";
         if (resource.resourceType === "video") return "A downloadable lesson cannot use a video resource.";
         if (resource.status !== "published") return "Publish the selected resource before publishing this lesson.";
+        if (resource.resourceType === "resource_partner") {
+          const linkType = resource.partnerLinkType || "lms";
+          const partnerUrl = linkType === "external" ? resource.partnerResourceUrl : resource.partnerLoginUrl;
+          return partnerUrl ? null : "The selected partner resource does not have a working link.";
+        }
         if (!resource.fileUrl) return "The selected resource does not have a downloadable file.";
         return null;
       }

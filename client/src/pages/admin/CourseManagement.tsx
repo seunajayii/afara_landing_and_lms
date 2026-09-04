@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AdminSidebar } from "@/components/AdminSidebar";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import {
   ArrowDown, ArrowLeft, ArrowUp, BookOpen, Clock, FileText, GripVertical,
-  Link as LinkIcon, Pencil, Plus, Search, Settings2, Trash2, Video,
+  Loader2, Pencil, Plus, Search, Settings2, Trash2, UploadCloud, Video, X,
 } from "lucide-react";
 import type { Cohort, Course, Lesson, Module, Resource } from "@shared/schema";
 
@@ -156,11 +156,246 @@ function CourseFields({ value, onChange, showStatus = true }: { value: typeof in
   );
 }
 
+type QuickResourceDraft = {
+  title: string;
+  description: string;
+  resourceType: "document" | "template" | "toolkit" | "guide" | "resource_partner";
+  category: string;
+  fileUrl: string;
+  partnerName: string;
+  partnerLinkType: "external" | "lms";
+  partnerResourceUrl: string;
+  partnerLoginUrl: string;
+  partnerLoginUsername: string;
+  partnerLoginPassword: string;
+};
+
+const emptyQuickResource: QuickResourceDraft = {
+  title: "",
+  description: "",
+  resourceType: "document",
+  category: "Business Strategy",
+  fileUrl: "",
+  partnerName: "",
+  partnerLinkType: "external",
+  partnerResourceUrl: "",
+  partnerLoginUrl: "",
+  partnerLoginUsername: "",
+  partnerLoginPassword: "",
+};
+
+function QuickResourceDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated: (resource: Resource) => void;
+}) {
+  const { toast } = useToast();
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [draft, setDraft] = useState<QuickResourceDraft>(emptyQuickResource);
+  const [file, setFile] = useState<File | null>(null);
+
+  const createResource = useMutation({
+    mutationFn: async () => {
+      let uploaded: { fileUrl: string; fileName: string; fileSize: number } | null = null;
+      if (file) {
+        const body = new FormData();
+        body.append("file", file);
+        const uploadResponse = await fetch("/api/resources/upload", {
+          method: "POST",
+          body,
+          credentials: "include",
+        });
+        if (!uploadResponse.ok) {
+          const result = await uploadResponse.json().catch(() => ({})) as { error?: string };
+          throw new Error(result.error || "The file could not be uploaded.");
+        }
+        uploaded = await uploadResponse.json();
+      }
+
+      const isPartner = draft.resourceType === "resource_partner";
+      const response = await apiRequest("POST", "/api/resources", {
+        title: draft.title.trim(),
+        description: draft.description.trim() || null,
+        resourceType: draft.resourceType,
+        category: draft.category,
+        fileUrl: isPartner ? null : uploaded?.fileUrl || draft.fileUrl.trim() || null,
+        fileName: isPartner ? null : uploaded?.fileName || null,
+        fileSize: isPartner ? null : uploaded?.fileSize || null,
+        visibility: "community",
+        status: "published",
+        partnerName: isPartner ? draft.partnerName.trim() : null,
+        partnerLinkType: isPartner ? draft.partnerLinkType : "lms",
+        partnerResourceUrl: isPartner && draft.partnerLinkType === "external" ? draft.partnerResourceUrl.trim() : null,
+        partnerLoginUrl: isPartner && draft.partnerLinkType === "lms" ? draft.partnerLoginUrl.trim() : null,
+        partnerLoginUsername: isPartner && draft.partnerLinkType === "lms" ? draft.partnerLoginUsername.trim() || null : null,
+        partnerLoginPassword: isPartner && draft.partnerLinkType === "lms" ? draft.partnerLoginPassword || null : null,
+      });
+      return response.json() as Promise<Resource>;
+    },
+    onSuccess: (resource) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/resources"] });
+      onCreated(resource);
+      setDraft(emptyQuickResource);
+      setFile(null);
+      onOpenChange(false);
+      toast({ title: "Resource created and attached", description: resource.title });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Could not create resource",
+        description: error.message.replace(/^\d+:\s*/, ""),
+        variant: "destructive",
+      });
+    },
+  });
+
+  const isPartner = draft.resourceType === "resource_partner";
+  const targetUrl = draft.partnerLinkType === "external" ? draft.partnerResourceUrl : draft.partnerLoginUrl;
+  const canCreate = Boolean(
+    draft.title.trim()
+    && (isPartner
+      ? draft.partnerName.trim() && targetUrl.trim()
+      : file || draft.fileUrl.trim())
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => {
+      if (!createResource.isPending) onOpenChange(next);
+    }}>
+      <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Create and attach resource</DialogTitle>
+          <DialogDescription>
+            Add this material here. It will be attached to the lesson and also remain reusable in other courses.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label>Resource title</Label>
+            <Input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="e.g. Financial planning workbook" data-testid="input-inline-resource-title" />
+          </div>
+          <div>
+            <Label>Description (optional)</Label>
+            <Textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} rows={2} />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label>Resource type</Label>
+              <Select value={draft.resourceType} onValueChange={(resourceType: QuickResourceDraft["resourceType"]) => {
+                setDraft({ ...draft, resourceType, fileUrl: "", partnerResourceUrl: "", partnerLoginUrl: "" });
+                setFile(null);
+              }}>
+                <SelectTrigger data-testid="select-inline-resource-type"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="document">Document</SelectItem>
+                  <SelectItem value="template">Template</SelectItem>
+                  <SelectItem value="toolkit">Toolkit</SelectItem>
+                  <SelectItem value="guide">Guide</SelectItem>
+                  <SelectItem value="resource_partner">Partner resource / external link</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Category</Label>
+              <Select value={draft.category} onValueChange={(category) => setDraft({ ...draft, category })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {["Business Strategy", "Financial Planning", "Marketing", "Operations", "Legal", "HR & Management", "Technology", "Fundraising"].map((category) => (
+                    <SelectItem key={category} value={category}>{category}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {isPartner ? (
+            <div className="space-y-4 rounded-md border p-4">
+              <div>
+                <Label>Partner name</Label>
+                <Input value={draft.partnerName} onChange={(event) => setDraft({ ...draft, partnerName: event.target.value })} placeholder="e.g. Coursera or a resource provider" />
+              </div>
+              <div>
+                <Label>Link type</Label>
+                <Select value={draft.partnerLinkType} onValueChange={(partnerLinkType: "external" | "lms") => setDraft({ ...draft, partnerLinkType })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="external">External resource or website</SelectItem>
+                    <SelectItem value="lms">Partner LMS with login access</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {draft.partnerLinkType === "external" ? (
+                <div>
+                  <Label>External resource URL</Label>
+                  <Input type="url" value={draft.partnerResourceUrl} onChange={(event) => setDraft({ ...draft, partnerResourceUrl: event.target.value })} placeholder="https://partner.example.com/resource" />
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <Label>Partner LMS URL</Label>
+                    <Input type="url" value={draft.partnerLoginUrl} onChange={(event) => setDraft({ ...draft, partnerLoginUrl: event.target.value })} placeholder="https://partner.example.com/login" />
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div><Label>Username / email</Label><Input value={draft.partnerLoginUsername} onChange={(event) => setDraft({ ...draft, partnerLoginUsername: event.target.value })} /></div>
+                    <div><Label>Password</Label><Input type="password" value={draft.partnerLoginPassword} onChange={(event) => setDraft({ ...draft, partnerLoginPassword: event.target.value })} /></div>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3 rounded-md border p-4">
+              <Label>Resource file or link</Label>
+              <input
+                ref={fileInput}
+                className="hidden"
+                type="file"
+                onChange={(event) => {
+                  const selected = event.target.files?.[0] || null;
+                  if (selected && selected.size > 4 * 1024 * 1024) {
+                    toast({ title: "File too large", description: "Choose a file that is 4 MB or smaller.", variant: "destructive" });
+                    event.target.value = "";
+                    return;
+                  }
+                  setFile(selected);
+                }}
+              />
+              {file ? (
+                <div className="flex items-center gap-3 rounded-md bg-muted p-3 text-sm">
+                  <FileText className="h-4 w-4 text-primary" />
+                  <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                  <Button type="button" size="icon" variant="ghost" onClick={() => setFile(null)}><X className="h-4 w-4" /></Button>
+                </div>
+              ) : (
+                <Button type="button" variant="outline" className="w-full gap-2" onClick={() => fileInput.current?.click()}>
+                  <UploadCloud className="h-4 w-4" />Upload a file
+                </Button>
+              )}
+              <div className="flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />or use a link<span className="h-px flex-1 bg-border" /></div>
+              <Input type="url" value={draft.fileUrl} disabled={Boolean(file)} onChange={(event) => setDraft({ ...draft, fileUrl: event.target.value })} placeholder="https://example.com/resource.pdf" />
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" disabled={createResource.isPending} onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button disabled={!canCreate || createResource.isPending} onClick={() => createResource.mutate()} data-testid="button-create-inline-resource">
+            {createResource.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating…</> : "Create and attach"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () => void }) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [moduleDialog, setModuleDialog] = useState(false);
   const [lessonDialog, setLessonDialog] = useState<{ moduleId: string; lesson?: LessonWithResource } | null>(null);
+  const [quickResourceDialog, setQuickResourceDialog] = useState(false);
   const [settingsDialog, setSettingsDialog] = useState(false);
   const [moduleDraft, setModuleDraft] = useState({ title: "", description: "" });
   const [lessonDraft, setLessonDraft] = useState({
@@ -273,9 +508,10 @@ function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () =
           <div>
             <div className="mb-2 flex items-center gap-2">{statusBadge(course.status)} <span className="text-sm text-muted-foreground">{course.moduleCount} modules · {course.lessonCount} lessons · {formatDuration(course.durationMinutes)}</span></div>
             <h1 className="text-3xl font-bold">{course.title}</h1>
-            <p className="mt-1 text-muted-foreground">Build the sequence learners will follow. Resources remain reusable in the resource library.</p>
+            <p className="mt-1 text-muted-foreground">Build modules, lessons, and their resources in one place. Created resources remain reusable across courses.</p>
           </div>
           <div className="flex gap-2">
+             <Button variant="outline" onClick={() => setLocation("/admin/resources")}><FileText className="mr-2 h-4 w-4" />Resource library</Button>
              <Button variant="outline" onClick={() => { setSettingsDraft({ title: course.title, shortDescription: course.shortDescription || "", description: course.description || "", category: course.category || categories[0], level: course.level || "beginner", status: course.status || "draft", durationOverrideMinutes: course.durationOverrideMinutes, audience: course.audience || "all", cohortIds: course.cohortIds || [] }); setSettingsDialog(true); }}><Settings2 className="mr-2 h-4 w-4" />Course settings</Button>
             <Button onClick={() => setModuleDialog(true)}><Plus className="mr-2 h-4 w-4" />Add module</Button>
           </div>
@@ -339,12 +575,22 @@ function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () =
             {lessonDraft.lessonType !== "text" && <>
               {lessonDraft.lessonType === "video" && <div><Label>Content source</Label><Select value={lessonDraft.source} onValueChange={(source) => setLessonDraft({ ...lessonDraft, source, resourceId: "", youtubeValue: "", videoId: "" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="resource">Reusable video resource</SelectItem><SelectItem value="youtube">YouTube URL / ID</SelectItem></SelectContent></Select></div>}
               {lessonDraft.lessonType === "video" && lessonDraft.source === "youtube" ? <div className="rounded-md border p-4"><Label>YouTube URL or video ID</Label><div className="mt-2 flex gap-2"><Input value={lessonDraft.youtubeValue} onChange={(e) => setLessonDraft({ ...lessonDraft, youtubeValue: e.target.value, videoId: "" })} placeholder="https://youtube.com/watch?v=…" /><Button type="button" variant="outline" onClick={resolveYouTube}>Validate</Button></div><p className="mt-2 text-xs text-muted-foreground">{lessonDraft.videoId ? `Validated video ID: ${lessonDraft.videoId}` : "Validate before publishing so learners receive a playable video."}</p></div> :
-                <div className="rounded-md border p-4"><Label>Attach a reusable {lessonDraft.lessonType === "video" ? "video" : "file"} resource</Label><Select value={lessonDraft.resourceId || "none"} onValueChange={(resourceId) => setLessonDraft({ ...lessonDraft, resourceId: resourceId === "none" ? "" : resourceId })}><SelectTrigger className="mt-2"><SelectValue placeholder="Choose a resource" /></SelectTrigger><SelectContent><SelectItem value="none">Choose a resource</SelectItem>{resourceOptions.map((resource) => <SelectItem key={resource.id} value={resource.id}>{resource.title}{resource.status !== "published" ? " (draft)" : ""}</SelectItem>)}</SelectContent></Select><div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"><LinkIcon className="h-3.5 w-3.5" />Need a new PDF or protected video? <Button variant="ghost" className="h-auto p-0 text-xs underline" onClick={() => setLocation("/admin/resources")}>Create it in Resource Management</Button>.</div></div>}
+                <div className="rounded-md border p-4"><Label>Attach a reusable {lessonDraft.lessonType === "video" ? "video" : "resource"}</Label><Select value={lessonDraft.resourceId || "none"} onValueChange={(resourceId) => setLessonDraft({ ...lessonDraft, resourceId: resourceId === "none" ? "" : resourceId })}><SelectTrigger className="mt-2"><SelectValue placeholder="Choose a resource" /></SelectTrigger><SelectContent><SelectItem value="none">Choose a resource</SelectItem>{resourceOptions.map((resource) => <SelectItem key={resource.id} value={resource.id}>{resource.title}{resource.status !== "published" ? " (draft)" : ""}</SelectItem>)}</SelectContent></Select>{lessonDraft.lessonType !== "video" ? <Button type="button" variant="outline" className="mt-3 w-full gap-2" onClick={() => setQuickResourceDialog(true)} data-testid="button-create-resource-from-lesson"><Plus className="h-4 w-4" />Create and attach a new resource</Button> : <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"><Video className="h-3.5 w-3.5" />Use a YouTube URL above or choose an existing protected video.</div>}</div>}
             </>}
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setLessonDialog(null)}>Cancel</Button><Button disabled={!lessonDraft.title.trim() || lessonMutation.isPending} onClick={() => lessonMutation.mutate()}>{lessonMutation.isPending ? "Saving…" : "Save lesson"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <QuickResourceDialog
+        open={quickResourceDialog}
+        onOpenChange={setQuickResourceDialog}
+        onCreated={(resource) => setLessonDraft((current) => ({
+          ...current,
+          resourceId: resource.id,
+          title: current.title || resource.title,
+        }))}
+      />
 
       <Dialog open={settingsDialog} onOpenChange={setSettingsDialog}><DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto"><DialogHeader><DialogTitle>Course settings</DialogTitle><DialogDescription>Courses can only be published when each module has published, playable lessons.</DialogDescription></DialogHeader><CourseFields value={settingsDraft} onChange={setSettingsDraft} /><p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">Calculated curriculum duration: {formatDuration(course.calculatedDurationMinutes)}.</p><DialogFooter><Button variant="outline" onClick={() => setSettingsDialog(false)}>Cancel</Button><Button disabled={!settingsDraft.title.trim() || (settingsDraft.audience === "selected" && settingsDraft.cohortIds.length === 0) || settingsMutation.isPending} onClick={() => settingsMutation.mutate()}>{settingsMutation.isPending ? "Saving…" : "Save settings"}</Button></DialogFooter></DialogContent></Dialog>
     </main>
@@ -353,6 +599,7 @@ function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () =
 
 export default function CourseManagement() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const selectedCohortId = getAdminCohortId();
   const [searchQuery, setSearchQuery] = useState("");
   const [createDialog, setCreateDialog] = useState(false);
@@ -379,7 +626,7 @@ export default function CourseManagement() {
     <div className="flex h-screen flex-col md:flex-row"><AdminSidebar />
       {editorCourseId ? <CurriculumEditor courseId={editorCourseId} onBack={() => setEditorCourseId(null)} /> :
         <main className="flex-1 overflow-auto"><div className="p-6 md:p-8">
-          <div className="mb-8 flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-3xl font-bold">Course Management</h1><p className="mt-1 text-muted-foreground">Showing shared courses and courses assigned to the current cohort. Reusable resources remain global.</p></div><Button onClick={() => setCreateDialog(true)} data-testid="button-create-course"><Plus className="mr-2 h-4 w-4" />Add course</Button></div>
+          <div className="mb-8 flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-3xl font-bold">Courses & Resources</h1><p className="mt-1 text-muted-foreground">Build each course, module, lesson, and attached resource in one connected workflow.</p></div><div className="flex gap-2"><Button variant="outline" onClick={() => setLocation("/admin/resources")}><FileText className="mr-2 h-4 w-4" />Resource library</Button><Button onClick={() => setCreateDialog(true)} data-testid="button-create-course"><Plus className="mr-2 h-4 w-4" />Add course</Button></div></div>
           <div className="relative mb-6 max-w-md"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search courses" /></div>
           {isLoading ? <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{[1, 2, 3].map((key) => <Skeleton key={key} className="h-56" />)}</div> :
             filteredCourses.length === 0 ? <Card className="border-dashed py-12 text-center"><CardContent><BookOpen className="mx-auto mb-3 h-10 w-10 text-muted-foreground" /><h2 className="text-lg font-semibold">No courses found</h2><p className="mt-1 text-sm text-muted-foreground">{searchQuery ? "Try a different search." : "Create your first course, then add its curriculum."}</p>{!searchQuery && <Button className="mt-5" onClick={() => setCreateDialog(true)}>Create course</Button>}</CardContent></Card> :

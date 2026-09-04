@@ -36,8 +36,7 @@ const navGroups: NavGroup[] = [
       { path: "/admin/progress-reporting", label: "Progress", icon: FileBarChart },
       { path: "/admin/cohort-report", label: "Reports", icon: FileText },
       { path: "/admin/assignments", label: "Assignments", icon: ClipboardCheck },
-      { path: "/admin/courses", label: "Courses", icon: BookOpen },
-      { path: "/admin/resources", label: "Resources", icon: FolderKanban },
+      { path: "/admin/courses", label: "Courses & Resources", icon: BookOpen },
     ],
   },
   {
@@ -143,7 +142,8 @@ function AdminSidebarNav({ location, onNavigate }: { location: string; onNavigat
             <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{group.label}</p>
             <div className="space-y-0.5">
               {group.items.map((item) => {
-                const active = location === item.path;
+                const active = location === item.path
+                  || (item.path === "/admin/courses" && location === "/admin/resources");
                 return (
                   <Link key={item.path} href={adminCohortHref(item.path, activeCohort?.id)} onClick={onNavigate}>
                     <Button

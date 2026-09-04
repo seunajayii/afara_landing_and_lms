@@ -2,7 +2,7 @@
 - [YouTube learning materials](youtube-learning-materials.md) — YouTube videos are LMS resources; unlisted embeds are app-gated but not share-proof
 - [Resumable provider uploads](resumable-provider-uploads.md) — dropped responses require opaque server sessions and an authoritative provider status check before retrying a chunk
 - [Private video lifecycle](private-video-lifecycle.md) — save resource changes before best-effort deletion of replaced or removed private objects
-- [Course catalogue access](course-catalogue-access.md) — courses default to all participants; selected-course access follows the learner’s accepted application cohort
+- [Course catalogue access](course-catalogue-access.md) — course resources are created in the lesson workflow, remain reusable, and follow the learner’s accepted cohort access
 - [Object Storage provisioning](object-storage-provisioning.md) — SDK variables can exist without a usable default bucket; probe availability and fail protected uploads explicitly
 - [Zoom webhook setup](zoom-webhooks.md) — Zoom OAuth callbacks and event webhooks use different public URLs; webhook validation requires the separate Secret Token
 - [Zoom OAuth connection](zoom-oauth.md) — meeting-management authorization must not depend on optional Zoom profile-read scopes
