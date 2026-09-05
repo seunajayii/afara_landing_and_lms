@@ -57,6 +57,7 @@ async function selectDateTime(
   timeValue: string,
 ) {
   await page.getByTestId(dateTestId).first().click();
+  const datePopover = page.getByRole("dialog").last();
 
   const [year, month, day] = dateValue.split("-").map(Number);
   const browserToday = await page.evaluate(() => {
@@ -65,14 +66,14 @@ async function selectDateTime(
   });
   const monthDelta =
     (year - browserToday.year) * 12 + (month - browserToday.month);
-  const monthButton = page.getByRole("button", {
+  const monthButton = datePopover.getByRole("button", {
     name: monthDelta >= 0 ? "Go to next month" : "Go to previous month",
   });
   for (let index = 0; index < Math.abs(monthDelta); index += 1) {
     await monthButton.click();
   }
 
-  const calendar = page.getByTestId(dateTestId).last();
+  const calendar = datePopover.getByRole("grid");
   await calendar
     .locator('button[name="day"]:not(.day-outside)')
     .filter({ hasText: new RegExp(`^${day}$`) })
@@ -80,15 +81,11 @@ async function selectDateTime(
 
   const timeTrigger = page.getByTestId(timeTestId);
   await timeTrigger.scrollIntoViewIfNeeded();
-  await timeTrigger.dispatchEvent("click");
+  await timeTrigger.click();
   const timeLabel = await formatBrowserTime(page, timeValue);
   const timeOption = page.getByRole("option", { name: timeLabel, exact: true });
-  await timeOption.scrollIntoViewIfNeeded();
-  await timeOption.click({ force: true });
-  await page
-    .getByRole("button", { name: "Done", exact: true })
-    .last()
-    .evaluate((element) => (element as HTMLButtonElement).click());
+  await timeOption.click();
+  await page.getByRole("button", { name: "Done", exact: true }).last().click();
   await expect(page.getByTestId(dateTestId)).toHaveCount(1);
 }
 
@@ -96,6 +93,7 @@ test.describe("admin event date and time fields", () => {
   test("keeps selected create and edit values local, including clearing the optional end", async ({
     page,
   }) => {
+    await page.setViewportSize({ width: 390, height: 500 });
     const credentials = loadCredentials();
     test.skip(
       !credentials,
@@ -162,16 +160,11 @@ test.describe("admin event date and time fields", () => {
       );
 
       await page.getByTestId("input-edit-end-date").first().click();
-      await page
-        .getByRole("button", { name: "Clear", exact: true })
-        .evaluate((element) => (element as HTMLButtonElement).click());
+      await page.getByRole("button", { name: "Clear", exact: true }).click();
       await expect(page.getByTestId("input-edit-end-date").first()).toContainText(
         "Choose end date and time",
       );
-      await page
-        .getByRole("button", { name: "Done", exact: true })
-        .last()
-        .evaluate((element) => (element as HTMLButtonElement).click());
+      await page.getByRole("button", { name: "Done", exact: true }).last().click();
       await expect(page.getByTestId("input-edit-end-date")).toHaveCount(1);
 
       const updateResponsePromise = page.waitForResponse(
