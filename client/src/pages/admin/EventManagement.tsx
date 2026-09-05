@@ -179,7 +179,72 @@ function formatDateTime(dateString: string | Date): string {
 function formatDateTimeForInput(dateString: string | Date | null): string {
   if (!dateString) return "";
   const date = new Date(dateString);
-  return date.toISOString().slice(0, 16);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function DateTimeField({
+  value,
+  onChange,
+  label,
+  optional = false,
+  dateTestId,
+  timeTestId,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  label: string;
+  optional?: boolean;
+  dateTestId: string;
+  timeTestId: string;
+}) {
+  const dateValue = value.slice(0, 10);
+  const timeValue = value.includes("T") ? value.slice(11, 16) : "";
+  const updateDate = (nextDate: string) => {
+    if (!nextDate) {
+      onChange("");
+      return;
+    }
+    onChange(`${nextDate}T${timeValue || "09:00"}`);
+  };
+  const updateTime = (nextTime: string) => {
+    if (!nextTime) {
+      onChange(dateValue ? `${dateValue}T00:00` : "");
+      return;
+    }
+    onChange(dateValue ? `${dateValue}T${nextTime}` : "");
+  };
+
+  return (
+    <div className="space-y-2">
+      <FormLabel>{label}{optional ? " (Optional)" : ""}</FormLabel>
+      <div className="grid grid-cols-[minmax(0,1.35fr)_minmax(7.5rem,0.65fr)] gap-2">
+        <div className="relative">
+          <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="date"
+            value={dateValue}
+            onChange={(event) => updateDate(event.target.value)}
+            className="pl-9"
+            aria-label={`${label} date`}
+            data-testid={dateTestId}
+          />
+        </div>
+        <div className="relative">
+          <Clock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="time"
+            value={timeValue}
+            onChange={(event) => updateTime(event.target.value)}
+            className="pl-9"
+            aria-label={`${label} time`}
+            data-testid={timeTestId}
+          />
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">Choose the date first, then set the time.</p>
+    </div>
+  );
 }
 
 export default function EventManagement() {
@@ -862,16 +927,19 @@ export default function EventManagement() {
                     </FormItem>
                   )}
                 />
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <FormField
                     control={createForm.control}
                     name="startTime"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Start Time</FormLabel>
-                        <FormControl>
-                          <Input type="datetime-local" {...field} data-testid="input-create-start-time" />
-                        </FormControl>
+                        <DateTimeField
+                          label="Start"
+                          value={field.value}
+                          onChange={field.onChange}
+                          dateTestId="input-create-start-date"
+                          timeTestId="input-create-start-time"
+                        />
                         <FormMessage />
                       </FormItem>
                     )}
@@ -881,10 +949,14 @@ export default function EventManagement() {
                     name="endTime"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>End Time (Optional)</FormLabel>
-                        <FormControl>
-                          <Input type="datetime-local" {...field} data-testid="input-create-end-time" />
-                        </FormControl>
+                        <DateTimeField
+                          label="End"
+                          optional
+                          value={field.value || ""}
+                          onChange={field.onChange}
+                          dateTestId="input-create-end-date"
+                          timeTestId="input-create-end-time"
+                        />
                         <FormMessage />
                       </FormItem>
                     )}
@@ -1133,16 +1205,19 @@ export default function EventManagement() {
                     </FormItem>
                   )}
                 />
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <FormField
                     control={editForm.control}
                     name="startTime"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Start Time</FormLabel>
-                        <FormControl>
-                          <Input type="datetime-local" {...field} data-testid="input-edit-start-time" />
-                        </FormControl>
+                        <DateTimeField
+                          label="Start"
+                          value={field.value}
+                          onChange={field.onChange}
+                          dateTestId="input-edit-start-date"
+                          timeTestId="input-edit-start-time"
+                        />
                         <FormMessage />
                       </FormItem>
                     )}
@@ -1152,10 +1227,14 @@ export default function EventManagement() {
                     name="endTime"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>End Time (Optional)</FormLabel>
-                        <FormControl>
-                          <Input type="datetime-local" {...field} data-testid="input-edit-end-time" />
-                        </FormControl>
+                        <DateTimeField
+                          label="End"
+                          optional
+                          value={field.value || ""}
+                          onChange={field.onChange}
+                          dateTestId="input-edit-end-date"
+                          timeTestId="input-edit-end-time"
+                        />
                         <FormMessage />
                       </FormItem>
                     )}
