@@ -402,7 +402,7 @@ function QuickResourceDialog({
 function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () => void }) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const [moduleDialog, setModuleDialog] = useState(false);
+  const [moduleDialog, setModuleDialog] = useState<{ module?: ModuleWithLessons } | null>(null);
   const [lessonDialog, setLessonDialog] = useState<{ moduleId: string; lesson?: LessonWithResource } | null>(null);
   const [quickResourceDialog, setQuickResourceDialog] = useState(false);
   const [settingsDialog, setSettingsDialog] = useState(false);
@@ -424,9 +424,17 @@ function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () =
   };
 
   const moduleMutation = useMutation({
-    mutationFn: async () => apiRequest("POST", "/api/modules", { ...moduleDraft, courseId, orderIndex: course?.modules.length || 0 }),
-    onSuccess: () => { invalidate(); setModuleDialog(false); setModuleDraft({ title: "", description: "" }); toast({ title: "Module added" }); },
-    onError: () => toast({ title: "Could not add module", variant: "destructive" }),
+    mutationFn: async () => moduleDialog?.module
+      ? apiRequest("PATCH", `/api/modules/${moduleDialog.module.id}`, { title: moduleDraft.title.trim(), description: moduleDraft.description.trim() || null })
+      : apiRequest("POST", "/api/modules", { ...moduleDraft, courseId, orderIndex: course?.modules.length || 0 }),
+    onSuccess: () => {
+      const editing = Boolean(moduleDialog?.module);
+      invalidate();
+      setModuleDialog(null);
+      setModuleDraft({ title: "", description: "" });
+      toast({ title: editing ? "Module updated" : "Module added" });
+    },
+    onError: async (error: Error) => toast({ title: moduleDialog?.module ? "Could not update module" : "Could not add module", description: error.message.replace(/^\d+:\s*/, ""), variant: "destructive" }),
   });
   const lessonMutation = useMutation({
     mutationFn: async () => {
@@ -551,12 +559,12 @@ function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () =
           <div className="flex gap-2">
              <Button variant="outline" onClick={() => setLocation("/admin/resources")}><FileText className="mr-2 h-4 w-4" />Resource library</Button>
              <Button variant="outline" onClick={() => { setSettingsDraft({ title: course.title, shortDescription: course.shortDescription || "", description: course.description || "", category: course.category || categories[0], level: course.level || "beginner", status: course.status || "draft", durationOverrideMinutes: course.durationOverrideMinutes, audience: course.audience || "all", cohortIds: course.cohortIds || [] }); setSettingsDialog(true); }}><Settings2 className="mr-2 h-4 w-4" />Course settings</Button>
-            <Button onClick={() => setModuleDialog(true)}><Plus className="mr-2 h-4 w-4" />Add module</Button>
+           <Button onClick={() => { setModuleDraft({ title: "", description: "" }); setModuleDialog({}); }}><Plus className="mr-2 h-4 w-4" />Add module</Button>
           </div>
         </div>
 
         {course.modules.length === 0 ? (
-          <Card className="border-dashed py-10 text-center"><CardContent><BookOpen className="mx-auto mb-3 h-10 w-10 text-muted-foreground" /><h2 className="text-lg font-semibold">Start with a module</h2><p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Modules group a set of ordered lessons. Add your first module, then attach a video, PDF, or written lesson.</p><Button className="mt-5" onClick={() => setModuleDialog(true)}>Add first module</Button></CardContent></Card>
+           <Card className="border-dashed py-10 text-center"><CardContent><BookOpen className="mx-auto mb-3 h-10 w-10 text-muted-foreground" /><h2 className="text-lg font-semibold">Start with a module</h2><p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Modules group a set of ordered lessons. Add your first module, then attach a video, PDF, or written lesson.</p><Button className="mt-5" onClick={() => { setModuleDraft({ title: "", description: "" }); setModuleDialog({}); }}>Add first module</Button></CardContent></Card>
         ) : course.modules.map((module, index) => (
           <Card key={module.id} className="mb-5" data-testid={`course-module-${module.id}`}>
             <CardHeader className="border-b bg-muted/20 pb-4">
@@ -568,6 +576,7 @@ function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () =
                 <div className="flex gap-1">
                   <Button variant="ghost" size="icon" disabled={index === 0} onClick={() => reorder("modules", module, -1)} aria-label="Move module up"><ArrowUp className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="icon" disabled={index === course.modules.length - 1} onClick={() => reorder("modules", module, 1)} aria-label="Move module down"><ArrowDown className="h-4 w-4" /></Button>
+                   <Button variant="ghost" size="icon" onClick={() => { setModuleDraft({ title: module.title, description: module.description || "" }); setModuleDialog({ module }); }} aria-label={`Edit ${module.title}`}><Pencil className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="icon" onClick={() => remove("module", module.id, module.title)} aria-label="Delete module"><Trash2 className="h-4 w-4 text-destructive" /></Button>
                   <Button size="sm" onClick={() => openLesson(module.id)}><Plus className="mr-1 h-4 w-4" />Lesson</Button>
                 </div>
@@ -594,8 +603,8 @@ function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () =
         ))}
       </div>
 
-      <Dialog open={moduleDialog} onOpenChange={setModuleDialog}>
-        <DialogContent><DialogHeader><DialogTitle>Add module</DialogTitle><DialogDescription>Modules keep lessons grouped and ordered.</DialogDescription></DialogHeader><div className="space-y-4"><div><Label>Module title</Label><Input value={moduleDraft.title} onChange={(e) => setModuleDraft({ ...moduleDraft, title: e.target.value })} /></div><div><Label>Description (optional)</Label><Textarea value={moduleDraft.description} onChange={(e) => setModuleDraft({ ...moduleDraft, description: e.target.value })} /></div></div><DialogFooter><Button variant="outline" onClick={() => setModuleDialog(false)}>Cancel</Button><Button disabled={!moduleDraft.title.trim() || moduleMutation.isPending} onClick={() => moduleMutation.mutate()}>{moduleMutation.isPending ? "Adding…" : "Add module"}</Button></DialogFooter></DialogContent>
+       <Dialog open={Boolean(moduleDialog)} onOpenChange={(open) => { if (!open) { setModuleDialog(null); setModuleDraft({ title: "", description: "" }); } }}>
+         <DialogContent><DialogHeader><DialogTitle>{moduleDialog?.module ? "Edit module" : "Add module"}</DialogTitle><DialogDescription>{moduleDialog?.module ? "Update the module title or description without changing its lessons." : "Modules keep lessons grouped and ordered."}</DialogDescription></DialogHeader><div className="space-y-4"><div><Label htmlFor="module-title">Module title</Label><Input id="module-title" value={moduleDraft.title} onChange={(e) => setModuleDraft({ ...moduleDraft, title: e.target.value })} /></div><div><Label htmlFor="module-description">Description (optional)</Label><Textarea id="module-description" value={moduleDraft.description} onChange={(e) => setModuleDraft({ ...moduleDraft, description: e.target.value })} /></div></div><DialogFooter><Button variant="outline" onClick={() => setModuleDialog(null)}>Cancel</Button><Button disabled={!moduleDraft.title.trim() || moduleMutation.isPending} onClick={() => moduleMutation.mutate()}>{moduleMutation.isPending ? "Saving…" : moduleDialog?.module ? "Save changes" : "Add module"}</Button></DialogFooter></DialogContent>
       </Dialog>
 
       <Dialog open={Boolean(lessonDialog)} onOpenChange={(open) => !open && setLessonDialog(null)}>
