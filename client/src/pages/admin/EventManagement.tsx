@@ -31,6 +31,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as DateCalendar } from "@/components/ui/calendar";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -62,6 +64,7 @@ import {
   CheckCircle2,
   Clock3,
   RotateCcw,
+  ChevronDown,
 } from "lucide-react";
 import type { Course, Event } from "@shared/schema";
 
@@ -183,7 +186,36 @@ function formatDateTimeForInput(dateString: string | Date | null): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function DateTimeField({
+const timeOptions = Array.from({ length: 96 }, (_, index) => {
+  const hours = Math.floor(index / 4);
+  const minutes = (index % 4) * 15;
+  const value = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+  const label = new Date(2000, 0, 1, hours, minutes).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return { value, label };
+});
+
+function parseDateValue(value: string): Date | undefined {
+  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day, 12);
+}
+
+function formatDateValue(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function formatDateLabel(value: string): string {
+  const date = parseDateValue(value);
+  return date
+    ? date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })
+    : "Choose a date";
+}
+
+function DateTimeDropdown({
   value,
   onChange,
   label,
@@ -198,51 +230,72 @@ function DateTimeField({
   dateTestId: string;
   timeTestId: string;
 }) {
+  const [open, setOpen] = useState(false);
   const dateValue = value.slice(0, 10);
   const timeValue = value.includes("T") ? value.slice(11, 16) : "";
-  const updateDate = (nextDate: string) => {
-    if (!nextDate) {
-      onChange("");
-      return;
-    }
-    onChange(`${nextDate}T${timeValue || "09:00"}`);
-  };
-  const updateTime = (nextTime: string) => {
-    if (!nextTime) {
-      onChange(dateValue ? `${dateValue}T00:00` : "");
-      return;
-    }
-    onChange(dateValue ? `${dateValue}T${nextTime}` : "");
-  };
 
   return (
     <div className="space-y-2">
       <FormLabel>{label}{optional ? " (Optional)" : ""}</FormLabel>
-      <div className="grid grid-cols-[minmax(0,1.35fr)_minmax(7.5rem,0.65fr)] gap-2">
-        <div className="relative">
-          <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="date"
-            value={dateValue}
-            onChange={(event) => updateDate(event.target.value)}
-            className="pl-9"
-            aria-label={`${label} date`}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 w-full justify-between px-3 font-normal"
+            data-testid={dateTestId}
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <Calendar className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className={dateValue ? "truncate text-foreground" : "truncate text-muted-foreground"}>
+                {dateValue ? `${formatDateLabel(dateValue)}${timeValue ? ` · ${timeOptions.find((option) => option.value === timeValue)?.label || timeValue}` : ""}` : `Choose ${label.toLowerCase()} date and time`}
+              </span>
+            </span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[340px] p-0" align="start" sideOffset={8}>
+          <div className="border-b bg-muted/30 px-4 py-3">
+            <p className="text-sm font-semibold">{label} date and time</p>
+            <p className="mt-1 text-xs text-muted-foreground">Pick a date, then choose a time.</p>
+          </div>
+          <DateCalendar
+            mode="single"
+            selected={parseDateValue(dateValue)}
+            onSelect={(date) => {
+              if (date) onChange(`${formatDateValue(date)}T${timeValue || "09:00"}`);
+            }}
+            initialFocus
+            className="mx-auto"
             data-testid={dateTestId}
           />
-        </div>
-        <div className="relative">
-          <Clock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="time"
-            value={timeValue}
-            onChange={(event) => updateTime(event.target.value)}
-            className="pl-9"
-            aria-label={`${label} time`}
-            data-testid={timeTestId}
-          />
-        </div>
-      </div>
-      <p className="text-xs text-muted-foreground">Choose the date first, then set the time.</p>
+          <div className="border-t px-4 py-4">
+            <label className="mb-2 block text-sm font-medium" htmlFor={`${timeTestId}-select`}>Time</label>
+            <Select
+              value={timeValue || "09:00"}
+              onValueChange={(nextTime) => {
+                if (dateValue) onChange(`${dateValue}T${nextTime}`);
+              }}
+            >
+              <SelectTrigger id={`${timeTestId}-select`} data-testid={timeTestId}>
+                <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
+                <SelectValue placeholder="Choose a time" />
+              </SelectTrigger>
+              <SelectContent className="max-h-60">
+                {timeOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="mt-3 flex items-center justify-between gap-2">
+              {optional && value ? (
+                <Button type="button" variant="ghost" size="sm" onClick={() => onChange("")}>Clear</Button>
+              ) : <span />}
+              <Button type="button" size="sm" className="min-w-20" onClick={() => setOpen(false)}>Done</Button>
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
@@ -933,7 +986,7 @@ export default function EventManagement() {
                     name="startTime"
                     render={({ field }) => (
                       <FormItem>
-                        <DateTimeField
+                        <DateTimeDropdown
                           label="Start"
                           value={field.value}
                           onChange={field.onChange}
@@ -949,7 +1002,7 @@ export default function EventManagement() {
                     name="endTime"
                     render={({ field }) => (
                       <FormItem>
-                        <DateTimeField
+                        <DateTimeDropdown
                           label="End"
                           optional
                           value={field.value || ""}
@@ -1211,7 +1264,7 @@ export default function EventManagement() {
                     name="startTime"
                     render={({ field }) => (
                       <FormItem>
-                        <DateTimeField
+                        <DateTimeDropdown
                           label="Start"
                           value={field.value}
                           onChange={field.onChange}
@@ -1227,7 +1280,7 @@ export default function EventManagement() {
                     name="endTime"
                     render={({ field }) => (
                       <FormItem>
-                        <DateTimeField
+                        <DateTimeDropdown
                           label="End"
                           optional
                           value={field.value || ""}
