@@ -467,6 +467,9 @@ export default function EventManagement() {
           value === "" ? undefined : value
         ])
       );
+      // An omitted field leaves the existing end time unchanged on PATCH.
+      // Send null so clearing the optional end controls removes it.
+      cleanedData.endTime = data.endTime || null;
       cleanedData.zoomMeetingId = data.zoomMeetingId?.trim() || null;
       cleanedData.recordingLessonId = data.recordingLessonId || null;
       const response = await apiRequest("PATCH", `/api/events/${id}`, cleanedData);
