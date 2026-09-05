@@ -23,9 +23,22 @@ export default function Dashboard() {
       return response.json();
     },
     enabled: Boolean(user?.id),
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
-  const { data: events = [], isLoading: eventsLoading } = useQuery<Event[]>({ queryKey: ["/api/events"] });
-  const { data: assignments = [], isLoading: assignmentsLoading } = useQuery<Assignment[]>({ queryKey: ["/api/assignments"] });
+  const { data: events = [], isLoading: eventsLoading } = useQuery<Event[]>({
+    queryKey: ["/api/events"],
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+  });
+  const { data: assignments = [], isLoading: assignmentsLoading } = useQuery<Assignment[]>({
+    queryKey: ["/api/assignments"],
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+  });
 
   const publishedCourses = courses.filter((course) => course.status === "published");
   const continueCourse = publishedCourses[0];

@@ -422,6 +422,7 @@ function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () =
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/courses"] });
     queryClient.invalidateQueries({ queryKey: ["/api/courses", courseId] });
+    queryClient.invalidateQueries({ queryKey: ["/api/events"] });
   };
 
   const moduleMutation = useMutation({
@@ -672,7 +673,14 @@ export default function CourseManagement() {
   });
   const deleteCourse = async (course: CourseWithCurriculum) => {
     if (!window.confirm(`Delete "${course.title}" and all of its modules, lessons, enrolments, and certificate records? Reusable resources will not be deleted.`)) return;
-    try { await apiRequest("DELETE", `/api/courses/${course.id}`); queryClient.invalidateQueries({ queryKey: ["/api/courses"] }); toast({ title: "Course deleted" }); } catch { toast({ title: "Could not delete course", variant: "destructive" }); }
+    try {
+      await apiRequest("DELETE", `/api/courses/${course.id}`);
+      queryClient.invalidateQueries({ queryKey: ["/api/courses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      toast({ title: "Course deleted" });
+    } catch {
+      toast({ title: "Could not delete course", variant: "destructive" });
+    }
   };
   const filteredCourses = useMemo(() => (courses || []).filter((course) =>
     (course.audience === "all" || !selectedCohortId || course.cohortIds?.includes(selectedCohortId))

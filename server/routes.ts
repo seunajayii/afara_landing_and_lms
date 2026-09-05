@@ -3951,6 +3951,12 @@ export async function registerRoutes(
       const userRole = (req.session?.userRole as string) || null;
       const isAdminUser = userRole === "admin" || userRole === "superadmin";
       const visibleEvents = (await Promise.all(allEvents.map(async (event) => {
+        const parentCourse = await storage.getCourseForEvent(event.id);
+        if (parentCourse && !isAdminUser) {
+          return parentCourse.status === "published" && await canAccessCourse(req, parentCourse)
+            ? event
+            : null;
+        }
         if (!event.podId) return isAdminUser || canAccessVisibility(event.visibility, userRole) ? event : null;
         const pod = await storage.getLearningPod(event.podId);
         return pod && await canAccessLearningPod(req, pod) ? event : null;

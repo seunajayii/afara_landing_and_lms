@@ -120,6 +120,7 @@ export interface IStorage {
   getActiveCohortForUser(userId: string): Promise<Cohort | undefined>;
   getCoursesForResource(resourceId: string): Promise<Course[]>;
   getCourseForResource(resourceId: string): Promise<Course | undefined>;
+  getCourseForEvent(eventId: string): Promise<Course | undefined>;
   createCourse(course: InsertCourse): Promise<Course>;
   updateCourse(id: string, data: Partial<InsertCourse>): Promise<Course | undefined>;
   deleteCourse(id: string): Promise<void>;
@@ -564,6 +565,16 @@ export class DatabaseStorage implements IStorage {
     return results[0];
   }
 
+  async getCourseForEvent(eventId: string): Promise<Course | undefined> {
+    const [result] = await db.select({ course: courses })
+      .from(lessons)
+      .innerJoin(modules, eq(lessons.moduleId, modules.id))
+      .innerJoin(courses, eq(modules.courseId, courses.id))
+      .where(eq(lessons.eventId, eventId))
+      .limit(1);
+    return result?.course;
+  }
+
   async getCoursesForResource(resourceId: string): Promise<Course[]> {
     const results = await db.select({ course: courses })
       .from(lessons)
@@ -585,20 +596,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteCourse(id: string): Promise<void> {
-    const courseModules = await db.select({ id: modules.id }).from(modules).where(eq(modules.courseId, id));
-    const moduleIds = courseModules.map((module) => module.id);
-    if (moduleIds.length > 0) {
-      const courseLessons = await db.select({ id: lessons.id }).from(lessons).where(inArray(lessons.moduleId, moduleIds));
-      const lessonIds = courseLessons.map((lesson) => lesson.id);
-      if (lessonIds.length > 0) {
-        await db.delete(lessonProgress).where(inArray(lessonProgress.lessonId, lessonIds));
-        await db.delete(lessons).where(inArray(lessons.id, lessonIds));
+    await db.transaction(async (tx) => {
+      const courseModules = await tx.select({ id: modules.id }).from(modules).where(eq(modules.courseId, id));
+      const moduleIds = courseModules.map((module) => module.id);
+      if (moduleIds.length > 0) {
+        const courseLessons = await tx.select({ id: lessons.id, eventId: lessons.eventId }).from(lessons).where(inArray(lessons.moduleId, moduleIds));
+        const lessonIds = courseLessons.map((lesson) => lesson.id);
+        const eventIds = courseLessons.flatMap((lesson) => lesson.eventId ? [lesson.eventId] : []);
+        if (lessonIds.length > 0) {
+          await tx.delete(lessonProgress).where(inArray(lessonProgress.lessonId, lessonIds));
+          await tx.delete(lessons).where(inArray(lessons.id, lessonIds));
+        }
+        await tx.delete(modules).where(inArray(modules.id, moduleIds));
+        if (eventIds.length > 0) {
+          await tx.delete(eventRegistrations).where(inArray(eventRegistrations.eventId, eventIds));
+          await tx.delete(events).where(inArray(events.id, eventIds));
+        }
       }
-      await db.delete(modules).where(inArray(modules.id, moduleIds));
-    }
-    await db.delete(certificates).where(eq(certificates.courseId, id));
-    await db.delete(enrollments).where(eq(enrollments.courseId, id));
-    await db.delete(courses).where(eq(courses.id, id));
+      await tx.delete(certificates).where(eq(certificates.courseId, id));
+      await tx.delete(enrollments).where(eq(enrollments.courseId, id));
+      await tx.delete(courses).where(eq(courses.id, id));
+    });
   }
 
   async getModulesByCourse(courseId: string): Promise<Module[]> {
@@ -616,13 +634,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteModule(id: string): Promise<void> {
-    const moduleLessons = await db.select({ id: lessons.id }).from(lessons).where(eq(lessons.moduleId, id));
-    const lessonIds = moduleLessons.map((lesson) => lesson.id);
-    if (lessonIds.length > 0) {
-      await db.delete(lessonProgress).where(inArray(lessonProgress.lessonId, lessonIds));
-      await db.delete(lessons).where(inArray(lessons.id, lessonIds));
-    }
-    await db.delete(modules).where(eq(modules.id, id));
+    await db.transaction(async (tx) => {
+      const moduleLessons = await tx.select({ id: lessons.id, eventId: lessons.eventId }).from(lessons).where(eq(lessons.moduleId, id));
+      const lessonIds = moduleLessons.map((lesson) => lesson.id);
+      const eventIds = moduleLessons.flatMap((lesson) => lesson.eventId ? [lesson.eventId] : []);
+      if (lessonIds.length > 0) {
+        await tx.delete(lessonProgress).where(inArray(lessonProgress.lessonId, lessonIds));
+        await tx.delete(lessons).where(inArray(lessons.id, lessonIds));
+      }
+      await tx.delete(modules).where(eq(modules.id, id));
+      if (eventIds.length > 0) {
+        await tx.delete(eventRegistrations).where(inArray(eventRegistrations.eventId, eventIds));
+        await tx.delete(events).where(inArray(events.id, eventIds));
+      }
+    });
   }
 
   async getLessonsByModule(moduleId: string): Promise<Lesson[]> {
@@ -645,8 +670,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteLesson(id: string): Promise<void> {
-    await db.delete(lessonProgress).where(eq(lessonProgress.lessonId, id));
-    await db.delete(lessons).where(eq(lessons.id, id));
+    await db.transaction(async (tx) => {
+      const [lesson] = await tx.select({ eventId: lessons.eventId }).from(lessons).where(eq(lessons.id, id));
+      await tx.delete(lessonProgress).where(eq(lessonProgress.lessonId, id));
+      await tx.delete(lessons).where(eq(lessons.id, id));
+      if (lesson?.eventId) {
+        await tx.delete(eventRegistrations).where(eq(eventRegistrations.eventId, lesson.eventId));
+        await tx.delete(events).where(eq(events.id, lesson.eventId));
+      }
+    });
   }
 
   async getEnrollment(userId: string, courseId: string): Promise<Enrollment | undefined> {

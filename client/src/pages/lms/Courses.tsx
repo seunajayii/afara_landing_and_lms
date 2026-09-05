@@ -45,6 +45,9 @@ export default function Courses() {
       return response.json();
     },
     enabled: Boolean(user?.id),
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const categories = useMemo(() => {
