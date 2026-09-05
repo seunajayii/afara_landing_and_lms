@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { getAdminCohortId } from "@/lib/adminCohortContext";
 import { useToast } from "@/hooks/use-toast";
+import { DateTimeDropdown } from "@/components/DateTimeDropdown";
 import { useLocation } from "wouter";
 import {
   ArrowDown, ArrowLeft, ArrowUp, BookOpen, Clock, FileText, GripVertical,
@@ -621,7 +622,10 @@ function CurriculumEditor({ courseId, onBack }: { courseId: string; onBack: () =
             {lessonDraft.lessonType === "text" && <div><Label>Lesson content</Label><Textarea rows={7} value={lessonDraft.content} onChange={(e) => setLessonDraft({ ...lessonDraft, content: e.target.value })} placeholder="Write the learning content here" /></div>}
             {lessonDraft.lessonType === "live_session" && <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
               <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-primary" /><div><p className="font-medium">Schedule this live class</p><p className="text-xs text-muted-foreground">This creates a connected event that also appears in the programme calendar.</p></div></div>
-              <div className="grid gap-4 sm:grid-cols-2"><div><Label>Starts</Label><Input type="datetime-local" value={lessonDraft.eventStartTime} onChange={(e) => setLessonDraft({ ...lessonDraft, eventStartTime: e.target.value })} /></div><div><Label>Ends (optional)</Label><Input type="datetime-local" value={lessonDraft.eventEndTime} onChange={(e) => setLessonDraft({ ...lessonDraft, eventEndTime: e.target.value })} /></div></div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <DateTimeDropdown label="Starts" value={lessonDraft.eventStartTime} onChange={(eventStartTime) => setLessonDraft({ ...lessonDraft, eventStartTime })} dateTestId="input-live-class-start-date" timeTestId="input-live-class-start-time" />
+                <DateTimeDropdown label="Ends" optional value={lessonDraft.eventEndTime} onChange={(eventEndTime) => setLessonDraft({ ...lessonDraft, eventEndTime })} dateTestId="input-live-class-end-date" timeTestId="input-live-class-end-time" />
+              </div>
               <div className="grid gap-4 sm:grid-cols-2"><div><Label>Platform</Label><Input value={lessonDraft.meetingPlatform} onChange={(e) => setLessonDraft({ ...lessonDraft, meetingPlatform: e.target.value })} placeholder="Zoom" /></div><div><Label>Meeting link (optional)</Label><Input value={lessonDraft.meetingLink} onChange={(e) => setLessonDraft({ ...lessonDraft, meetingLink: e.target.value })} placeholder="Leave blank to create with Zoom" /></div></div>
                <div><Label className="flex items-center gap-2"><Users className="h-4 w-4" />Facilitators (optional)</Label><p className="mt-1 text-xs text-muted-foreground">You can leave this live class unassigned and add facilitators later.</p><div className="mt-2 grid gap-2 sm:grid-cols-2">{(facilitatorsQuery.data || []).map((facilitator) => <label key={facilitator.id} className="flex items-center gap-2 rounded-md border p-3 text-sm"><Checkbox checked={lessonDraft.facilitatorIds.includes(facilitator.id)} onCheckedChange={(checked) => setLessonDraft({ ...lessonDraft, facilitatorIds: checked ? [...lessonDraft.facilitatorIds, facilitator.id] : lessonDraft.facilitatorIds.filter((id) => id !== facilitator.id) })} /><span>{facilitator.firstName} {facilitator.lastName}</span></label>)}</div>{facilitatorsQuery.data?.length === 0 && <p className="mt-2 text-sm text-muted-foreground">No facilitator accounts are available yet. You can still schedule this class.</p>}</div>
             </div>}
