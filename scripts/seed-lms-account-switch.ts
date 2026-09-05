@@ -10,6 +10,7 @@ import {
   courses,
   enrollments,
   certificates,
+  events,
   lessons,
   lessonProgress,
   modules,
@@ -36,9 +37,11 @@ export interface AccountSwitchFixtureManifest {
   participantModuleId: string;
   adminModuleId: string;
   participantLessonId: string;
+  participantEventId: string;
   adminLessonId: string;
   applicationId: string;
   participantCourseTitle: string;
+  participantEventTitle: string;
   adminCourseTitle: string;
 }
 
@@ -64,9 +67,11 @@ function buildFixtureManifest(): AccountSwitchFixtureManifest {
     participantModuleId: fixtureId("participant-module"),
     adminModuleId: fixtureId("admin-module"),
     participantLessonId: fixtureId("participant-lesson"),
+    participantEventId: fixtureId("participant-event"),
     adminLessonId: fixtureId("admin-lesson"),
     applicationId: fixtureId("participant-application"),
     participantCourseTitle: `E2E Participant Course (${fixtureNamespace})`,
+    participantEventTitle: `Participant Live Class (${fixtureNamespace})`,
     adminCourseTitle: `E2E Admin Course (${fixtureNamespace})`,
   };
 }
@@ -105,6 +110,7 @@ function assertFixtureManifest(
     participantModuleId: "participant-module",
     adminModuleId: "admin-module",
     participantLessonId: "participant-lesson",
+    participantEventId: "participant-event",
     adminLessonId: "admin-lesson",
     applicationId: "participant-application",
   };
@@ -428,6 +434,44 @@ export async function seedLmsAccountSwitchData(): Promise<AccountSwitchCredentia
     })
     .where(eq(lessons.id, fixture.adminLessonId));
 
+  await db
+    .insert(events)
+    .values({
+      id: fixture.participantEventId,
+      title: `Participant Live Class (${fixture.namespace})`,
+      description: `A live class linked to the participant course (${fixture.namespace}).`,
+      eventType: "live_session",
+      hostId: superAdmin.id,
+      startTime: new Date("2030-05-06T14:30:00.000Z"),
+      endTime: new Date("2030-05-06T15:30:00.000Z"),
+      durationMinutes: 60,
+      meetingPlatform: "Zoom",
+      meetingLink: "https://example.com/e2e-participant-live-class",
+      isPublic: false,
+      visibility: "community",
+      status: "published",
+    })
+    .onConflictDoUpdate({
+      target: events.id,
+      set: {
+        title: `Participant Live Class (${fixture.namespace})`,
+        description: `A live class linked to the participant course (${fixture.namespace}).`,
+        hostId: superAdmin.id,
+        startTime: new Date("2030-05-06T14:30:00.000Z"),
+        endTime: new Date("2030-05-06T15:30:00.000Z"),
+        durationMinutes: 60,
+        meetingPlatform: "Zoom",
+        meetingLink: "https://example.com/e2e-participant-live-class",
+        isPublic: false,
+        visibility: "community",
+        status: "published",
+      },
+    });
+  await db
+    .update(lessons)
+    .set({ eventId: fixture.participantEventId })
+    .where(eq(lessons.id, fixture.participantLessonId));
+
   writeCredentials(credentials);
 
   return credentials;
@@ -474,6 +518,7 @@ export async function cleanupLmsAccountSwitchData(
     await tx
       .delete(courseCohortAssignments)
       .where(inArray(courseCohortAssignments.courseId, courseIds));
+    await tx.delete(events).where(eq(events.id, fixture.participantEventId));
     await tx
       .delete(lessons)
       .where(inArray(lessons.id, lessonIds));

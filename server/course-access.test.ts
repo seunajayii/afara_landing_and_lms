@@ -198,6 +198,80 @@ const protectedVideo = {
 
 const courseById = new Map(courses.map(course => [course.id, course]));
 const lessonById = new Map(lessons.map(lesson => [lesson.id, lesson]));
+const events = [
+  {
+    id: "event-all",
+    title: "Shared live class",
+    description: null,
+    eventType: "live_session",
+    hostId: users.admin.id,
+    podId: null,
+    thumbnailUrl: null,
+    startTime: new Date("2030-05-06T14:30:00.000Z"),
+    endTime: new Date("2030-05-06T15:30:00.000Z"),
+    durationMinutes: 60,
+    meetingPlatform: "Zoom",
+    meetingLink: "https://example.com/shared-live-class",
+    zoomMeetingId: null,
+    recordingUrl: null,
+    recordingResourceId: null,
+    recordingLessonId: null,
+    maxAttendees: null,
+    isPublic: false,
+    visibility: "community",
+    status: "published",
+    createdAt: new Date("2026-08-27T00:00:00.000Z"),
+    lessonId: "lesson-all",
+  },
+  {
+    id: "event-a",
+    title: "Cohort A live class",
+    description: null,
+    eventType: "live_session",
+    hostId: users.admin.id,
+    podId: null,
+    thumbnailUrl: null,
+    startTime: new Date("2030-05-07T14:30:00.000Z"),
+    endTime: new Date("2030-05-07T15:30:00.000Z"),
+    durationMinutes: 60,
+    meetingPlatform: "Zoom",
+    meetingLink: "https://example.com/cohort-a-live-class",
+    zoomMeetingId: null,
+    recordingUrl: null,
+    recordingResourceId: null,
+    recordingLessonId: null,
+    maxAttendees: null,
+    isPublic: false,
+    visibility: "community",
+    status: "published",
+    createdAt: new Date("2026-08-27T00:00:00.000Z"),
+    lessonId: "lesson-a",
+  },
+  {
+    id: "event-b",
+    title: "Cohort B live class",
+    description: null,
+    eventType: "live_session",
+    hostId: users.admin.id,
+    podId: null,
+    thumbnailUrl: null,
+    startTime: new Date("2030-05-08T14:30:00.000Z"),
+    endTime: new Date("2030-05-08T15:30:00.000Z"),
+    durationMinutes: 60,
+    meetingPlatform: "Zoom",
+    meetingLink: "https://example.com/cohort-b-live-class",
+    zoomMeetingId: null,
+    recordingUrl: null,
+    recordingResourceId: null,
+    recordingLessonId: null,
+    maxAttendees: null,
+    isPublic: false,
+    visibility: "community",
+    status: "published",
+    createdAt: new Date("2026-08-27T00:00:00.000Z"),
+    lessonId: "lesson-b",
+  },
+] as any[];
 
 function userForId(userId: string) {
   return Object.values(users).find(user => user.id === userId);
@@ -239,6 +313,15 @@ async function withCourseRoutes<T>(
   replace("getModulesByCourse", async (courseId: string) => modules.filter(module => module.courseId === courseId));
   replace("getLessonsByModule", async (moduleId: string) => lessons.filter(lesson => lesson.moduleId === moduleId));
   replace("getLesson", async (lessonId: string) => lessonById.get(lessonId));
+  replace("getAllEvents", async () => events);
+  replace("getUpcomingEvents", async () => events);
+  replace("getEvent", async (eventId: string) => events.find(event => event.id === eventId));
+  replace("getCourseForEvent", async (eventId: string) => {
+    const event = events.find(candidate => candidate.id === eventId);
+    const lesson = event ? lessonById.get(event.lessonId) : undefined;
+    const module = lesson ? modules.find(candidate => candidate.id === lesson.moduleId) : undefined;
+    return module ? courseById.get(module.courseId) : undefined;
+  });
   replace("getActiveCohortForUser", async (userId: string) => cohortForUser(userId));
   replace("isCourseAssignedToCohort", async (courseId: string, cohortId: string) => (
     (courseId === "course-a" && cohortId === cohortA.id) ||
@@ -532,6 +615,12 @@ test("course and lesson routes keep selected cohorts isolated while sharing all-
       assert.equal(sharedCourse.status, 200);
       const sharedLesson = await request(baseUrl, testCase.userId, "/api/lessons/lesson-all");
       assert.equal(sharedLesson.status, 200);
+      const visibleEvents = await request(baseUrl, testCase.userId, "/api/events?upcoming=true");
+      assert.equal(visibleEvents.status, 200);
+      assert.deepEqual(
+        visibleEvents.body.map((event: { id: string }) => event.id).sort(),
+        ["event-all", ...(testCase.visibleSelectedCourse ? [`event-${testCase.visibleSelectedCourse.at(-1)}`] : [])].sort(),
+      );
 
       const accessibleSelectedCourse = testCase.visibleSelectedCourse
         ? await request(baseUrl, testCase.userId, `/api/courses/${testCase.visibleSelectedCourse}`)
