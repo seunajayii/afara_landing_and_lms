@@ -10,6 +10,12 @@ The Replit Nix environment must include Chromium’s shared libraries for Playwr
 
 **How to apply:** Keep the required browser libraries in the project environment configuration. For API checks, use a cache-busted/no-store request when the test needs a readable successful response, while still verifying the rendered UI.
 
+Admin date/time popovers can be clipped by the scrollable dialog viewport, leaving calendar time options and Clear/Done controls outside the hit-test area. Browser checks for these controls should use the rendered trigger and option semantics, with DOM event clicks only for controls that are genuinely clipped.
+
+**Why:** Playwright coordinate clicks can time out even when the control is rendered and the component handler is functional; forcing every click would hide real interaction regressions.
+
+**How to apply:** Prefer normal role/test-id interactions, then scope to the active popover and use a DOM click only for the clipped control itself. Assert the popover closes before submitting the form.
+
 ## Isolated seeded fixtures
 The run identifier for seeded fixtures must be created by the command that launches
 Playwright and inherited by global setup, workers, and global teardown. Do not
