@@ -205,76 +205,100 @@ test.describe("admin event date and time fields", () => {
   test.describe("when the browser is in a non-UTC timezone", () => {
     test.use({ timezoneId: "America/Los_Angeles" });
 
-    test("shows a stored event instant as the expected local edit value", async ({ page }) => {
-      const credentials = loadCredentials();
-      test.skip(
-        !credentials,
-        "Run npm run test:e2e for the seeded check, or provide the super-admin E2E variables.",
-      );
+    const storedInstantCases = [
+      {
+        label: "standard time",
+        storedStartTime: "2030-01-13T21:35:00.000Z",
+        storedEndTime: "2030-01-13T23:05:00.000Z",
+        localDate: "Sun, Jan 13, 2030",
+        localStartTime: "13:35",
+        localEndTime: "15:05",
+      },
+      {
+        label: "daylight time",
+        storedStartTime: "2030-05-06T21:35:00.000Z",
+        storedEndTime: "2030-05-06T23:05:00.000Z",
+        localDate: "Mon, May 6, 2030",
+        localStartTime: "14:35",
+        localEndTime: "16:05",
+      },
+    ] as const;
 
-      const title = `E2E event timezone stability ${Date.now()}`;
-      const storedStartTime = "2030-05-06T21:35:00.000Z";
-      const storedEndTime = "2030-05-06T23:05:00.000Z";
-      let eventId: string | undefined;
-
-      try {
-        await signIn(page, credentials!.superAdmin.email, credentials!.superAdmin.password);
-
-        // Use a fixed UTC instant so this check verifies the edit form's
-        // conversion rather than relying on the server and browser sharing a
-        // timezone. In Los Angeles on this date, these are 14:35 and 16:05.
-        const createResponse = await page.request.post("/api/events", {
-          data: {
-            title,
-            eventType: "webinar",
-            startTime: storedStartTime,
-            endTime: storedEndTime,
-            durationMinutes: 90,
-            meetingPlatform: "Zoom",
-            meetingLink: "https://example.com/e2e-event-timezone-stability",
-            maxAttendees: 100,
-            isPublic: true,
-            visibility: "community",
-            status: "published",
-          },
-        });
-        expect(createResponse.status()).toBe(201);
-
-        const createdEvent = (await createResponse.json()) as {
-          id: string;
-          startTime: string;
-          endTime: string;
-        };
-        expect(createdEvent.startTime).toBe(storedStartTime);
-        expect(createdEvent.endTime).toBe(storedEndTime);
-        eventId = createdEvent.id;
-
-        await page.goto("/admin/events");
-        await expect(page.getByRole("heading", { name: "Event Management", exact: true })).toBeVisible();
-
-        const eventCard = page.locator(`[data-testid="card-event-${eventId}"]`);
-        await expect(eventCard).toBeVisible();
-        await eventCard.getByTestId(`button-edit-event-${eventId}`).click();
-        await expect(page.getByRole("dialog", { name: "Edit Event" })).toBeVisible();
-
-        await expect(page.getByTestId("input-edit-start-date").first()).toContainText(
-          "Mon, May 6, 2030",
+    for (const instantCase of storedInstantCases) {
+      test(`shows a stored event instant as the expected local edit value in ${instantCase.label}`, async ({
+        page,
+      }) => {
+        const credentials = loadCredentials();
+        test.skip(
+          !credentials,
+          "Run npm run test:e2e for the seeded check, or provide the super-admin E2E variables.",
         );
-        await expect(page.getByTestId("input-edit-start-date").first()).toContainText(
-          /(?:14:35|2:35 PM)/,
-        );
-        await expect(page.getByTestId("input-edit-end-date").first()).toContainText(
-          "Mon, May 6, 2030",
-        );
-        await expect(page.getByTestId("input-edit-end-date").first()).toContainText(
-          /(?:16:05|4:05 PM)/,
-        );
-      } finally {
-        if (eventId) {
-          const deleteResponse = await page.request.delete(`/api/events/${eventId}`);
-          expect(deleteResponse.ok()).toBeTruthy();
+
+        const title = `E2E event timezone stability ${instantCase.label} ${Date.now()}`;
+        let eventId: string | undefined;
+
+        try {
+          await signIn(page, credentials!.superAdmin.email, credentials!.superAdmin.password);
+
+          // Use fixed UTC instants so this check verifies the edit form's
+          // conversion rather than relying on the server and browser sharing a
+          // timezone. These cases deliberately straddle the Los Angeles
+          // daylight-saving boundary: January is PST and May is PDT.
+          const createResponse = await page.request.post("/api/events", {
+            data: {
+              title,
+              eventType: "webinar",
+              startTime: instantCase.storedStartTime,
+              endTime: instantCase.storedEndTime,
+              durationMinutes: 90,
+              meetingPlatform: "Zoom",
+              meetingLink: "https://example.com/e2e-event-timezone-stability",
+              maxAttendees: 100,
+              isPublic: true,
+              visibility: "community",
+              status: "published",
+            },
+          });
+          expect(createResponse.status()).toBe(201);
+
+          const createdEvent = (await createResponse.json()) as {
+            id: string;
+            startTime: string;
+            endTime: string;
+          };
+          expect(createdEvent.startTime).toBe(instantCase.storedStartTime);
+          expect(createdEvent.endTime).toBe(instantCase.storedEndTime);
+          eventId = createdEvent.id;
+
+          await page.goto("/admin/events");
+          await expect(page.getByRole("heading", { name: "Event Management", exact: true })).toBeVisible();
+
+          const eventCard = page.locator(`[data-testid="card-event-${eventId}"]`);
+          await expect(eventCard).toBeVisible();
+          await eventCard.getByTestId(`button-edit-event-${eventId}`).click();
+          await expect(page.getByRole("dialog", { name: "Edit Event" })).toBeVisible();
+
+          const expectedStartTime = await formatBrowserTime(page, instantCase.localStartTime);
+          const expectedEndTime = await formatBrowserTime(page, instantCase.localEndTime);
+          await expect(page.getByTestId("input-edit-start-date").first()).toContainText(
+            instantCase.localDate,
+          );
+          await expect(page.getByTestId("input-edit-start-date").first()).toContainText(
+            expectedStartTime,
+          );
+          await expect(page.getByTestId("input-edit-end-date").first()).toContainText(
+            instantCase.localDate,
+          );
+          await expect(page.getByTestId("input-edit-end-date").first()).toContainText(
+            expectedEndTime,
+          );
+        } finally {
+          if (eventId) {
+            const deleteResponse = await page.request.delete(`/api/events/${eventId}`);
+            expect(deleteResponse.ok()).toBeTruthy();
+          }
         }
-      }
-    });
+      });
+    }
   });
 });
